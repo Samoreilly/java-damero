@@ -1,6 +1,5 @@
-package java.damero.annotations;
+package net.damero.annotations;
 
-import java.awt.*;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;

@@ -1,4 +1,4 @@
-package java.damero.annotations;
+package net.damero.annotations;
 
 public enum MessagerType {
     KAFKA,

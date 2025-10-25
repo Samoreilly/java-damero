@@ -1,4 +1,4 @@
-package java.damero.managelistener;
+package net.damero.managelistener;
 
 import jakarta.annotation.PostConstruct;
 import org.reflections.Reflections;
@@ -6,11 +6,10 @@ import org.reflections.scanners.Scanners;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.KafkaListener;
 
-import java.damero.CustomKafkaSetup.CustomKafka;
-import java.damero.CustomKafkaSetup.CustomKafkaListenerConfig;
-import java.damero.CustomKafkaSetup.registerconfig.RegisterConfig;
-import java.damero.annotations.CustomKafkaListener;
-import java.damero.annotations.MessageListener;
+import net.damero.CustomKafkaSetup.CustomKafkaListenerConfig;
+import net.damero.CustomKafkaSetup.registerconfig.RegisterConfig;
+import net.damero.annotations.CustomKafkaListener;
+import net.damero.annotations.MessageListener;
 import java.lang.reflect.Method;
 import java.util.Set;
 
@@ -50,7 +49,7 @@ public class ListenerSetup {
 
         for(Class<?> clazz : listenerAnnotation) {
             for (Method method : clazz.getDeclaredMethods()) {//CustomKafka.class should override KafkaListener
-                if (method.isAnnotationPresent(KafkaListener.class) && method.isAnnotationPresent(CustomKafka.class)) {
+                if (method.isAnnotationPresent(KafkaListener.class) && method.isAnnotationPresent(CustomKafkaListener.class)) {
 
                 }
             }

@@ -1,8 +1,8 @@
-package java.damero.CustomKafkaSetup;
+package net.damero.CustomKafkaSetup;
 
 import lombok.Getter;
 
-import java.damero.annotations.CustomKafkaListener;
+import net.damero.annotations.CustomKafkaListener;
 
 @Getter
 public class CustomKafkaListenerConfig {
@@ -11,6 +11,7 @@ public class CustomKafkaListenerConfig {
     private final String dlqTopic;
     private final int maxAttempts;
     private final double delay;
+    private DelayMethod delayMethod;
 
 
     CustomKafkaListenerConfig(Builder builder) {//takes in builder config
@@ -18,6 +19,7 @@ public class CustomKafkaListenerConfig {
         this.dlqTopic = builder.dlqTopic;
         this.maxAttempts = builder.maxAttempts;
         this.delay = builder.delay;
+        this.delayMethod = builder.delayMethod;
     }
 
 
@@ -27,6 +29,7 @@ public class CustomKafkaListenerConfig {
                 .dlqTopic(annotation.dlqTopic())
                 .maxAttempts(annotation.maxAttempts())
                 .delay(annotation.delay())
+                .delayMethod(annotation.delayMethod())
                 .build();
     }
     //Builder class used to build custom Kafka Listener config class, will add more ltr
@@ -37,6 +40,7 @@ public class CustomKafkaListenerConfig {
         private String dlqTopic;
         private int maxAttempts;
         private double delay;
+        private DelayMethod delayMethod;//default delay method to linear
 
         public Builder topic(String topic) {
             this.topic = topic;
@@ -52,6 +56,10 @@ public class CustomKafkaListenerConfig {
         }
         public Builder delay(double delay) {
             this.delay = delay;
+            return this;
+        }
+        public Builder delayMethod(DelayMethod delayMethod) {
+            this.delayMethod = delayMethod;
             return this;
         }
 

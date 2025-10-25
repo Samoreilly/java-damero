@@ -1,10 +1,9 @@
-package java.damero.CustomKafkaSetup.registerconfig;
+package net.damero.CustomKafkaSetup.registerconfig;
 
 import org.springframework.stereotype.Service;
 
-import java.damero.CustomKafkaSetup.CustomKafkaListenerConfig;
-import java.damero.CustomKafkaSetup.KafkaListenerAspect;
-import java.damero.annotations.CustomKafkaListener;
+import net.damero.CustomKafkaSetup.CustomKafkaListenerConfig;
+
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,7 +16,6 @@ public class RegisterConfig {
 
 
     public void registerConfig(Method method, CustomKafkaListenerConfig config) {
-
         methodConfig.put(method, config);
     }
     public CustomKafkaListenerConfig getConfig(Method method) {

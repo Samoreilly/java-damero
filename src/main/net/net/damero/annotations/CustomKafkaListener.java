@@ -1,4 +1,6 @@
-package java.damero.CustomKafkaSetup;
+package net.damero.annotations;
+
+import net.damero.CustomKafkaSetup.DelayMethod;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -7,9 +9,10 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface CustomKafka {
-    String topic() default "";
+public @interface CustomKafkaListener {
+    String topic();
     String dlqTopic() default "";
     int maxAttempts() default 3;
-    boolean customRetry() default false;
+    double delay() default 0.0;
+    DelayMethod delayMethod() default DelayMethod.EXPO;
 }
