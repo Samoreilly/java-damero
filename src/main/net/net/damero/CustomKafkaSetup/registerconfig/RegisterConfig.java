@@ -14,7 +14,6 @@ public class RegisterConfig {
     //EACH LISTENER METHOD SHOULD HAVE THERE OWN CONFIG
     private final Map<Method, CustomKafkaListenerConfig> methodConfig = new HashMap<>();
 
-
     public void registerConfig(Method method, CustomKafkaListenerConfig config) {
         methodConfig.put(method, config);
     }

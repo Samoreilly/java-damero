@@ -3,6 +3,7 @@ package net.damero.CustomKafkaSetup;
 import lombok.Getter;
 
 import net.damero.annotations.CustomKafkaListener;
+import org.springframework.beans.factory.annotation.Value;
 
 @Getter
 public class CustomKafkaListenerConfig {
@@ -37,27 +38,35 @@ public class CustomKafkaListenerConfig {
     public static class Builder {
 
         private String topic;
+
         private String dlqTopic;
+
         private int maxAttempts;
+
         private double delay;
+
         private DelayMethod delayMethod;//default delay method to linear
 
         public Builder topic(String topic) {
             this.topic = topic;
             return this;
         }
+
         public Builder dlqTopic(String dlqTopic) {
             this.dlqTopic = dlqTopic;
             return this;
         }
+
         public Builder maxAttempts(int maxAttempts) {
             this.maxAttempts = maxAttempts;
             return this;
         }
+
         public Builder delay(double delay) {
             this.delay = delay;
             return this;
         }
+
         public Builder delayMethod(DelayMethod delayMethod) {
             this.delayMethod = delayMethod;
             return this;
