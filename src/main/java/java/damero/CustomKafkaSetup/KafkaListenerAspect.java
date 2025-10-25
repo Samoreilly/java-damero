@@ -6,19 +6,21 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.stereotype.Component;
 
+import java.damero.annotations.CustomKafkaListener;
+
 @Aspect
 @Component
 public class KafkaListenerAspect {
 
     //ProceedingJoinPoint gives u full access of method and execution
-    @Around("@annotation(customKafka)")
-    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafka customKafka) throws Throwable {
+    @Around("@annotation(customKafkaListener)")
+    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
 
         int attempts = 0;
 
         Throwable lastException = null;
 
-        while(attempts < customKafka.maxAttempts()){
+        while(attempts < customKafkaListener.maxAttempts()){
 
             try {
                 return pjp.proceed();

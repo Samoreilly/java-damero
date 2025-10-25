@@ -2,13 +2,14 @@ package java.damero.managelistener;
 
 import jakarta.annotation.PostConstruct;
 import org.reflections.Reflections;
-import org.reflections.scanners.FieldAnnotationsScanner;
 import org.reflections.scanners.Scanners;
-import org.reflections.scanners.TypeAnnotationsScanner;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.KafkaListener;
 
 import java.damero.CustomKafkaSetup.CustomKafka;
+import java.damero.CustomKafkaSetup.CustomKafkaListenerConfig;
+import java.damero.CustomKafkaSetup.registerconfig.RegisterConfig;
+import java.damero.annotations.CustomKafkaListener;
 import java.damero.annotations.MessageListener;
 import java.lang.reflect.Method;
 import java.util.Set;
@@ -19,6 +20,12 @@ import java.util.Set;
 @Service
 public class ListenerSetup {
 
+    private final RegisterConfig registerConfig;
+
+    public ListenerSetup(RegisterConfig registerConfig) {
+        this.registerConfig = registerConfig;
+    }
+
 
     @PostConstruct
     public void listenerSetup(){
@@ -27,6 +34,19 @@ public class ListenerSetup {
 
         //gets all classes annotated with @MessageListener
         Set<Class<?>> listenerAnnotation = reflections.getTypesAnnotatedWith(MessageListener.class);
+
+        Set<Class<?>> set = reflections.getTypesAnnotatedWith(CustomKafkaListener.class);
+
+        Set<Method> methods = reflections.getMethodsAnnotatedWith(CustomKafkaListener.class);
+
+        for (Method method : methods) {
+            CustomKafkaListener annotation = method.getAnnotation(CustomKafkaListener.class);
+            CustomKafkaListenerConfig config = CustomKafkaListenerConfig.fromAnnotation(annotation);
+            registerConfig.registerConfig(method, config);
+            // Now you can use the config to wrap the listener method
+        }
+
+
 
         for(Class<?> clazz : listenerAnnotation) {
             for (Method method : clazz.getDeclaredMethods()) {//CustomKafka.class should override KafkaListener
