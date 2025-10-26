@@ -3,6 +3,8 @@ package net.damero.managelistener;
 import jakarta.annotation.PostConstruct;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.KafkaListener;
 
@@ -20,6 +22,8 @@ import java.util.Set;
 public class ListenerSetup {
 
     private final RegisterConfig registerConfig;
+    @Autowired
+    ApplicationContext context;
 
     public ListenerSetup(RegisterConfig registerConfig) {
         this.registerConfig = registerConfig;
@@ -40,7 +44,7 @@ public class ListenerSetup {
 
         for (Method method : methods) {
             CustomKafkaListener annotation = method.getAnnotation(CustomKafkaListener.class);
-            CustomKafkaListenerConfig config = CustomKafkaListenerConfig.fromAnnotation(annotation);
+            CustomKafkaListenerConfig config = CustomKafkaListenerConfig.fromAnnotation(annotation, context);
             registerConfig.registerConfig(method, config);
             // Now you can use the config to wrap the listener method
         }

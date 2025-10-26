@@ -1,0 +1,120 @@
+package net.damero.CustomKafkaSetup;
+
+import lombok.Getter;
+
+import net.damero.annotations.CustomKafkaListener;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+
+@Getter
+public class CustomKafkaListenerConfig {
+
+
+    private final String topic;
+    private final String dlqTopic;
+    private final int maxAttempts;
+    private final double delay;
+    private DelayMethod delayMethod;
+    private final KafkaTemplate<?, ?> kafkaTemplate;
+    private final ConsumerFactory<?, ?> consumerFactory;//allow the user to provide custom consumer config
+
+    CustomKafkaListenerConfig(Builder builder) {//takes in builder config
+        this.topic = builder.topic;
+        this.dlqTopic = builder.dlqTopic;
+        this.maxAttempts = builder.maxAttempts;
+        this.delay = builder.delay;
+        this.delayMethod = builder.delayMethod;
+        this.kafkaTemplate = builder.kafkaTemplate;
+        this.consumerFactory = builder.consumerFactory;
+    }
+
+    public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation, ApplicationContext context) {
+
+
+        CustomKafkaListenerConfig.Builder build = new CustomKafkaListenerConfig.Builder();
+
+        build
+            .topic(annotation.topic())
+            .dlqTopic(annotation.dlqTopic())
+            .maxAttempts(annotation.maxAttempts())
+            .delay(annotation.delay())
+            .delayMethod(annotation.delayMethod())
+            .consumerFactory(null);
+
+        KafkaTemplate<?, ?> kafkaTemplate = null;
+
+        Class<?> factoryClass = annotation.kafkaTemplate();
+        if (!factoryClass.equals(void.class)) {
+            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);
+        }
+
+        build.kafkaTemplate(kafkaTemplate);
+        return build.build();
+    }
+    //Builder class used to build custom Kafka Listener config class, will add more ltr
+
+    public static class Builder {
+
+        private String topic;
+
+        private String dlqTopic;
+
+        private int maxAttempts;
+
+        private double delay;
+
+        private DelayMethod delayMethod;//default delay method to linear
+
+        private KafkaTemplate<?, ?> kafkaTemplate;
+        private ConsumerFactory<?, ?> consumerFactory;
+
+        public Builder topic(String topic) {
+            this.topic = topic;
+            return this;
+        }
+
+        public Builder dlqTopic(String dlqTopic) {
+            this.dlqTopic = dlqTopic;
+            return this;
+        }
+
+        public Builder maxAttempts(int maxAttempts) {
+            this.maxAttempts = maxAttempts;
+            return this;
+        }
+
+        public Builder delay(double delay) {
+            this.delay = delay;
+            return this;
+        }
+
+        public Builder delayMethod(DelayMethod delayMethod) {
+            this.delayMethod = delayMethod;
+            return this;
+        }
+
+        Builder kafkaTemplate(KafkaTemplate<?, ?> kafkaTemplate){
+            this.kafkaTemplate = kafkaTemplate;
+            return this;
+        }
+
+        public Builder consumerFactory(ConsumerFactory<?, ?> factory) {
+            this.consumerFactory = factory;
+            return this;
+        }
+
+        //custom kafkalistenerconfig takes in builder config
+
+        public CustomKafkaListenerConfig build() {
+            return new CustomKafkaListenerConfig(this);
+        }
+    }
+
+}

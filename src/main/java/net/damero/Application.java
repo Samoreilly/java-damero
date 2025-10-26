@@ -6,7 +6,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 public class Application{
-
     //PLAN AND DESIGN
     //KAFKA
     //Create MesssageListener annotation that will be used to annotate a class for dlq
