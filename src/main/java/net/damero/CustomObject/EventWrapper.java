@@ -16,10 +16,22 @@ public class EventWrapper {
     private final Object event;
     private LocalDateTime date;
 
-    public EventWrapper(Object event, List<Throwable> throwable){
+    public EventWrapper(Object event){
         this.event = event;
         this.date = LocalDateTime.now();
-        exceptions.computeIfAbsent(event, k -> new ArrayList<>()).addAll(throwable);
+    }
+
+    //override hashcode to ignore date when equals is called
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if(!(o instanceof EventWrapper)) return false;
+        EventWrapper that = (EventWrapper) o;
+        return event.equals(that.event);
+    }
+    @Override
+    public int hashCode() {
+        return event.hashCode();
     }
 
 }

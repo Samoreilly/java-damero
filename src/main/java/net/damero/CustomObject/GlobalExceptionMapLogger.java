@@ -6,13 +6,10 @@ import java.util.List;
 import java.util.Map;
 
 public class GlobalExceptionMapLogger {
-    public static Map<Object, List<Throwable>> exceptions = new HashMap<>();
+    public static Map<EventWrapper, List<Throwable>> exceptions = new HashMap<>();
 
-    public static int getExceptionSize(Object object){
+    public static int getExceptionSize(EventWrapper object){
         List<Throwable> list = exceptions.get(object);
         return list == null ? 0 : list.size();
-    }
-    public static void addObject(Object object, Throwable throwable){
-        exceptions.computeIfAbsent(object, k -> new ArrayList<>()).add(throwable);
     }
 }

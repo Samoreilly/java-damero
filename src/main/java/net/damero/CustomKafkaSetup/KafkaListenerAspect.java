@@ -81,7 +81,6 @@ public class KafkaListenerAspect {
         int attempts = 0;
         Throwable lastException = null;
 
-        List<Throwable> currException = new ArrayList<>();//stores all current exception for this listener
 
         while(attempts < customKafkaListener.maxAttempts()){
 
@@ -91,11 +90,11 @@ public class KafkaListenerAspect {
             } catch (Throwable e) {
 
                 attempts++;
-                currException.add(e);
 
-                if(attempts >= customKafkaListener.maxAttempts() && event != null){
-
-                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event, currException);
+                if(event != null){
+                    //boolean method to make sure we log EVERY exception and not just when we exceed max attempts
+                    boolean sendToDLQ = attempts >= customKafkaListener.maxAttempts();
+                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event, e, sendToDLQ);
 
                     throw e;
                 }
@@ -113,6 +112,7 @@ public class KafkaListenerAspect {
                 lastException = e;
             }
         }
+
         throw lastException;
     }
 
