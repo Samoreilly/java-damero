@@ -38,13 +38,15 @@ public class KafkaListenerAspect {
         //set default consumer for listener
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = defaultFactory;
 
-
         ConsumerFactory<? super String, ? super Object> customConsumerFactory;
+
         //check if user provided custom factory
         if (!customKafkaListener.consumerFactory().equals(void.class)) {
+
             Class<?> factoryClass = customKafkaListener.consumerFactory();
             customConsumerFactory = (ConsumerFactory<? super String, ? super Object>) context.getBean(factoryClass);
-        } else {
+        }else{
+
             //defaults to default consumer factory
             customConsumerFactory = defaultFactory.getConsumerFactory();
         }

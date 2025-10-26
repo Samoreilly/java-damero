@@ -29,11 +29,10 @@ public class CustomKafkaListenerConfig {
         this.consumerFactory = builder.consumerFactory;
     }
 
-    public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation, ApplicationContext context) {
+    public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation) {
 
 
         CustomKafkaListenerConfig.Builder build = new CustomKafkaListenerConfig.Builder();
-
         build
             .topic(annotation.topic())
             .dlqTopic(annotation.dlqTopic())
