@@ -2,16 +2,10 @@ package net.damero.CustomKafkaSetup;
 
 import lombok.Getter;
 
-import net.damero.annotations.CustomKafkaListener;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import net.damero.Annotations.CustomKafkaListener;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Component;
 
 @Getter
 public class CustomKafkaListenerConfig {
@@ -50,10 +44,10 @@ public class CustomKafkaListenerConfig {
 
         KafkaTemplate<?, ?> kafkaTemplate = null;
 
-        Class<?> factoryClass = annotation.kafkaTemplate();
-        if (!factoryClass.equals(void.class)) {
-            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);
-        }
+//        Class<?> factoryClass = annotation.kafkaTemplate();
+//        if (!factoryClass.equals(void.class)) {
+//            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);
+//        }
 
         build.kafkaTemplate(kafkaTemplate);
         return build.build();

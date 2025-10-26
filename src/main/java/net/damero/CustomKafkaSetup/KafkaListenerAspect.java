@@ -1,17 +1,17 @@
 package net.damero.CustomKafkaSetup;
 
+import net.damero.KafkaServices.KafkaDLQ;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-import net.damero.annotations.CustomKafkaListener;
+import net.damero.Annotations.CustomKafkaListener;
 
 @Aspect
 @Component
@@ -24,22 +24,38 @@ public class KafkaListenerAspect {
     private ConcurrentKafkaListenerContainerFactory<String, Object> defaultFactory;
 
     @Autowired
-    private KafkaTemplate<? super String, ? super Object> kafkaTemplate;
+    private KafkaTemplate<?, ?> kafkaTemplate;
 
     //ProceedingJoinPoint gives u full access of method and execution
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
 
         //defaults to default consumer factory
-        ConsumerFactory<?, ?> customConsumerFactory = defaultFactory.getConsumerFactory();
 
+        //set default consumer for listener
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = defaultFactory;
+
+
+
+        ConsumerFactory<? super String, ? super Object> customConsumerFactory;
         //check if user provided custom factory
-        if(!customKafkaListener.consumerFactory().equals(void.class)){
+        if (!customKafkaListener.consumerFactory().equals(void.class)) {
             Class<?> factoryClass = customKafkaListener.consumerFactory();
-            customConsumerFactory = (ConsumerFactory<?, ?>) context.getBean(factoryClass);//backoff to default factory if no custom factory is provided
+            customConsumerFactory = (ConsumerFactory<? super String, ? super Object>) context.getBean(factoryClass);
+        } else {
+            //defaults to default consumer factory
+            customConsumerFactory = defaultFactory.getConsumerFactory();
         }
 
+        factory.setConsumerFactory(customConsumerFactory);
 
+        //checks for custom kafka template
+        Class<?> factoryClass = customKafkaListener.kafkaTemplate();
+        if (!factoryClass.equals(void.class)) {
+            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);
+        }
+
+        //builds CustomKafkaListenerConfig
         CustomKafkaListenerConfig.Builder builder = new CustomKafkaListenerConfig.Builder()
                 .topic(customKafkaListener.topic())
                 .dlqTopic(customKafkaListener.dlqTopic())
@@ -49,16 +65,11 @@ public class KafkaListenerAspect {
                 .kafkaTemplate(kafkaTemplate)
                 .consumerFactory(customConsumerFactory);
 
+        CustomKafkaListenerConfig config = builder.build();
+
         //interface defaults kafkatemplte to void.class
         //if the kafkatemplate is provided we will use getBean to get that template
         //otherwise defaulit to the default
-        if (!customKafkaListener.kafkaTemplate().equals(void.class)) {
-            Class<?> kafkaClass = customKafkaListener.kafkaTemplate();
-            KafkaTemplate<?, ?> customTemplate = (KafkaTemplate<?, ?>) context.getBean(kafkaClass);
-            builder.kafkaTemplate(customTemplate);
-        } else {
-            builder.kafkaTemplate(kafkaTemplate);
-        }
 
         Object event = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;//gets event from queue
 
@@ -76,7 +87,7 @@ public class KafkaListenerAspect {
 
                 if(attempts >= customKafkaListener.maxAttempts() && event != null){
 
-                    kafkaTemplate.send(customKafkaListener.dlqTopic(), event);
+                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event);
 
                     throw e;
                 }
@@ -97,20 +108,5 @@ public class KafkaListenerAspect {
         }
         throw lastException;
     }
-
-
-    //get factory from config if it exists, else use default factory
-//    @Bean
-//    public ConcurrentKafkaListenerContainerFactory<String, Object> getFactory(CustomKafkaListenerConfig config) {
-//        if (config.getConsumerFactory() != null) {
-//            ConcurrentKafkaListenerContainerFactory<String, Object> factory =
-//                    new ConcurrentKafkaListenerContainerFactory<>();
-//            factory.setConsumerFactory(config.getConsumerFactory());
-//            factory.setConcurrency(3);
-//            factory.getContainerProperties().setAckMode(defaultFactory.getContainerProperties().getAckMode());
-//            return factory;
-//        }
-//        return defaultFactory;
-//    }
 
 }

@@ -1,4 +1,4 @@
-package net.damero.CustomKafkaSetup.registerconfig;
+package net.damero.CustomKafkaSetup.RegisterConfig;
 
 import org.springframework.stereotype.Service;
 

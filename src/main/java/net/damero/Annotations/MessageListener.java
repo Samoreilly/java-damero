@@ -1,4 +1,4 @@
-package net.damero.annotations;
+package net.damero.Annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
