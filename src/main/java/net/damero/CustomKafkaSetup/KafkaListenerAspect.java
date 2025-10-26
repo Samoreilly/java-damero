@@ -13,6 +13,9 @@ import org.springframework.stereotype.Component;
 
 import net.damero.Annotations.CustomKafkaListener;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Aspect
 @Component
 public class KafkaListenerAspect {
@@ -34,7 +37,6 @@ public class KafkaListenerAspect {
 
         //set default consumer for listener
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = defaultFactory;
-
 
 
         ConsumerFactory<? super String, ? super Object> customConsumerFactory;
@@ -77,17 +79,21 @@ public class KafkaListenerAspect {
         int attempts = 0;
         Throwable lastException = null;
 
+        List<Throwable> currException = new ArrayList<>();//stores all current exception for this listener
+
         while(attempts < customKafkaListener.maxAttempts()){
 
             try {
-                return pjp.proceed();
+                return pjp.proceed();//continues original method, in this case it would be the listener method that the user
+                                     //has annotated with customKafkaListener
             } catch (Throwable e) {
 
                 attempts++;
+                currException.add(e);
 
                 if(attempts >= customKafkaListener.maxAttempts() && event != null){
 
-                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event);
+                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event, currException);
 
                     throw e;
                 }
@@ -96,7 +102,6 @@ public class KafkaListenerAspect {
                 double baseDelay = customKafkaListener.delay();
 
                 switch (delayMethod){
-
                     case LINEAR ->  Thread.sleep((long)(baseDelay * attempts));
                     case EXPO -> Thread.sleep((long)(baseDelay * Math.min(MAX, Math.pow(2, attempts))));
                     case MAX -> Thread.sleep((long)(MAX));
