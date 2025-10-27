@@ -1,20 +1,27 @@
 package net.damero.CustomObject;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import static net.damero.CustomObject.GlobalExceptionMapLogger.exceptions;
+import java.time.LocalDateTime;
 
 @Getter
+@Setter
+@NoArgsConstructor
 public class EventWrapper {
 
-    private final Object event;
+    private Object event;
     private LocalDateTime date;
+
+    @JsonCreator
+    public EventWrapper(@JsonProperty("event") Object event,
+                        @JsonProperty("date") LocalDateTime date) {
+        this.event = event;
+        this.date = date;
+    }
 
     public EventWrapper(Object event){
         this.event = event;
@@ -29,9 +36,18 @@ public class EventWrapper {
         EventWrapper that = (EventWrapper) o;
         return event.equals(that.event);
     }
+    
     @Override
     public int hashCode() {
         return event.hashCode();
+    }
+    
+    @Override
+    public String toString() {
+        return "EventWrapper{" +
+                "event=" + event +
+                ", date=" + date +
+                '}';
     }
 
 }

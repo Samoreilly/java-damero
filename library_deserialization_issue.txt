@@ -1,0 +1,40 @@
+LIBRARY DESERIALIZATION ISSUE
+
+The library has a real problem with EventWrapper deserialization:
+
+PROBLEM
+1. EventWrapper is sent to DLQ (KafkaDLQ.java line 24)
+2. It gets serialized to JSON using JsonSerializer
+3. When users consume from DLQ, they need to deserialize it
+4. But EventWrapper is missing:
+   - Default constructor (required for Jackson deserialization)
+   - Jackson annotations (if needed)
+   - Proper toString() for debugging
+
+CURRENT CODE ISSUES IN EventWrapper.java:
+- Has @Getter from Lombok (okay)
+- Has final Object event field (okay)
+- Has LocalDateTime date field (okay)
+- BUT: No default constructor!
+- BUT: No setter for the final field!
+- BUT: No Jackson configuration to handle Object type
+
+WHY THIS IS A CODE ISSUE, NOT TEST ISSUE:
+When users consume from DLQ, they'll do:
+```java
+@KafkaListener(topics = "my-dlq")
+public void handleDLQMessage(Object message) { // or EventWrapper message
+    // Deserialization will FAIL because EventWrapper has no default constructor
+}
+```
+
+The library needs to fix EventWrapper to be Jackson-serializable.
+
+HOW TO FIX EventWrapper:
+1. Add default constructor
+2. Make fields non-final (or add setters)
+3. Add @JsonCreator and @JsonProperty annotations
+4. Or use different serialization approach
+
+This is a library bug that will cause production issues for users.
+
