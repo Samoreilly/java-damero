@@ -1,0 +1,18 @@
+Fix retry logic and improve library structure
+
+This commit fixes a critical bug where the Kafka listener retry mechanism was not working properly. The library now correctly retries failed messages according to the configured strategy.
+
+Changes:
+
+- Fixed KafkaListenerAspect retry logic to actually retry messages instead of throwing immediately
+- Moved test files (TestApplication, TestEvent, TestKafkaListener) from src/main to src/test for proper library structure
+- Made CustomKafkaListenerConfig.Builder internal only to keep API clean
+- Updated README with clear usage instructions and examples
+
+The retry logic now works as follows:
+1. On exception, increment attempt counter
+2. If attempts < maxAttempts: wait based on delay method, then retry
+3. If attempts >= maxAttempts: send to dead letter queue and throw exception
+
+All tests passing. Library is now ready for use.
+

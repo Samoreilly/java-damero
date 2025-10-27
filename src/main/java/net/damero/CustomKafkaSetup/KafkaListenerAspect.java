@@ -56,11 +56,11 @@ public class KafkaListenerAspect {
         //checks for custom kafka template
         Class<?> factoryClass = customKafkaListener.kafkaTemplate();
         if (!factoryClass.equals(void.class)) {
-            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);
+            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);//gets the custom kafka template
         }
 
         //builds CustomKafkaListenerConfig
-        CustomKafkaListenerConfig.Builder builder = new CustomKafkaListenerConfig.Builder()
+        CustomKafkaListenerConfig.Builder builder = CustomKafkaListenerConfig.builder()
                 .topic(customKafkaListener.topic())
                 .dlqTopic(customKafkaListener.dlqTopic())
                 .maxAttempts(customKafkaListener.maxAttempts())
@@ -84,21 +84,26 @@ public class KafkaListenerAspect {
 
         while(attempts < customKafkaListener.maxAttempts()){
 
+            attempts++;
+
             try {
                 return pjp.proceed();//continues original method, in this case it would be the listener method that the user
                                      //has annotated with customKafkaListener
             } catch (Throwable e) {
 
-                attempts++;
+                //boolean method to make sure we log EVERY exception and not just when we exceed max attempts
+                boolean sendToDLQ = attempts >= customKafkaListener.maxAttempts();
 
                 if(event != null){
-                    //boolean method to make sure we log EVERY exception and not just when we exceed max attempts
-                    boolean sendToDLQ = attempts >= customKafkaListener.maxAttempts();
                     KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event, e, sendToDLQ);
+                }
 
+                // If we've exceeded max attempts, throw the exception
+                if(sendToDLQ){
                     throw e;
                 }
 
+                // Otherwise, sleep and retry
                 DelayMethod delayMethod = customKafkaListener.delayMethod();
                 double baseDelay = customKafkaListener.delay();
 

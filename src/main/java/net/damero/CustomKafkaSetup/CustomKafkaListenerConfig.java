@@ -52,8 +52,13 @@ public class CustomKafkaListenerConfig {
         return build.build();
     }
     //Builder class used to build custom Kafka Listener config class, will add more ltr
+    
+    // Internal factory for aspect to create configs from annotations
+    static Builder builder() {
+        return new Builder();
+    }
 
-    public static class Builder {
+    static class Builder {
 
         private String topic;
 
@@ -68,27 +73,27 @@ public class CustomKafkaListenerConfig {
         private KafkaTemplate<?, ?> kafkaTemplate;
         private ConsumerFactory<?, ?> consumerFactory;
 
-        public Builder topic(String topic) {
+        Builder topic(String topic) {
             this.topic = topic;
             return this;
         }
 
-        public Builder dlqTopic(String dlqTopic) {
+        Builder dlqTopic(String dlqTopic) {
             this.dlqTopic = dlqTopic;
             return this;
         }
 
-        public Builder maxAttempts(int maxAttempts) {
+        Builder maxAttempts(int maxAttempts) {
             this.maxAttempts = maxAttempts;
             return this;
         }
 
-        public Builder delay(double delay) {
+        Builder delay(double delay) {
             this.delay = delay;
             return this;
         }
 
-        public Builder delayMethod(DelayMethod delayMethod) {
+        Builder delayMethod(DelayMethod delayMethod) {
             this.delayMethod = delayMethod;
             return this;
         }
@@ -98,14 +103,14 @@ public class CustomKafkaListenerConfig {
             return this;
         }
 
-        public Builder consumerFactory(ConsumerFactory<?, ?> factory) {
+        Builder consumerFactory(ConsumerFactory<?, ?> factory) {
             this.consumerFactory = factory;
             return this;
         }
 
         //custom kafkalistenerconfig takes in builder config
 
-        public CustomKafkaListenerConfig build() {
+        CustomKafkaListenerConfig build() {
             return new CustomKafkaListenerConfig(this);
         }
     }
