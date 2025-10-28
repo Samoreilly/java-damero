@@ -1,7 +1,7 @@
 package net.damero;
 
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import net.damero.CustomKafkaSetup.KafkaListenerAspect;
 import net.damero.CustomObject.EventWrapper;
@@ -14,9 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.context.annotation.*;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
@@ -38,12 +36,17 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = {
-        CustomKafkaListenerIntegrationTest.TestConfig.class,
-        TestKafkaListener.class,
-        DLQMessageCollector.class,
-        KafkaListenerAspect.class // Your aspect
-})
+@SpringBootTest(
+        classes = {
+                CustomKafkaListenerIntegrationTest.TestConfig.class,
+                TestKafkaListener.class,
+                DLQMessageCollector.class,
+                KafkaListenerAspect.class
+        },
+        properties = {
+                "custom.kafka.auto-config.enabled=false"  // Disable auto-config for tests
+        }
+)
 @EmbeddedKafka(partitions = 1, topics = {"test-topic", "test-dlq"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class CustomKafkaListenerIntegrationTest {
@@ -60,7 +63,6 @@ class CustomKafkaListenerIntegrationTest {
     @Autowired
     private DLQMessageCollector dlqCollector;
 
-
     @BeforeEach
     void setUp() {
         testKafkaListener.reset();
@@ -70,14 +72,9 @@ class CustomKafkaListenerIntegrationTest {
     @Test
     void testSuccessfulEventProcessing() {
         TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Test message", false);
-
-        // Send with proper key
-        kafkaTemplate.send("test-topic", event.getId(), event);  // ADD KEY
-
-        System.out.println("Sent event: " + event);  // ADD LOGGING
+        kafkaTemplate.send("test-topic", event.getId(), event);
 
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-            System.out.println("Successful events count: " + testKafkaListener.getSuccessfulEvents().size());
             assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
             assertEquals(event.getId(), testKafkaListener.getSuccessfulEvents().get(0).getId());
             assertEquals(1, testKafkaListener.getAttemptCount(event.getId()));
@@ -146,37 +143,17 @@ class CustomKafkaListenerIntegrationTest {
     @EnableAspectJAutoProxy
     static class TestConfig {
 
+        // Provide all beans needed for testing (auto-config is disabled)
+
         @Bean
         public ObjectMapper kafkaObjectMapper() {
             ObjectMapper mapper = new ObjectMapper();
             mapper.registerModule(new JavaTimeModule());
-            // Enable default typing for polymorphic deserialization
-            mapper.activateDefaultTyping(
-                    mapper.getPolymorphicTypeValidator(),
-                    ObjectMapper.DefaultTyping.NON_FINAL,
-                    JsonTypeInfo.As.PROPERTY
-            );
+            BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                    .allowIfBaseType(Object.class)
+                    .build();
+            mapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL);
             return mapper;
-        }
-
-        @Bean
-        public ProducerFactory<String, TestEvent> producerFactory(EmbeddedKafkaBroker embeddedKafka, ObjectMapper kafkaObjectMapper) {
-            Map<String, Object> props = new HashMap<>();
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-            props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
-
-            DefaultKafkaProducerFactory<String, TestEvent> factory = new DefaultKafkaProducerFactory<>(props);
-            // Use the shared ObjectMapper
-            JsonSerializer<TestEvent> serializer = new JsonSerializer<>(kafkaObjectMapper);
-            factory.setValueSerializer(serializer);
-            return factory;
-        }
-
-        @Bean
-        public KafkaTemplate<String, TestEvent> kafkaTemplate(ProducerFactory<String, TestEvent> producerFactory) {
-            return new KafkaTemplate<>(producerFactory);
         }
 
         @Bean
@@ -187,8 +164,6 @@ class CustomKafkaListenerIntegrationTest {
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
             JsonDeserializer<TestEvent> jsonDeserializer = new JsonDeserializer<>(TestEvent.class, kafkaObjectMapper);
             jsonDeserializer.addTrustedPackages("*");
@@ -207,9 +182,52 @@ class CustomKafkaListenerIntegrationTest {
             ConcurrentKafkaListenerContainerFactory<String, TestEvent> factory =
                     new ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory(testEventConsumerFactory);
-            // Disable auto-commit to have more control during retries
-            factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+
+            // CRITICAL: Disable container-level error handling since aspect handles retries
+            factory.setCommonErrorHandler(null);
+
+            // Enable manual acknowledgment mode
+            factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+
             return factory;
+        }
+
+        @Bean
+        public ProducerFactory<String, TestEvent> producerFactory(
+                EmbeddedKafkaBroker embeddedKafka,
+                ObjectMapper kafkaObjectMapper) {
+            Map<String, Object> props = new HashMap<>();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+            DefaultKafkaProducerFactory<String, TestEvent> factory = new DefaultKafkaProducerFactory<>(props);
+            JsonSerializer<TestEvent> serializer = new JsonSerializer<>(kafkaObjectMapper);
+            factory.setValueSerializer(serializer);
+            return factory;
+        }
+
+        @Bean
+        public KafkaTemplate<String, TestEvent> kafkaTemplate(ProducerFactory<String, TestEvent> producerFactory) {
+            return new KafkaTemplate<>(producerFactory);
+        }
+
+        // Library beans configured for embedded kafka
+
+        @Bean(name = "defaultKafkaTemplate")
+        public KafkaTemplate<String, Object> defaultKafkaTemplate(
+                EmbeddedKafkaBroker embeddedKafka,
+                ObjectMapper kafkaObjectMapper) {
+            Map<String, Object> props = new HashMap<>();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+            DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
+            JsonSerializer<Object> serializer = new JsonSerializer<>(kafkaObjectMapper);
+            factory.setValueSerializer(serializer);
+
+            return new KafkaTemplate<>(factory);
         }
 
         @Bean(name = "defaultFactory")
@@ -219,7 +237,7 @@ class CustomKafkaListenerIntegrationTest {
 
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
-            props.put(ConsumerConfig.GROUP_ID_CONFIG, "default-group");
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "custom-kafka-default-group");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
             JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
@@ -235,10 +253,13 @@ class CustomKafkaListenerIntegrationTest {
             ConcurrentKafkaListenerContainerFactory<String, Object> factory =
                     new ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory(consumerFactory);
+            factory.setCommonErrorHandler(null);
+            factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+
             return factory;
         }
 
-        @Bean
+        @Bean(name = "dlqConsumerFactory")
         public ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory(
                 EmbeddedKafkaBroker embeddedKafka,
                 ObjectMapper kafkaObjectMapper) {
@@ -246,10 +267,7 @@ class CustomKafkaListenerIntegrationTest {
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "dlq-test-group");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
-            // Use the shared ObjectMapper with polymorphic type handling
             JsonDeserializer<EventWrapper<?>> deserializer =
                     new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
             deserializer.addTrustedPackages("*");
@@ -269,24 +287,6 @@ class CustomKafkaListenerIntegrationTest {
                     new ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory(dlqConsumerFactory);
             return factory;
-        }
-
-        @Bean(name = "defaultKafkaTemplate")
-        public KafkaTemplate<String, Object> defaultKafkaTemplate(
-                EmbeddedKafkaBroker embeddedKafka,
-                ObjectMapper kafkaObjectMapper) {
-            Map<String, Object> props = new HashMap<>();
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-            props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
-
-            DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
-            // Use the shared ObjectMapper for consistent serialization
-            JsonSerializer<Object> serializer = new JsonSerializer<>(kafkaObjectMapper);
-            factory.setValueSerializer(serializer);
-
-            return new KafkaTemplate<>(factory);
         }
     }
 }

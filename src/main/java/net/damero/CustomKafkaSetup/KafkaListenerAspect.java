@@ -12,6 +12,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import net.damero.Annotations.CustomKafkaListener;
@@ -40,7 +41,7 @@ public class KafkaListenerAspect {
 
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
-        System.out.println("🔥 ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
+        System.out.println("ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
         KafkaTemplate<?, ?> kafkaTemplate = defaultKafkaTemplate;
 
         // Check for custom kafka template
@@ -64,6 +65,13 @@ public class KafkaListenerAspect {
 
         Object event = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
 
+        Acknowledgment acknowledgment = null;//to stop reprocessing the same event after its being passed to DLQ
+        for (Object arg : pjp.getArgs()) {
+            if (arg instanceof Acknowledgment) {
+                acknowledgment = (Acknowledgment) arg;
+                break;
+            }
+        }
         int attempts = 0;
         Throwable lastException = null;
         LocalDateTime firstFailureDateTime = null;
@@ -73,9 +81,20 @@ public class KafkaListenerAspect {
             attempts++;
 
             try {
-                return pjp.proceed();
+
+                Object result = pjp.proceed();
+
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();
+                }
+
+                return result;
+
             } catch (Throwable e) {
                 if (e instanceof ClassCastException || e instanceof IllegalArgumentException) {
+                    if (acknowledgment != null) {
+                        acknowledgment.acknowledge();//prevent reprocessing of the same event
+                    }
                     throw e;
                 }
 
@@ -97,6 +116,10 @@ public class KafkaListenerAspect {
                 lastException = e;
 
                 if(sendToDLQ){
+                    if (acknowledgment != null) {
+                        System.out.println("⚠️ Acknowledging message after max attempts reached");
+                        acknowledgment.acknowledge();
+                    }
                     throw e;
                 }
 
