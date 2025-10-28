@@ -1,16 +1,27 @@
 package net.damero.CustomObject;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import java.time.LocalDateTime;
 
+@Getter
+@Setter
 public class EventMetadata {
 
-    private LocalDateTime firstFailure;
-    private LocalDateTime lastFailure;
-    private int retryCount;
+    private LocalDateTime firstFailureDateTime;
+    private LocalDateTime lastFailureDateTime;
+    private int attempts;
 
-    public EventMetadata(LocalDateTime firstFailure, LocalDateTime lastFailure, int retryCount) {
-        this.firstFailure = firstFailure;
-        this.lastFailure = lastFailure;
-        this.retryCount = retryCount;
+    @JsonCreator
+    public EventMetadata(
+            @JsonProperty("firstFailureDateTime") LocalDateTime firstFailureDateTime,
+            @JsonProperty("lastFailureDateTime") LocalDateTime lastFailureDateTime,
+            @JsonProperty("attempts") int attempts) {
+        this.firstFailureDateTime = firstFailureDateTime;
+        this.lastFailureDateTime = lastFailureDateTime;
+        this.attempts = attempts;
     }
 }

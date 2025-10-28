@@ -18,4 +18,5 @@ public @interface CustomKafkaListener {
     DelayMethod delayMethod() default DelayMethod.EXPO;
     Class<Void> kafkaTemplate() default void.class;
     Class<Void> consumerFactory() default void.class;
+    Class<?> eventType() default Void.class;
 }

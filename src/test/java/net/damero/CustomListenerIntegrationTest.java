@@ -1,44 +1,65 @@
 package net.damero;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import net.damero.CustomKafkaSetup.KafkaListenerAspect;
 import net.damero.CustomObject.EventWrapper;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
-import org.springframework.stereotype.Component;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(classes = TestApplication.class)
-@DirtiesContext
-@EmbeddedKafka(
-        partitions = 1,
-        topics = {"test-topic", "test-dlq"},
-        brokerProperties = {
-                "listeners=PLAINTEXT://localhost:9092",
-                "port=9092"
-        }
-)
+@ExtendWith(SpringExtension.class)
+@SpringBootTest(classes = {
+        CustomKafkaListenerIntegrationTest.TestConfig.class,
+        TestKafkaListener.class,
+        DLQMessageCollector.class,
+        KafkaListenerAspect.class // Your aspect
+})
+@EmbeddedKafka(partitions = 1, topics = {"test-topic", "test-dlq"})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class CustomKafkaListenerIntegrationTest {
 
     @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private EmbeddedKafkaBroker embeddedKafka;
+
+    @Autowired
+    private KafkaTemplate<String, TestEvent> kafkaTemplate;
 
     @Autowired
     private TestKafkaListener testKafkaListener;
 
     @Autowired
     private DLQMessageCollector dlqCollector;
+
 
     @BeforeEach
     void setUp() {
@@ -48,180 +69,224 @@ class CustomKafkaListenerIntegrationTest {
 
     @Test
     void testSuccessfulEventProcessing() {
-        // Given
-        TestEvent event = new TestEvent(
-                UUID.randomUUID().toString(),
-                "Test message",
-                false // should NOT fail
-        );
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Test message", false);
 
-        // When
-        kafkaTemplate.send("test-topic", event);
+        // Send with proper key
+        kafkaTemplate.send("test-topic", event.getId(), event);  // ADD KEY
 
-        // Then
-        await()
-                .atMost(10, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
-                    assertEquals(event.getId(), testKafkaListener.getSuccessfulEvents().get(0).getId());
-                    assertEquals(1, testKafkaListener.getAttemptCount(event.getId()));
-                });
+        System.out.println("Sent event: " + event);  // ADD LOGGING
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            System.out.println("Successful events count: " + testKafkaListener.getSuccessfulEvents().size());
+            assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
+            assertEquals(event.getId(), testKafkaListener.getSuccessfulEvents().get(0).getId());
+            assertEquals(1, testKafkaListener.getAttemptCount(event.getId()));
+        });
     }
 
     @Test
     void testFailedEventWithRetries() {
-        // Given
-        TestEvent event = new TestEvent(
-                UUID.randomUUID().toString(),
-                "Test message that will fail",
-                true // should fail
-        );
-
-        // When
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Will fail", true);
         kafkaTemplate.send("test-topic", event);
 
-        // Then - verify it was attempted 3 times (maxAttempts)
-        await()
-                .atMost(15, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    int attempts = testKafkaListener.getAttemptCount(event.getId());
-                    assertEquals(3, attempts, "Should have attempted 3 times");
-                    assertTrue(testKafkaListener.getFailedEvents().size() >= 3);
-                });
+        await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertEquals(3, testKafkaListener.getAttemptCount(event.getId()), "Should have attempted 3 times");
+            assertTrue(testKafkaListener.getFailedEvents().size() >= 3);
+        });
     }
 
     @Test
     void testDLQReceivesMessageAfterMaxAttempts() {
-        // Given
-        TestEvent event = new TestEvent(
-                UUID.randomUUID().toString(),
-                "Will fail and go to DLQ",
-                true
-        );
-
-        // When
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Fail to DLQ", true);
         kafkaTemplate.send("test-topic", event);
 
-        // Then - verify retries happened and message was sent to DLQ topic
-        await()
-                .atMost(15, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    int attempts = testKafkaListener.getAttemptCount(event.getId());
-                    assertEquals(3, attempts, "Should have attempted 3 times");
-                    
-                    // Verify the retry logic triggered DLQ send (we can't verify the actual
-                    // DLQ message due to deserialization complexity, but we verify the path was taken)
-                    assertTrue(attempts >= 3, "Retry logic should have run");
-                });
+        await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertEquals(3, testKafkaListener.getAttemptCount(event.getId()), "Retry logic should have run");
+            assertEquals(1, dlqCollector.getReceivedMessages().size(), "DLQ should receive the failed message");
+        });
     }
 
     @Test
-    void testDLQTopicConfigurationVerified() {
-        // Given
-        TestEvent event = new TestEvent(
-                UUID.randomUUID().toString(),
-                "Verify DLQ topic configuration",
-                true
-        );
-
-        // When
+    void testDLQMetadataTracksAllAttempts() {
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Metadata check", true);
+        LocalDateTime testStartTime = LocalDateTime.now();
         kafkaTemplate.send("test-topic", event);
 
-        // Then - verify max attempts reached (which triggers DLQ)
-        await()
-                .atMost(15, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    int attempts = testKafkaListener.getAttemptCount(event.getId());
-                    assertEquals(3, attempts, "Should have attempted 3 times");
-                    // After 3 attempts, DLQ should have been called with "test-dlq" topic
-                });
+        await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertEquals(1, dlqCollector.getReceivedMessages().size());
+
+            var wrapper = dlqCollector.getReceivedMessages().get(0);
+            var metadata = wrapper.getMetadata();
+
+            assertEquals(3, metadata.getAttempts());
+            assertNotNull(metadata.getFirstFailureDateTime());
+            assertNotNull(metadata.getLastFailureDateTime());
+            assertTrue(!metadata.getFirstFailureDateTime().isBefore(testStartTime));
+            assertTrue(!metadata.getLastFailureDateTime().isBefore(metadata.getFirstFailureDateTime()));
+
+            TestEvent originalEvent = (TestEvent) wrapper.getEvent();
+            assertEquals(event.getId(), originalEvent.getId());
+            assertTrue(originalEvent.isShouldFail());
+        });
     }
 
     @Test
     void testSuccessEventDoesNotGoToDLQ() {
-        // Given - an event that will succeed
-        TestEvent event = new TestEvent(
-                UUID.randomUUID().toString(),
-                "Will succeed",
-                false
-        );
-
-        // When
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Success", false);
         kafkaTemplate.send("test-topic", event);
 
-        // Then - verify it succeeded and nothing in DLQ
-        await()
-                .atMost(10, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
-                    assertEquals(event.getId(), testKafkaListener.getSuccessfulEvents().get(0).getId());
-                    assertEquals(1, testKafkaListener.getAttemptCount(event.getId()));
-                });
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
+            assertEquals(0, dlqCollector.getReceivedMessages().size(), "DLQ should be empty for successful events");
+        });
     }
 
-    @Test
-    void testMultipleFailedEvents() {
-        // Given
-        TestEvent event1 = new TestEvent(UUID.randomUUID().toString(), "Fail 1", true);
-        TestEvent event2 = new TestEvent(UUID.randomUUID().toString(), "Fail 2", true);
+    @Configuration
+    @EnableKafka
+    @EnableAspectJAutoProxy
+    static class TestConfig {
 
-        // When
-        kafkaTemplate.send("test-topic", event1);
-        kafkaTemplate.send("test-topic", event2);
+        @Bean
+        public ObjectMapper kafkaObjectMapper() {
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.registerModule(new JavaTimeModule());
+            // Enable default typing for polymorphic deserialization
+            mapper.activateDefaultTyping(
+                    mapper.getPolymorphicTypeValidator(),
+                    ObjectMapper.DefaultTyping.NON_FINAL,
+                    JsonTypeInfo.As.PROPERTY
+            );
+            return mapper;
+        }
 
-        // Then - verify both were attempted (library retries up to maxAttempts=3, then sends to DLQ)
-        await()
-                .atMost(20, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    int attempts1 = testKafkaListener.getAttemptCount(event1.getId());
-                    int attempts2 = testKafkaListener.getAttemptCount(event2.getId());
-                    
-                    // Both events should have been attempted (at least 3 times due to retry logic)
-                    assertTrue(attempts1 >= 3, "Event1 should have been attempted at least 3 times");
-                    assertTrue(attempts2 >= 3, "Event2 should have been attempted at least 3 times");
-                });
-    }
+        @Bean
+        public ProducerFactory<String, TestEvent> producerFactory(EmbeddedKafkaBroker embeddedKafka, ObjectMapper kafkaObjectMapper) {
+            Map<String, Object> props = new HashMap<>();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+            props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
 
-    @Test
-    void testMultipleEvents() {
-        // Given
-        TestEvent successEvent1 = new TestEvent(UUID.randomUUID().toString(), "Success 1", false);
-        TestEvent successEvent2 = new TestEvent(UUID.randomUUID().toString(), "Success 2", false);
-        TestEvent failEvent = new TestEvent(UUID.randomUUID().toString(), "Fail", true);
+            DefaultKafkaProducerFactory<String, TestEvent> factory = new DefaultKafkaProducerFactory<>(props);
+            // Use the shared ObjectMapper
+            JsonSerializer<TestEvent> serializer = new JsonSerializer<>(kafkaObjectMapper);
+            factory.setValueSerializer(serializer);
+            return factory;
+        }
 
-        // When
-        kafkaTemplate.send("test-topic", successEvent1);
-        kafkaTemplate.send("test-topic", successEvent2);
-        kafkaTemplate.send("test-topic", failEvent);
+        @Bean
+        public KafkaTemplate<String, TestEvent> kafkaTemplate(ProducerFactory<String, TestEvent> producerFactory) {
+            return new KafkaTemplate<>(producerFactory);
+        }
 
-        // Then
-        await()
-                .atMost(20, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    // Two successful events
-                    assertEquals(2, testKafkaListener.getSuccessfulEvents().size());
+        @Bean
+        public ConsumerFactory<String, TestEvent> testEventConsumerFactory(
+                EmbeddedKafkaBroker embeddedKafka,
+                ObjectMapper kafkaObjectMapper) {
+            Map<String, Object> props = new HashMap<>();
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
 
-                    // One failed event (attempted 3 times)
-                    assertEquals(3, testKafkaListener.getAttemptCount(failEvent.getId()));
-                });
-    }
+            JsonDeserializer<TestEvent> jsonDeserializer = new JsonDeserializer<>(TestEvent.class, kafkaObjectMapper);
+            jsonDeserializer.addTrustedPackages("*");
+            jsonDeserializer.setUseTypeHeaders(false);
 
-    @Test
-    void testAspectIsActive() {
-        // This test verifies that the aspect is intercepting the listener
-        TestEvent event = new TestEvent(
-                UUID.randomUUID().toString(),
-                "Aspect test",
-                false
-        );
+            return new DefaultKafkaConsumerFactory<>(
+                    props,
+                    new StringDeserializer(),
+                    jsonDeserializer
+            );
+        }
 
-        kafkaTemplate.send("test-topic", event);
+        @Bean(name = "kafkaListenerContainerFactory")
+        public ConcurrentKafkaListenerContainerFactory<String, TestEvent> kafkaListenerContainerFactory(
+                ConsumerFactory<String, TestEvent> testEventConsumerFactory) {
+            ConcurrentKafkaListenerContainerFactory<String, TestEvent> factory =
+                    new ConcurrentKafkaListenerContainerFactory<>();
+            factory.setConsumerFactory(testEventConsumerFactory);
+            // Disable auto-commit to have more control during retries
+            factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+            return factory;
+        }
 
-        await()
-                .atMost(10, TimeUnit.SECONDS)
-                .untilAsserted(() -> {
-                    assertFalse(testKafkaListener.getSuccessfulEvents().isEmpty(),
-                            "If aspect is working, event should be processed");
-                });
+        @Bean(name = "defaultFactory")
+        public ConcurrentKafkaListenerContainerFactory<String, Object> defaultFactory(
+                EmbeddedKafkaBroker embeddedKafka,
+                ObjectMapper kafkaObjectMapper) {
+
+            Map<String, Object> props = new HashMap<>();
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "default-group");
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+            JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
+            jsonDeserializer.addTrustedPackages("*");
+            jsonDeserializer.setUseTypeHeaders(false);
+
+            ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
+                    props,
+                    new StringDeserializer(),
+                    jsonDeserializer
+            );
+
+            ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+                    new ConcurrentKafkaListenerContainerFactory<>();
+            factory.setConsumerFactory(consumerFactory);
+            return factory;
+        }
+
+        @Bean
+        public ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory(
+                EmbeddedKafkaBroker embeddedKafka,
+                ObjectMapper kafkaObjectMapper) {
+            Map<String, Object> props = new HashMap<>();
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "dlq-test-group");
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+
+            // Use the shared ObjectMapper with polymorphic type handling
+            JsonDeserializer<EventWrapper<?>> deserializer =
+                    new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
+            deserializer.addTrustedPackages("*");
+            deserializer.setUseTypeHeaders(false);
+
+            return new DefaultKafkaConsumerFactory<>(
+                    props,
+                    new StringDeserializer(),
+                    deserializer
+            );
+        }
+
+        @Bean(name = "dlqKafkaListenerContainerFactory")
+        public ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> dlqKafkaListenerContainerFactory(
+                ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory) {
+            ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> factory =
+                    new ConcurrentKafkaListenerContainerFactory<>();
+            factory.setConsumerFactory(dlqConsumerFactory);
+            return factory;
+        }
+
+        @Bean(name = "defaultKafkaTemplate")
+        public KafkaTemplate<String, Object> defaultKafkaTemplate(
+                EmbeddedKafkaBroker embeddedKafka,
+                ObjectMapper kafkaObjectMapper) {
+            Map<String, Object> props = new HashMap<>();
+            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
+            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+            props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+
+            DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
+            // Use the shared ObjectMapper for consistent serialization
+            JsonSerializer<Object> serializer = new JsonSerializer<>(kafkaObjectMapper);
+            factory.setValueSerializer(serializer);
+
+            return new KafkaTemplate<>(factory);
+        }
     }
 }

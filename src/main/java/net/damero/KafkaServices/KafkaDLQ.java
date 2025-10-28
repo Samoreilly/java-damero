@@ -13,10 +13,8 @@ public class KafkaDLQ {
 
     //static method to call it avoid uneccessary injections
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, Object message, Throwable throwable, boolean sendToDLQ, EventMetadata eventMetadata){
+    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper eventWrapper, Throwable throwable, boolean sendToDLQ, EventMetadata eventMetadata){
 
-        //wrapped in a custom object to add metadata
-        EventWrapper eventWrapper = new EventWrapper(message, eventMetadata);
 
         exceptions.computeIfAbsent(eventWrapper, k -> new ArrayList<>()).add(throwable);
 

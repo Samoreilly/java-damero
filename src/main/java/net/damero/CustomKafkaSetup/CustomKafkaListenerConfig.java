@@ -58,7 +58,7 @@ public class CustomKafkaListenerConfig {
         return new Builder();
     }
 
-    static class Builder {
+    static class Builder<T> {
 
         private String topic;
 
@@ -72,6 +72,7 @@ public class CustomKafkaListenerConfig {
 
         private KafkaTemplate<?, ?> kafkaTemplate;
         private ConsumerFactory<?, ?> consumerFactory;
+        private Class<T> eventType;
 
         Builder topic(String topic) {
             this.topic = topic;
@@ -81,6 +82,10 @@ public class CustomKafkaListenerConfig {
         Builder dlqTopic(String dlqTopic) {
             this.dlqTopic = dlqTopic;
             return this;
+        }
+        Builder eventType(Class<T> evemtType){
+                this.eventType = eventType;
+                return this;
         }
 
         Builder maxAttempts(int maxAttempts) {
@@ -111,8 +116,13 @@ public class CustomKafkaListenerConfig {
         //custom kafkalistenerconfig takes in builder config
 
         CustomKafkaListenerConfig build() {
+            if (consumerFactory == null && eventType != null) {
+                // fallback to default consumer factory with generics
+                consumerFactory = KafkaConsumerFactoryProvider.defaultConsumerFactory(eventType);
+            }
             return new CustomKafkaListenerConfig(this);
         }
+
     }
 
 }
