@@ -1,5 +1,4 @@
-# Kafka Damero
-
+# Kafka Damero (not ready for production yet)
 A Spring Boot library that adds retry logic and dead letter queue handling to your Kafka listeners. This library makes it easy to handle message processing failures with automatic retries and dead letter queues.
 
 ## What This Library Does
