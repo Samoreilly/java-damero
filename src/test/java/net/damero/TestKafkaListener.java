@@ -33,7 +33,7 @@ public class TestKafkaListener {
     public void handleTestEvent(TestEvent event) {
         String eventId = event.getId();
 
-        // Track attempts
+        //tracks attempts
         AtomicInteger count = attemptCounts.computeIfAbsent(eventId, k -> new AtomicInteger(0));
         int currentAttempt = count.incrementAndGet();
 

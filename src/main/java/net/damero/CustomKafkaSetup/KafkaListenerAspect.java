@@ -1,5 +1,6 @@
 package net.damero.CustomKafkaSetup;
 
+import net.damero.CustomObject.EventMetadata;
 import net.damero.KafkaServices.KafkaDLQ;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import net.damero.Annotations.CustomKafkaListener;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,13 +29,21 @@ public class KafkaListenerAspect {
     private ConcurrentKafkaListenerContainerFactory<String, Object> defaultFactory;
 
     @Autowired
-    private KafkaTemplate<?, ?> kafkaTemplate;
+    private KafkaTemplate<?, ?> defaultKafkaTemplate;
 
+    /**
+     * CURRENT IMPLEMENTATION:
+     * Retries block the consumer thread.
+     * Ensure maxAttempts * delay < max.poll.interval.ms
+     * For long delays, consider using a retry topic pattern instead.
+     */
     //ProceedingJoinPoint gives u full access of method and execution
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
 
         //defaults to default consumer factory
+
+        KafkaTemplate<?, ?> kafkaTemplate = defaultKafkaTemplate;
 
         //set default consumer for listener
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = defaultFactory;
@@ -80,6 +90,8 @@ public class KafkaListenerAspect {
         int MAX = DelayMethod.MAX.amount;
         int attempts = 0;
         Throwable lastException = null;
+        LocalDateTime firstFailureDateTime = null;
+        LocalDateTime lastFailureDateTime = null;
 
 
         while(attempts < customKafkaListener.maxAttempts()){
@@ -91,11 +103,17 @@ public class KafkaListenerAspect {
                                      //has annotated with customKafkaListener
             } catch (Throwable e) {
 
+                if(firstFailureDateTime == null){
+                    firstFailureDateTime = LocalDateTime.now();
+                }
+
                 //boolean method to make sure we log EVERY exception and not just when we exceed max attempts
                 boolean sendToDLQ = attempts >= customKafkaListener.maxAttempts();
 
                 if(event != null){
-                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event, e, sendToDLQ);
+                    lastFailureDateTime = LocalDateTime.now();
+                    EventMetadata eventMetadata = new EventMetadata(firstFailureDateTime, lastFailureDateTime, attempts);
+                    KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), event, e, sendToDLQ, eventMetadata);
                 }
 
                 // If we've exceeded max attempts, throw the exception
@@ -103,7 +121,7 @@ public class KafkaListenerAspect {
                     throw e;
                 }
 
-                // Otherwise, sleep and retry
+                //otherwise, retry
                 DelayMethod delayMethod = customKafkaListener.delayMethod();
                 double baseDelay = customKafkaListener.delay();
 

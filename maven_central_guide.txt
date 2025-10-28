@@ -1,0 +1,79 @@
+MAVEN CENTRAL UPLOAD GUIDE
+
+CAN THIS LIBRARY BE INSTALLED AS A DEPENDENCY?
+YES - once uploaded to Maven Central, users can install it just like any other dependency.
+
+HOW TO UPLOAD TO MAVEN CENTRAL:
+
+Prerequisites:
+1. Create a Sonatype account at https://issues.sonatype.org
+2. Create a JIRA ticket to get your groupId approved (java.damero)
+3. Generate GPG keys for signing
+
+Step 1: Update pom.xml with required information
+
+You'll need to add these sections to your pom.xml:
+
+- Project metadata (name, description, URL, licenses, developers, SCM)
+- Distribution management (Maven Central URLs)
+- Plugin configuration (maven-gpg-plugin for signing)
+- Property for GPG key details
+
+Step 2: Sign artifacts
+
+Maven Central requires signed artifacts. You'll need:
+- GPG installed on your system
+- GPG keys created and published
+- Configure signing in pom.xml
+
+Step 3: Deploy to Staging Repository
+
+- Use mvn deploy with staging profile
+- Send artifacts to Sonatype Nexus repository
+- Sonatype will review and promote to Central
+
+Step 4: Testing with SNAPSHOT version first
+
+- Upload as 0.0.1-SNAPSHOT to test
+- Verify it downloads correctly
+- Then publish full release (0.0.1) to Maven Central
+
+HOW USERS WOULD INSTALL IT:
+
+Once on Maven Central, users add to their pom.xml:
+
+```xml
+<dependency>
+    <groupId>java.damero</groupId>
+    <artifactId>demo</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
+
+THINGS TO FIX BEFORE UPLOADING:
+
+1. Change artifactId from "demo" to something descriptive like "kafka-damero"
+2. Fix pom.xml metadata (proper name, URL, license, etc.)
+3. Add javadoc generation
+4. Add sources jar generation
+5. Configure GPG signing
+6. Configure distribution management
+
+The library structure is ready, but you need to configure Maven Central deployment settings.
+
+ALTERNATIVE: Publish to GitHub Packages First
+
+Simpler approach:
+1. Configure GitHub Packages in pom.xml
+2. Use GitHub Actions to build and publish
+3. Users install from GitHub Packages first
+4. Later migrate to Maven Central
+
+GITHUB PACKAGES IS EASIER THAN MAVEN CENTRAL
+
+GitHub Packages workflow:
+- No JIRA ticket needed
+- No GPG signing required
+- Automatic CI/CD with GitHub Actions
+- Users can install with GitHub Packages repository URL
+

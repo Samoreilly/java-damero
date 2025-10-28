@@ -15,17 +15,21 @@ public class EventWrapper {
 
     private Object event;
     private LocalDateTime date;
+    private EventMetadata metadata;
 
     @JsonCreator
     public EventWrapper(@JsonProperty("event") Object event,
-                        @JsonProperty("date") LocalDateTime date) {
+                        @JsonProperty("date") LocalDateTime date,
+                        @JsonProperty("metadata") EventMetadata metadata) {
         this.event = event;
         this.date = date;
+        this.metadata = metadata;
     }
 
-    public EventWrapper(Object event){
+    public EventWrapper(Object event, EventMetadata metadata){
         this.event = event;
         this.date = LocalDateTime.now();
+        this.metadata = metadata;
     }
 
     //override hashcode to ignore date when equals is called
@@ -47,6 +51,7 @@ public class EventWrapper {
         return "EventWrapper{" +
                 "event=" + event +
                 ", date=" + date +
+                ", metadata=" + metadata +
                 '}';
     }
 
