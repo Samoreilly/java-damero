@@ -77,3 +77,127 @@ GitHub Packages workflow:
 - Automatic CI/CD with GitHub Actions
 - Users can install with GitHub Packages repository URL
 
+//
+//package net.damero.RegisterBean;
+//
+//import jakarta.annotation.PostConstruct;
+//import net.damero.Annotations.CustomKafkaListener;
+//import net.damero.CustomKafkaSetup.RetryKafkaListener.KafkaRetryListener;
+//import net.damero.CustomObject.EventWrapper;
+//import org.reflections.Reflections;
+//import org.reflections.scanners.Scanners;
+//import org.springframework.beans.factory.annotation.Autowired;
+//import org.springframework.beans.factory.annotation.Qualifier;
+//import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+//import org.springframework.context.ApplicationContext;
+//import org.springframework.kafka.annotation.KafkaListener;
+//import org.springframework.kafka.config.*;
+//import org.springframework.kafka.listener.adapter.RecordMessagingMessageListenerAdapter;
+//import org.springframework.messaging.handler.annotation.support.DefaultMessageHandlerMethodFactory;
+//import org.springframework.stereotype.Component;
+//
+//import java.lang.reflect.Method;
+//import java.util.HashSet;
+//import java.util.Set;
+//import java.util.concurrent.atomic.AtomicLong;
+//
+//@Component
+//@ConditionalOnProperty(name = "register.retry.enabled", havingValue = "true", matchIfMissing = true)
+//public class RegisterRetryBean {
+//
+//    @Autowired
+//    ApplicationContext context;
+//
+//    @Autowired
+//    private KafkaListenerEndpointRegistry registry;
+//
+//    @Autowired
+//    @Qualifier("defaultFactory")
+//    private KafkaListenerContainerFactory<?> kafkaListenerContainerFactory;
+//
+//    @Autowired
+//    private KafkaRetryListener kafkaRetryListener; // Inject your retry listener
+//
+//    String kafkaGroupId = "kafkaGroupId";
+//    static AtomicLong endpointIdIndex = new AtomicLong(1);
+//
+//    @PostConstruct
+//    public void listenerSetup() {
+//        Reflections reflections = new Reflections("net.damero", Scanners.MethodsAnnotated);
+//
+//        Set<Method> methods = reflections.getMethodsAnnotatedWith(CustomKafkaListener.class);
+//
+//        System.out.println("Found " + methods.size() + " methods with @CustomKafkaListener");
+//
+//        // Collect all unique retry topics
+//        Set<String> retryTopics = new HashSet<>();
+//
+//        for (Method method : methods) {
+//            if (!method.isAnnotationPresent(KafkaListener.class)) {
+//                throw new IllegalStateException(
+//                        "@CustomKafkaListener on " + method.getName() +
+//                                " must also have @KafkaListener annotation"
+//                );
+//            }
+//
+//            CustomKafkaListener customKafkaListener = method.getAnnotation(CustomKafkaListener.class);
+//            KafkaListener kafkaListener = method.getAnnotation(KafkaListener.class);
+//
+//            // Verify topic consistency
+//            if (kafkaListener.topics().length > 0 &&
+//                    !customKafkaListener.topic().equals(kafkaListener.topics()[0]) &&
+//                    !customKafkaListener.retryableTopic().isEmpty()) {
+//                throw new IllegalStateException(
+//                        "@CustomKafkaListener topic must match @KafkaListener topic"
+//                );
+//            }
+//
+//            // Collect retry topic if retryable
+//            if (customKafkaListener.retryable() &&
+//                    !customKafkaListener.retryableTopic().isEmpty()) {
+//                retryTopics.add(customKafkaListener.retryableTopic());
+//            }
+//        }
+//
+//        // Register KafkaRetryListener for each unique retry topic
+//        for (String retryTopic : retryTopics) {
+//            System.out.println("🔄 Registering KafkaRetryListener for retry topic: " + retryTopic);
+//            registerRetryListener(retryTopic);
+//        }
+//    }
+//
+//    /**
+//     * Register the KafkaRetryListener to consume from a retry topic
+//     */
+//    private void registerRetryListener(String retryTopic) {
+//        MethodKafkaListenerEndpoint<String, EventWrapper<?>> endpoint =
+//                new MethodKafkaListenerEndpoint<>();
+//
+//        endpoint.setId(generateListenerId());
+//        endpoint.setGroupId(kafkaGroupId + "-retry");
+//        endpoint.setAutoStartup(true);
+//        endpoint.setTopics(retryTopic);
+//        endpoint.setMessageHandlerMethodFactory(new DefaultMessageHandlerMethodFactory());
+//
+//        // Set the KafkaRetryListener instance and its onMessage method
+//        endpoint.setBean(kafkaRetryListener);
+//        try {
+//            Method onMessageMethod = KafkaRetryListener.class.getMethod(
+//                    "onMessage",
+//                    org.apache.kafka.clients.consumer.ConsumerRecord.class
+//            );
+//            endpoint.setMethod(onMessageMethod);
+//        } catch (NoSuchMethodException e) {
+//            throw new RuntimeException("Failed to find onMessage method on KafkaRetryListener", e);
+//        }
+//
+//        // Register the endpoint
+//        registry.registerListenerContainer(endpoint, kafkaListenerContainerFactory, true);
+//
+//        System.out.println("✅ Successfully registered retry listener for topic: " + retryTopic);
+//    }
+//
+//    private String generateListenerId() {
+//        return "retry-listener-" + endpointIdIndex.getAndIncrement();
+//    }
+//}

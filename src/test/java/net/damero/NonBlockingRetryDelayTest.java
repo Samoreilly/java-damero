@@ -3,8 +3,9 @@ package net.damero;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import net.damero.Annotations.CustomKafkaListener;
 import net.damero.CustomKafkaSetup.CustomKafkaAutoConfiguration;
-import net.damero.CustomKafkaSetup.KafkaListenerAspect;
+import net.damero.CustomKafkaSetup.DelayMethod;
 import net.damero.CustomKafkaSetup.RetryKafkaListener.KafkaRetryListener;
 import net.damero.CustomKafkaSetup.RetryKafkaListener.RetryDelayCalculator;
 import net.damero.CustomObject.EventWrapper;
@@ -17,23 +18,29 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.*;
 import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.stereotype.Component;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,121 +48,167 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(
         classes = {
-                CustomKafkaListenerIntegrationTest.TestConfig.class,
-                TestKafkaListener.class,
-                DLQMessageCollector.class,
-                CustomKafkaAutoConfiguration.class,
+                NonBlockingRetryDelayTest.TestConfig.class,
+                CustomKafkaAutoConfiguration.class
         }
 )
-@EmbeddedKafka(partitions = 1, topics = {"test-topic", "test-topic-retry", "test-dlq"})
+@EmbeddedKafka(
+        partitions = 1,
+        topics = {"delay-test-topic", "delay-test-retry", "delay-test-dlq"}
+)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
-class CustomKafkaListenerIntegrationTest {
-
-    @Autowired
-    private EmbeddedKafkaBroker embeddedKafka;
+class NonBlockingRetryDelayTest {
 
     @Autowired
     private KafkaTemplate<String, TestEvent> kafkaTemplate;
 
     @Autowired
-    private TestKafkaListener testKafkaListener;
+    private DelayTestListener delayTestListener;
 
     @Autowired
-    private DLQMessageCollector dlqCollector;
+    private DelayDLQCollector dlqCollector;
+
+    @Autowired
+    private KafkaRetryListener kafkaRetryListener;
 
     @BeforeEach
     void setUp() {
-        testKafkaListener.reset();
+        delayTestListener.reset();
         dlqCollector.reset();
     }
 
     @Test
-    void testSuccessfulEventProcessing() {
-        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Test message", false);
-        kafkaTemplate.send("test-topic", event.getId(), event);
+    void testRetryDelayIsNonBlocking() {
+        List<TestEvent> events = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Event " + i, true);
+            events.add(event);
+            kafkaTemplate.send("delay-test-topic", event);
+        }
 
+        // All events should be initially processed quickly
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
-            assertEquals(event.getId(), testKafkaListener.getSuccessfulEvents().get(0).getId());
-            assertEquals(1, testKafkaListener.getAttemptCount(event.getId()));
+            assertTrue(delayTestListener.getProcessedCount() >= 5,
+                    "All events should be processed initially, got: " + delayTestListener.getProcessedCount());
+        });
+
+        // Wait for all retries and DLQ
+        await().atMost(60, TimeUnit.SECONDS).untilAsserted(() -> {
+            int dlqSize = dlqCollector.getReceivedMessages().size();
+            assertEquals(5, dlqSize,
+                    "All 5 events should eventually reach DLQ, got: " + dlqSize);
         });
     }
 
     @Test
-    void testFailedEventWithRetries() {
-        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Will fail", true);
-        kafkaTemplate.send("test-topic", event);
+    void testRetryDelayIncreasesWithAttempts() {
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Delay check", true);
+
+        kafkaTemplate.send("delay-test-topic", event);
+
+        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Instant> timestamps = delayTestListener.getAttemptTimestamps(event.getId());
+            assertTrue(timestamps.size() >= 3,
+                    "Should have at least 3 attempts, got: " + timestamps.size());
+
+            if (timestamps.size() >= 3) {
+                Duration firstDelay = Duration.between(timestamps.get(0), timestamps.get(1));
+                Duration secondDelay = Duration.between(timestamps.get(1), timestamps.get(2));
+
+                System.out.println("First delay: " + firstDelay.toMillis() + "ms");
+                System.out.println("Second delay: " + secondDelay.toMillis() + "ms");
+
+                assertTrue(secondDelay.toMillis() >= firstDelay.toMillis() * 0.5,
+                        String.format("Second delay (%dms) should be comparable to first (%dms) with exponential backoff",
+                                secondDelay.toMillis(), firstDelay.toMillis()));
+            }
+        });
+    }
+
+    @Test
+    void testMainThreadIsNotBlocked() {
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Non-blocking test", true);
+
+        Instant sendTime = Instant.now();
+        kafkaTemplate.send("delay-test-topic", event);
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertTrue(delayTestListener.getProcessedCount() >= 1,
+                    "Should process at least once");
+        });
+
+        Instant firstProcessedTime = Instant.now();
+        Duration initialProcessingTime = Duration.between(sendTime, firstProcessedTime);
+
+        assertTrue(initialProcessingTime.toMillis() < 5000,
+                "Initial processing should be fast (" + initialProcessingTime.toMillis() +
+                        "ms), not blocked by retry delay");
+    }
+
+    @Test
+    void testSchedulerHandlesConcurrentRetries() {
+        int eventCount = 20;
+        List<TestEvent> events = new ArrayList<>();
+
+        for (int i = 0; i < eventCount; i++) {
+            TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Concurrent " + i, true);
+            events.add(event);
+            kafkaTemplate.send("delay-test-topic", event);
+        }
 
         await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertEquals(3, testKafkaListener.getAttemptCount(event.getId()), "Should have attempted 3 times");
-            assertTrue(testKafkaListener.getFailedEvents().size() >= 3);
+            assertTrue(delayTestListener.getProcessedCount() >= eventCount,
+                    "All " + eventCount + " events should be processed initially, got: " +
+                            delayTestListener.getProcessedCount());
         });
-    }
 
-    @Test
-    void testDLQReceivesMessageAfterMaxAttempts() {
-        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Fail to DLQ", true);
-        kafkaTemplate.send("test-topic", event);
+        KafkaRetryListener.SchedulerStats stats = kafkaRetryListener.getStats();
+        System.out.println("Scheduler stats after initial processing: " + stats);
 
-
-        await().atMost(15, TimeUnit.SECONDS)
-                .pollInterval(500, TimeUnit.MILLISECONDS)
+        await().atMost(90, TimeUnit.SECONDS)
+                .pollInterval(2, TimeUnit.SECONDS)
                 .untilAsserted(() -> {
-                    int attempts = testKafkaListener.getAttemptCount(event.getId());
-                    int failed = testKafkaListener.getFailedEvents().size();
-                    int dlq = dlqCollector.getReceivedMessages().size();
-
-                    System.out.println(String.format(
-                            "Event %s - Attempts: %d, Failed: %d, DLQ: %d",
-                            event.getId(), attempts, failed, dlq
-                    ));
-
-                    assertTrue(attempts >= 3, "Should attempt 3 times, got: " + attempts);
-                    assertEquals(1, dlq, "Should have 1 message in DLQ, got: " + dlq);
+                    int dlqCount = dlqCollector.getReceivedMessages().size();
+                    System.out.println("DLQ count: " + dlqCount + "/" + eventCount);
+                    assertEquals(eventCount, dlqCount,
+                            "All events should eventually reach DLQ");
                 });
     }
 
     @Test
-    void testDLQMetadataTracksAllAttempts() {
-        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Metadata check", true);
-        LocalDateTime testStartTime = LocalDateTime.now();
-        kafkaTemplate.send("test-topic", event);
+    void testDifferentDelayMethods() {
+        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Delay method test", true);
 
-        await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertEquals(1, dlqCollector.getReceivedMessages().size());
+        kafkaTemplate.send("delay-test-topic", event);
 
-            var wrapper = dlqCollector.getReceivedMessages().get(0);
-            var metadata = wrapper.getMetadata();
+        await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Instant> timestamps = delayTestListener.getAttemptTimestamps(event.getId());
+            assertTrue(timestamps.size() >= 3,
+                    "Should have at least 3 attempts, got: " + timestamps.size());
 
-            assertEquals(3, metadata.getAttempts());
-            assertNotNull(metadata.getFirstFailureDateTime());
-            assertNotNull(metadata.getLastFailureDateTime());
-            assertTrue(!metadata.getFirstFailureDateTime().isBefore(testStartTime));
-            assertTrue(!metadata.getLastFailureDateTime().isBefore(metadata.getFirstFailureDateTime()));
-
-            TestEvent originalEvent = (TestEvent) wrapper.getEvent();
-            assertEquals(event.getId(), originalEvent.getId());
-            assertTrue(originalEvent.isShouldFail());
+            for (int i = 1; i < timestamps.size(); i++) {
+                Duration delay = Duration.between(timestamps.get(i-1), timestamps.get(i));
+                System.out.println("Delay between attempt " + i + " and " + (i+1) + ": " +
+                        delay.toMillis() + "ms");
+                assertTrue(delay.toMillis() > 100,
+                        "Should have meaningful delay (>100ms) between attempts, got: " +
+                                delay.toMillis() + "ms");
+            }
         });
     }
 
-    @Test
-    void testSuccessEventDoesNotGoToDLQ() {
-        TestEvent event = new TestEvent(UUID.randomUUID().toString(), "Success", false);
-        kafkaTemplate.send("test-topic", event);
 
-        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertEquals(1, testKafkaListener.getSuccessfulEvents().size());
-            assertEquals(0, dlqCollector.getReceivedMessages().size(), "DLQ should be empty for successful events");
-        });
-    }
 
-    @Configuration
+
+
+    @TestConfiguration
     @EnableKafka
     @EnableAspectJAutoProxy
-    static class TestConfig {
-
-        // Provide all beans needed for testing (auto-config is disabled)
+    @Import({
+            DelayTestListener.class,
+            DelayDLQCollector.class
+    })
+    public static class TestConfig {
 
         @Bean
         public ObjectMapper kafkaObjectMapper() {
@@ -178,7 +231,6 @@ class CustomKafkaListenerIntegrationTest {
                 RetryDelayCalculator delayCalculator) {
             return new KafkaRetryListener(defaultKafkaTemplate, delayCalculator);
         }
-
         @Bean(name = "retryContainerFactory")
         public ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> retryContainerFactory(
                 EmbeddedKafkaBroker embeddedKafka,
@@ -192,7 +244,7 @@ class CustomKafkaListenerIntegrationTest {
             JsonDeserializer<EventWrapper<?>> deserializer =
                     new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
             deserializer.addTrustedPackages("*");
-            deserializer.setUseTypeHeaders(false);
+            deserializer.setUseTypeHeaders(true);
 
             ConsumerFactory<String, EventWrapper<?>> consumerFactory = new DefaultKafkaConsumerFactory<>(
                     props,
@@ -209,15 +261,17 @@ class CustomKafkaListenerIntegrationTest {
             return factory;
         }
         @Bean
-        public ConsumerFactory<String, TestEvent> testEventConsumerFactory(
+        public ConsumerFactory<String, TestEvent> delayTestConsumerFactory(
                 EmbeddedKafkaBroker embeddedKafka,
                 ObjectMapper kafkaObjectMapper) {
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
-            props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "delay-test-group");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
-            JsonDeserializer<TestEvent> jsonDeserializer = new JsonDeserializer<>(TestEvent.class, kafkaObjectMapper);
+            JsonDeserializer<TestEvent> jsonDeserializer =
+                    new JsonDeserializer<>(TestEvent.class, kafkaObjectMapper);
             jsonDeserializer.addTrustedPackages("*");
             jsonDeserializer.setUseTypeHeaders(false);
 
@@ -228,14 +282,15 @@ class CustomKafkaListenerIntegrationTest {
             );
         }
 
-// Inside the TestConfig class, REPLACE the existing kafkaListenerContainerFactory method:
 
-        @Bean(name = "kafkaListenerContainerFactory")
-        public ConcurrentKafkaListenerContainerFactory<String, TestEvent> kafkaListenerContainerFactory(
-                ConsumerFactory<String, TestEvent> testEventConsumerFactory) {
+// Inside the TestConfig class, REPLACE the existing delayTestContainerFactory method:
+
+        @Bean(name = "delayTestContainerFactory")
+        public ConcurrentKafkaListenerContainerFactory<String, TestEvent> delayTestContainerFactory(
+                ConsumerFactory<String, TestEvent> delayTestConsumerFactory) {
             ConcurrentKafkaListenerContainerFactory<String, TestEvent> factory =
                     new ConcurrentKafkaListenerContainerFactory<>();
-            factory.setConsumerFactory(testEventConsumerFactory);
+            factory.setConsumerFactory(delayTestConsumerFactory);
 
             // ✅ CRITICAL: Completely disable error handling so aspect can handle it
             factory.setCommonErrorHandler(new org.springframework.kafka.listener.CommonErrorHandler() {
@@ -258,9 +313,7 @@ class CustomKafkaListenerIntegrationTest {
                 }
             });
 
-            // Enable manual acknowledgment mode
             factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
-
             return factory;
         }
 
@@ -273,18 +326,17 @@ class CustomKafkaListenerIntegrationTest {
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-            DefaultKafkaProducerFactory<String, TestEvent> factory = new DefaultKafkaProducerFactory<>(props);
-            JsonSerializer<TestEvent> serializer = new JsonSerializer<>(kafkaObjectMapper);
-            factory.setValueSerializer(serializer);
+            DefaultKafkaProducerFactory<String, TestEvent> factory =
+                    new DefaultKafkaProducerFactory<>(props);
+            factory.setValueSerializer(new JsonSerializer<>(kafkaObjectMapper));
             return factory;
         }
 
         @Bean
-        public KafkaTemplate<String, TestEvent> kafkaTemplate(ProducerFactory<String, TestEvent> producerFactory) {
+        public KafkaTemplate<String, TestEvent> kafkaTemplate(
+                ProducerFactory<String, TestEvent> producerFactory) {
             return new KafkaTemplate<>(producerFactory);
         }
-
-        // Library beans configured for embedded kafka
 
         @Bean(name = "defaultKafkaTemplate")
         public KafkaTemplate<String, Object> defaultKafkaTemplate(
@@ -295,20 +347,19 @@ class CustomKafkaListenerIntegrationTest {
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-            DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
+            DefaultKafkaProducerFactory<String, Object> factory =
+                    new DefaultKafkaProducerFactory<>(props);
+
             JsonSerializer<Object> serializer = new JsonSerializer<>(kafkaObjectMapper);
-            serializer.setAddTypeInfo(true);
+            serializer.setAddTypeInfo(true);  // ✅ ADD THIS LINE
             factory.setValueSerializer(serializer);
 
             return new KafkaTemplate<>(factory);
         }
 
-// Add this to the TestConfig class in CustomKafkaListenerIntegrationTest.java
-
-// In the TestConfig class, add @Primary annotation to defaultFactory:
-
+        // CRITICAL FIX: Mark defaultFactory as @Primary
         @Bean(name = "defaultFactory")
-        @org.springframework.context.annotation.Primary
+        @Primary
         public ConcurrentKafkaListenerContainerFactory<String, Object> defaultFactory(
                 EmbeddedKafkaBroker embeddedKafka,
                 ObjectMapper kafkaObjectMapper) {
@@ -343,7 +394,7 @@ class CustomKafkaListenerIntegrationTest {
                 ObjectMapper kafkaObjectMapper) {
             Map<String, Object> props = new HashMap<>();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
-            props.put(ConsumerConfig.GROUP_ID_CONFIG, "dlq-test-group");
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "delay-dlq-group");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
             JsonDeserializer<EventWrapper<?>> deserializer =

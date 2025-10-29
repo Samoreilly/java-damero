@@ -2,6 +2,7 @@ package net.damero;
 
 import net.damero.Annotations.CustomKafkaListener;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,13 +19,15 @@ public class TestKafkaListener {
 
     @CustomKafkaListener(
             topic = "test-topic",
+            retryable = true,  // ✅ ADD THIS
+            retryableTopic = "test-topic-retry",
             dlqTopic = "test-dlq",
             maxAttempts = 3,
             delay = 100,
             delayMethod = net.damero.CustomKafkaSetup.DelayMethod.LINEAR
     )
-    @KafkaListener(topics = "test-topic",groupId = "test-group",  containerFactory = "kafkaListenerContainerFactory")
-    public void listen(TestEvent event) {
+    @KafkaListener(topics = "test-topic", groupId = "test-group", containerFactory = "kafkaListenerContainerFactory")
+    public void listen(TestEvent event, Acknowledgment acknowledgment) {  // ✅ ADD Acknowledgment
         String eventId = event.getId();
         attemptCounts.merge(eventId, 1, Integer::sum);
 

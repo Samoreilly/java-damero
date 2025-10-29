@@ -3,12 +3,13 @@ package net.damero;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Objects;
+
 public class TestEvent {
     private String id;
     private String message;
     private boolean shouldFail;
 
-    // Default constructor for Jackson
     public TestEvent() {
     }
 
@@ -22,7 +23,6 @@ public class TestEvent {
         this.shouldFail = shouldFail;
     }
 
-    // Getters and setters
     public String getId() {
         return id;
     }
@@ -45,6 +45,21 @@ public class TestEvent {
 
     public void setShouldFail(boolean shouldFail) {
         this.shouldFail = shouldFail;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TestEvent testEvent = (TestEvent) o;
+        return shouldFail == testEvent.shouldFail &&
+                Objects.equals(id, testEvent.id) &&
+                Objects.equals(message, testEvent.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, message, shouldFail);
     }
 
     @Override
