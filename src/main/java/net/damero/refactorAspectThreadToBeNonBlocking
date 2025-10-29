@@ -1,0 +1,11 @@
+
+
+ASPECT THREAD INTERCEPTOR SHOULD BE NON BLOCKING
+
+APPROACH: CREATE A RETRYABLE TOPIC
+-> When an event fails
+-> Update its attempts counter + 1
+-> Check if the counter is greater than the max attempts
+-> If not, publish the event to a retry topic
+-> If yes, publish the event to the dead letter topic
+

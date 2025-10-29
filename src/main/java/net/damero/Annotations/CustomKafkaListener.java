@@ -16,6 +16,9 @@ public @interface CustomKafkaListener {
     int maxAttempts() default 3;
     double delay() default 0.0;
     DelayMethod delayMethod() default DelayMethod.EXPO;
+    boolean retryable() default true;
+    String retryableTopic() default "retryable-topic";
+
     Class<Void> kafkaTemplate() default void.class;
     Class<Void> consumerFactory() default void.class;
     Class<?> eventType() default Void.class;

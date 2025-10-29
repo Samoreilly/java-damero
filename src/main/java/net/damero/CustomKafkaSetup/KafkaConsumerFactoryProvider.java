@@ -15,6 +15,8 @@ import java.util.Map;
 
 public class KafkaConsumerFactoryProvider {
 
+
+    //this is the
     public static <T> ConsumerFactory<String, EventWrapper<T>> defaultConsumerFactory(Class<T> eventType) {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());

@@ -15,7 +15,6 @@ public class KafkaDLQ {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper eventWrapper, Throwable throwable, boolean sendToDLQ, EventMetadata eventMetadata){
 
-
         exceptions.computeIfAbsent(eventWrapper, k -> new ArrayList<>()).add(throwable);
 
         //only send to DLQ if we exceed max attempts

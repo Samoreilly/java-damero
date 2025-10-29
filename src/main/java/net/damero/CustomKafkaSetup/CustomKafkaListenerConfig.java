@@ -8,7 +8,7 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 
 @Getter
-public class CustomKafkaListenerConfig {
+public class CustomKafkaListenerConfig{
 
 
     private final String topic;
@@ -16,6 +16,8 @@ public class CustomKafkaListenerConfig {
     private final int maxAttempts;
     private final double delay;
     private DelayMethod delayMethod;
+    private final boolean retryable;
+    private final String retryableTopic;
     private final KafkaTemplate<?, ?> kafkaTemplate;
     private final ConsumerFactory<?, ?> consumerFactory;//allow the user to provide custom consumer config
 
@@ -27,6 +29,8 @@ public class CustomKafkaListenerConfig {
         this.delayMethod = builder.delayMethod;
         this.kafkaTemplate = builder.kafkaTemplate;
         this.consumerFactory = builder.consumerFactory;
+        this.retryable = builder.retryable;
+        this.retryableTopic = builder.retryableTopic;
     }
 
     public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation) {
@@ -39,6 +43,8 @@ public class CustomKafkaListenerConfig {
             .maxAttempts(annotation.maxAttempts())
             .delay(annotation.delay())
             .delayMethod(annotation.delayMethod())
+            .retryable(annotation.retryable())
+            .retryableTopic(annotation.retryableTopic())
             .consumerFactory(null);
 
         KafkaTemplate<?, ?> kafkaTemplate = null;
@@ -70,6 +76,10 @@ public class CustomKafkaListenerConfig {
 
         private DelayMethod delayMethod;//default delay method to linear
 
+        private boolean retryable;
+
+        private String retryableTopic;
+
         private KafkaTemplate<?, ?> kafkaTemplate;
         private ConsumerFactory<?, ?> consumerFactory;
         private Class<T> eventType;
@@ -84,8 +94,8 @@ public class CustomKafkaListenerConfig {
             return this;
         }
         Builder eventType(Class<T> evemtType){
-                this.eventType = eventType;
-                return this;
+            this.eventType = eventType;
+            return this;
         }
 
         Builder maxAttempts(int maxAttempts) {
@@ -100,6 +110,16 @@ public class CustomKafkaListenerConfig {
 
         Builder delayMethod(DelayMethod delayMethod) {
             this.delayMethod = delayMethod;
+            return this;
+        }
+
+        Builder retryable(boolean retryable){
+            this.retryable = retryable;
+            return this;
+        }
+
+        Builder retryableTopic(String retryableTopic){
+            this.retryableTopic = retryableTopic;
             return this;
         }
 

@@ -57,6 +57,8 @@ public class KafkaListenerAspect {
                 .maxAttempts(customKafkaListener.maxAttempts())
                 .delay(customKafkaListener.delay())
                 .delayMethod(customKafkaListener.delayMethod())
+                .retryable(customKafkaListener.retryable())
+                .retryableTopic(customKafkaListener.retryableTopic())
                 .kafkaTemplate(kafkaTemplate)
                 // Remove these two lines if they exist:
                 // .eventType(eventType)
@@ -108,7 +110,7 @@ public class KafkaListenerAspect {
                     lastFailureDateTime = LocalDateTime.now();
                     EventMetadata eventMetadata = new EventMetadata(firstFailureDateTime, lastFailureDateTime, attempts);
 
-                    // Wrap the raw event before sending to DLQ
+                    // wraps the raw event before sending to DLQ
                     EventWrapper<Object> wrappedEvent = new EventWrapper<>(event, LocalDateTime.now(), eventMetadata);
 
                     KafkaDLQ.sendToDLQ(config.getKafkaTemplate(), config.getDlqTopic(), wrappedEvent, e, sendToDLQ, eventMetadata);
