@@ -154,6 +154,30 @@ public class CustomKafkaAutoConfiguration {
         return factory;
     }
 
+
+    /*
+        USE SAME CONFIG AS DLQ CONSUMER FACTORY BELOW
+     */
+//    @Bean
+//    @ConditionalOnMissingBean(name = "dlqReaderFactory")
+//    public ConsumerFactory<String, EventWrapper<?>> dlqReaderFactory(ObjectMapper kafkaObjectMapper) {
+//        Map<String, Object> props = new HashMap<>();
+//        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+//        props.put(ConsumerConfig.GROUP_ID_CONFIG, "custom-kafka-dlq-group");
+//        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+//
+//        JsonDeserializer<EventWrapper<?>> deserializer =
+//                new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
+//        deserializer.addTrustedPackages("*");
+//        deserializer.setUseTypeHeaders(false);
+//
+//        return new DefaultKafkaConsumerFactory<>(
+//                props,
+//                new StringDeserializer(),
+//                deserializer
+//        );
+//    }
+
     /**
      * Consumer factory for DLQ messages (EventWrapper).
      * Automatically handles deserialization of wrapped events.

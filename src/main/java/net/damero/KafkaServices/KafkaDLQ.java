@@ -21,11 +21,11 @@ public class KafkaDLQ {
         exceptions.computeIfAbsent(eventWrapper, k -> new ArrayList<>()).add(throwable);
 
         try {
-            System.out.println("💀 KafkaDLQ: Sending to topic: " + topic);
+            System.out.println("KafkaDLQ: Sending to topic: " + topic);
             ((KafkaTemplate) kafkaTemplate).send(topic, eventWrapper);
-            System.out.println("✅ KafkaDLQ: Successfully sent to " + topic);
+            System.out.println("KafkaDLQ: Successfully sent to " + topic);
         } catch (Exception e) {
-            System.err.println("❌ KafkaDLQ: Failed to send to " + topic + ": " + e.getMessage());
+            System.err.println("KafkaDLQ: Failed to send to " + topic + ": " + e.getMessage());
             e.printStackTrace();
         }
     }

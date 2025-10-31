@@ -1,0 +1,225 @@
+Purpose: Expose a read-only API for Dead Letter Queue (DLQ) contents without removing messages
+
+How Kafka reading works (why reading doesn't remove messages)
+
+Kafka topics are immutable append-only logs. Reading messages never deletes them.
+
+What actually happens:
+1. Messages are stored on disk in the topic partitions.
+2. Consumer groups track their "position" using offsets (like a bookmark: "I've read up to offset 100").
+3. When you poll(), Kafka returns messages starting from your current offset, but the messages stay in the topic.
+4. Committing offsets tells Kafka "I'm done processing up to offset 100, don't give me those again" - but it doesn't delete anything.
+5. Messages are only removed when:
+   - Retention time expires (e.g., delete messages older than 7 days)
+   - Log compaction runs (keeps latest value per key, removes older versions)
+   - Manual topic deletion
+
+Read-only consumer explained:
+- Create a consumer with enable.auto.commit=false (don't automatically save position)
+- Never call commitSync() or commitAsync() (don't save position at all)
+- Use a dedicated consumer group (e.g., "dlq-api-reader") separate from your processing consumers
+- Read messages by seeking to specific offsets and polling
+- The consumer group offset stays at the beginning (or wherever you last seeked), so each read starts from the same place
+- Your processing consumers (different group) keep their own offset track, unaffected by API reads
+- Messages remain in the topic for all consumers to see
+
+Example:
+- DLQ topic has messages at offsets 0, 1, 2, 3, 4, 5
+- Processing consumer group "dlq-processor" has committed offset 3 (processed 0-3)
+- API read-only consumer group "dlq-api-reader" never commits
+- API request seeks to offset 0, polls, gets messages 0-2
+- API request comes again, seeks to offset 0 again (offset never advanced), gets 0-2 again
+- Processing consumer can still read 4-5 (its offset is 3, unaffected by API)
+- Messages 0-5 still exist in the topic until retention removes them
+
+High-level approach
+- Use a dedicated consumer group that NEVER commits offsets so reads don't alter the stream.
+- Poll DLQ in a controlled, read-only way per request and return messages as JSON.
+- Support pagination via offset+partition or time-based windows.
+- Deserialize DLQ payloads as EventWrapper<?> to include metadata (attempts, timestamps, etc.).
+
+Key principles
+1) Non-destructive reads
+   - Create a consumer with enable.auto.commit=false and do not call commitSync/commitAsync.
+   - Use a unique consumer group (e.g., dlq-api-reader) so this API does not affect other consumers.
+   - For strict read-only semantics, close the consumer after use or reuse a pool with manual seek per request.
+
+2) Deterministic pagination
+   - DLQ is a topic with partitions; pagination must be based on (partition, offset) positions.
+   - API accepts parameters: partitions[], fromOffset, maxRecords, or time range.
+   - For multi-partition pagination, return a per-partition cursor to resume.
+
+3) Bounded polling
+   - Use poll(Duration.ofMillis(X)) with a sensible maxRecords to limit response size.
+   - Avoid long-lived consumers per request; construct → assign/seek → poll → map → close.
+
+4) Deserialization
+   - Use the same ObjectMapper as the library; JsonDeserializer<Object> with type headers enabled.
+   - Trust packages to your domain (or "*") as appropriate for your environment.
+   - Expect EventWrapper<?> in DLQ. Map to a DTO safe for external exposure (avoid serializing full Exceptions if needed).
+
+API design (example)
+- GET /api/dlq/peek
+  - Query params:
+    - partitions: optional, comma-separated (default: all)
+    - fromOffset: optional long (default: earliest for each partition)
+    - maxRecords: optional int (default: 50, max: 500)
+  - Behavior:
+    - Create consumer (groupId=dlq-api-reader, enable.auto.commit=false)
+    - For each requested partition: assign(topic, partition), seek(partition, fromOffset or beginning)
+    - poll; collect up to maxRecords per request
+    - Return records [{ partition, offset, key, timestamp, wrapper: { event, metadata } }]
+    - Include next cursors per partition to continue (partition, nextOffset)
+
+- GET /api/dlq/range
+  - Query params:
+    - partition: required
+    - startOffset: required
+    - endOffset: required (exclusive)
+  - Behavior: assign/seek to startOffset, poll/iterate until endOffset-1 or cap by maxRecords.
+
+- GET /api/dlq/metadata
+  - Returns topic name, partition count, beginning/ending offsets per partition.
+
+Security & governance
+- Protect endpoints (role-based access: e.g., ROLE_OPERATIONS only).
+- Rate limit to avoid hammering brokers.
+- Mask or drop sensitive fields from metadata or event payloads if your events can contain secrets.
+
+Minimal realistic implementation (what you actually need)
+
+Yes, you create a consumer and read, but here's what's required in between:
+
+1. Configure the consumer properly:
+   ```java
+   Properties props = new Properties();
+   props.put("bootstrap.servers", brokers);
+   props.put("group.id", "dlq-api-reader");  // unique group
+   props.put("enable.auto.commit", "false");  // critical!
+   props.put("key.deserializer", StringDeserializer.class);
+   props.put("value.deserializer", JsonDeserializer.class);
+   // Configure JsonDeserializer to handle EventWrapper<?>
+   ```
+
+2. Create consumer and assign partitions:
+   ```java
+   KafkaConsumer<String, Object> consumer = new KafkaConsumer<>(props);
+   List<TopicPartition> partitions = ... // get partitions for DLQ topic
+   consumer.assign(partitions);  // assign (not subscribe) for manual control
+   ```
+
+3. Seek to the starting position (not automatic with assign):
+   ```java
+   if (fromOffset != null) {
+       consumer.seek(partition, fromOffset);
+   } else {
+       consumer.seekToBeginning(partitions);  // start from beginning
+   }
+   ```
+
+4. Poll with a timeout (poll() blocks, need Duration):
+   ```java
+   List<ConsumerRecord<String, Object>> records = new ArrayList<>();
+   Duration timeout = Duration.ofMillis(2000);
+   ConsumerRecords<String, Object> batch = consumer.poll(timeout);
+   ```
+
+5. Bound the results (don't return everything):
+   ```java
+   for (ConsumerRecord<String, Object> record : batch) {
+       if (records.size() >= maxRecords) break;
+       records.add(record);
+   }
+   ```
+
+6. Handle deserialization errors (EventWrapper might fail):
+   ```java
+   try {
+       EventWrapper<?> wrapper = (EventWrapper<?>) record.value();
+       // map to DTO
+   } catch (Exception e) {
+       // log and skip, or return as "unparseable"
+   }
+   ```
+
+7. Close the consumer (always, even on errors):
+   ```java
+   try {
+       // poll and collect
+   } finally {
+       consumer.close();  // releases resources
+   }
+   ```
+
+What you're missing if you just "append to list":
+- Seek position control (you'll always read from committed offset, not what you want)
+- Bounded results (could return 100k messages and blow up API response)
+- Error handling (deserialization failures will crash your API)
+- Resource leaks (not closing consumer = connection pool exhaustion)
+- Timeout handling (poll() with no timeout can hang forever)
+
+So yes, the core is "create consumer, poll, append to list" - but those 7 steps above are what make it actually work in practice.
+
+Implementation sketch (Spring Boot)
+- Bean: ConsumerFactory<String, Object> dlqReadOnlyConsumerFactory
+  - Properties: bootstrap servers, key/value deserializers, enable.auto.commit=false, isolation.level=read_uncommitted
+- Controller: DLQController
+  - Inject factory and topic name (dlqTopic)
+  - For each request:
+    1) createConsumer()
+    2) assign to TopicPartition(s)
+    3) seek to provided offsets (or beginningOffsets)
+    4) poll with timeout and collect up to maxRecords
+    5) handle deserialization errors gracefully
+    6) map to DTOs
+    7) close consumer (in finally block)
+  - Never commit offsets.
+
+Why not dual-publish to a separate "read-only" topic?
+- Keeping two topics in sync is fragile and error-prone:
+  - If you delete from one, you'd have to delete from the other (manual work, race conditions).
+  - Retries, producer failures, or network hiccups can cause divergence.
+  - Partition reassignment or broker failures can leave topics out of sync.
+  - You'd need distributed locks or transactions to maintain consistency, which Kafka doesn't provide natively.
+- Bottom line: avoid dual topics unless you absolutely need different retention/compaction policies, and even then, accept they'll drift.
+
+Better approaches:
+
+Option 1: Single DLQ topic + read-only consumer (recommended for most cases)
+- Use the approach above: single DLQ topic, dedicated non-committing consumer group for API reads.
+- Simple, no sync issues, minimal infrastructure.
+- Limitation: deletion isn't really possible (Kafka is append-only), but you can use retention/compaction to clean old messages.
+
+Option 2: Project to a read model (DB/cache) if you need deletion capabilities
+- Async consumer (separate from API) reads DLQ and writes to a database/cache.
+- API reads from the DB, not Kafka.
+- Deletions happen in DB; Kafka DLQ retains messages per retention policy.
+- Benefits: fast filtering, stable pagination, true deletion, rich queries.
+- Tradeoff: extra infrastructure (DB), eventual consistency (DLQ → DB lag), and you need to handle DB failures.
+
+Edge cases & cautions
+- Large partitions: always enforce maxRecords and max payload size.
+- Mixed payloads: if DLQ may hold different event types, rely on type headers and wrap unknown types into a generic representation.
+- Exception fields: consider redacting stack traces before returning to API consumers.
+- Concurrency: per-request consumer creation is simpler; for higher throughput, use a small pool and perform assign/seek per request carefully.
+
+Minimal DTOs (response shapes)
+- DLQRecordDto
+  - partition: int
+  - offset: long
+  - timestamp: long
+  - key: String (optional)
+  - wrapper: { event: Object, metadata: { attempts, firstFailure, lastFailure, originalTopic, dlqTopic, delayMs, delayMethod, etc. } }
+- DLQPageCursor
+  - partition: int
+  - nextOffset: long
+
+Testing strategy
+- Use EmbeddedKafka; produce several EventWrapper<?> messages into DLQ topic.
+- Call /api/dlq/metadata to get beginning/ending offsets.
+- Call /api/dlq/peek with different maxRecords and verify cursors advance without modifying committed offsets.
+- Restart the API and confirm messages are still present (non-destructive).
+
+Bottom line
+- Use a dedicated, non-committing consumer group and manual seek to implement read-only, cursor-based access to DLQ contents.
+- Expose simple endpoints for peeking and ranged reads; never commit offsets and never send delete/consume acks.
