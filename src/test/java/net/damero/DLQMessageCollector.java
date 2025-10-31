@@ -23,4 +23,5 @@ public class DLQMessageCollector {
     public void listenDlq(EventWrapper<?> wrapper) {
         collect(wrapper);
     }
+
 }

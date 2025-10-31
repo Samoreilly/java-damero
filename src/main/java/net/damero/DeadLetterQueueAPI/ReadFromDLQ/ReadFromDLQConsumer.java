@@ -27,7 +27,6 @@ public class ReadFromDLQConsumer{
 
 
     private final ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory;
-    public static List<String> dlqMessages = new ArrayList<>();
     private final ObjectMapper kafkaObjectMapper;
 
     public ReadFromDLQConsumer(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,

@@ -8,6 +8,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.*;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -19,6 +20,8 @@ import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +29,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = CustomKafkaListenerIntegrationTest.TestConfig.class)
 @EmbeddedKafka(
@@ -35,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
                 "listeners=PLAINTEXT://localhost:0"
         }
 )
+@AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class CustomKafkaListenerIntegrationTest {
 
@@ -42,13 +48,16 @@ class CustomKafkaListenerIntegrationTest {
     private EmbeddedKafkaBroker embeddedKafka;
 
     @Autowired
-    private KafkaTemplate<String, TestEvent> kafkaTemplate;
+    private KafkaTemplate<?, Object> kafkaTemplate;
 
     @Autowired
     private TestKafkaListener testKafkaListener;
 
     @Autowired
     private DLQMessageCollector dlqCollector;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
@@ -178,6 +187,39 @@ class CustomKafkaListenerIntegrationTest {
         });
     }
 
+    @Test
+    void testDLQEndToEndFlow() throws Exception {
+        // Use the same ID as in the assertion
+        TestEvent event = new TestEvent("end-to-end-dlq", "data", true);
+        EventWrapper<?> wrapper = new EventWrapper<>(event, null, null);
+
+        // Reset collector to avoid old messages
+        dlqCollector.reset();
+
+        // Send the wrapper directly to DLQ
+        kafkaTemplate.send("test-dlq", wrapper);
+        kafkaTemplate.flush();
+
+        // Wait until DLQMessageCollector receives the message
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            EventWrapper<?> dlqMessage = dlqCollector.getLastMessage();
+            assertNotNull(dlqMessage, "Message should reach DLQ");
+            assertEquals("end-to-end-dlq", ((TestEvent) dlqMessage.getEvent()).getId());
+        });
+
+        // Call API endpoint that reads from DLQ
+        MvcResult result = mockMvc.perform(get("/dlq"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        System.out.println("\nSTART123" +responseBody +"END123\n");
+
+        assertTrue(responseBody.contains("end-to-end-dlq"),
+                "API response should contain the DLQ event ID");
+    }
+
+
     @Configuration
     @EnableKafka
     @EnableAspectJAutoProxy
@@ -263,7 +305,7 @@ class CustomKafkaListenerIntegrationTest {
 
             JsonDeserializer<EventWrapper<?>> deserializer = new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
             deserializer.addTrustedPackages("*");
-            deserializer.setUseTypeHeaders(false);
+            deserializer.setUseTypeHeaders(true);
 
             ConsumerFactory<String, EventWrapper<?>> consumerFactory = new DefaultKafkaConsumerFactory<>(
                     props,

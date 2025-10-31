@@ -16,7 +16,7 @@ public class KafkaDLQ {
 
     //static method to call it avoid uneccessary injections
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper eventWrapper, Throwable throwable, EventMetadata eventMetadata){
+    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper, Throwable throwable, EventMetadata eventMetadata){
 
         exceptions.computeIfAbsent(eventWrapper, k -> new ArrayList<>()).add(throwable);
 
