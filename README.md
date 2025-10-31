@@ -20,6 +20,42 @@ A Spring Boot library that adds intelligent retry logic and dead letter queue (D
 
 ## Quick Start
 
+Most users need only:
+- Set `spring.kafka.bootstrap-servers`
+- Add a listener using the built-in `kafkaListenerContainerFactory`
+- Annotate with `@CustomKafkaListener`
+
+Minimal example
+
+```java
+@Component
+public class OrderListener {
+
+    @CustomKafkaListener(
+        topic = "orders",
+        dlqTopic = "orders-dlq",
+        maxAttempts = 3,
+        delay = 1000,
+        delayMethod = DelayMethod.EXPO
+    )
+    @KafkaListener(
+        topics = "orders",
+        groupId = "order-group",
+        containerFactory = "kafkaListenerContainerFactory" // provided by this library
+    )
+    public void listen(Object payload, Acknowledgment acknowledgment) {
+        // The aspect unwraps ConsumerRecord/EventWrapper for you.
+        OrderEvent event = (OrderEvent) payload;
+        process(event);
+    }
+}
+```
+
+Notes
+- You can also accept `ConsumerRecord<String, Object>`; the aspect unwraps it before retry/DLQ logic.
+- On retry, the library resends `EventWrapper<?>` back to the original topic (metadata preserved).
+- On max attempts, it sends one `EventWrapper<?>` to the DLQ. Use the provided `dlqKafkaListenerContainerFactory` to read it.
+
 ### 1. Add the Dependency
 
 ```xml
@@ -51,7 +87,7 @@ spring.kafka.consumer.auto-offset-reset=earliest
 ```
 
 
-### 3. Create Your Event Consumer Factory
+### 3. (Optional) Create Your Own Consumer Factory
 
 ```java
 @Configuration
@@ -87,7 +123,7 @@ public class KafkaConfig {
 }
 ```
 
-### 4. Create Your Listener
+### 4. Create Your Listener (alternative signature)
 
 ```java
 @Component
@@ -105,7 +141,8 @@ public class OrderListener {
         groupId = "order-group",
         containerFactory = "orderListenerFactory"
     )
-    public void processOrder(OrderEvent event, Acknowledgment acknowledgment) {
+    public void processOrder(Object payload, Acknowledgment acknowledgment) {
+        OrderEvent event = (OrderEvent) payload; // aspect ensures you get the actual event
         // your logic
         // if this throws an exception, the library handles retries automatically
         // Method is intercepted using AspectJ

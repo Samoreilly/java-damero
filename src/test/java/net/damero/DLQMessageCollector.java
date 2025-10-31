@@ -9,24 +9,18 @@ import java.util.List;
 
 @Component
 public class DLQMessageCollector {
+    private EventWrapper<?> lastMessage;
 
-    private final List<EventWrapper<?>> receivedMessages = new ArrayList<>();
-
-    @KafkaListener(
-            topics = "test-dlq",
-            groupId = "dlq-test-group",
-            containerFactory = "dlqKafkaListenerContainerFactory"
-    )
-    public void listen(EventWrapper<?> message) {
-        System.out.println("DLQ received: " + message);
-        receivedMessages.add(message);
+    public void collect(EventWrapper<?> message) {
+        lastMessage = message;
     }
 
-    public List<EventWrapper<?>> getReceivedMessages() {
-        return new ArrayList<>(receivedMessages);
-    }
+    public EventWrapper<?> getLastMessage() { return lastMessage; }
 
-    public void reset() {
-        receivedMessages.clear();
+    public void reset() { lastMessage = null; }
+
+    @KafkaListener(topics = "test-dlq", groupId = "test-dlq-group", containerFactory = "dlqKafkaListenerContainerFactory")
+    public void listenDlq(EventWrapper<?> wrapper) {
+        collect(wrapper);
     }
 }

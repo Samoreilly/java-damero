@@ -1,0 +1,32 @@
+What was fixed (plain language)
+
+1) Retries keep the metadata (attempts, first/last failures)
+- We now resend the EventWrapper back to the original topic on a retry so the metadata travels with the event.
+- When max attempts are hit, we send a single EventWrapper to the DLQ with the original inner event and final metadata.
+
+2) Listeners can receive raw events or wrappers without blowing up
+- Your @KafkaListener method can accept Object or ConsumerRecord<String, Object>.
+- The library’s aspect unwraps ConsumerRecord and EventWrapper so your business logic gets the actual event type (e.g., TestEvent).
+- If you do want manual control in tests, you can accept Object and unwrap EventWrapper yourself.
+
+3) Serialization and deserialization line up
+- The default ObjectMapper adds type info and the main JsonDeserializer honors type headers, so both wrapped and unwrapped messages deserialize correctly.
+- DLQ listeners use a factory that reads EventWrapper<?> specifically.
+
+4) Embedded Kafka tests are isolated from localhost
+- In the tests, we override the default producer (used by retries and DLQ) and the DLQ container factory to point to the EmbeddedKafka broker, not localhost:9092.
+
+What files changed (high impact)
+- src/main/java/net/damero/CustomKafkaSetup/KafkaListenerAspect.java
+  * Unwraps ConsumerRecord and EventWrapper early, extracts the true event ID, and resends EventWrapper on retries.
+- src/main/java/net/damero/RetryScheduler/RetrySched.java
+  * Retries resend EventWrapper back to the original topic (metadata preserved).
+- src/main/java/net/damero/CustomKafkaSetup/CustomKafkaAutoConfiguration.java
+  * Main listener JsonDeserializer uses type headers; DLQ factory targets EventWrapper.
+- src/test/java/net/damero/TestKafkaListener.java
+  * Listener takes ConsumerRecord<String, Object> and safely unwraps to your event class.
+- src/test/java/net/damero/CustomListenerIntegrationTest.java
+  * Test-scoped defaultKafkaTemplate and DLQ container factory point to the embedded broker.
+
+Behavior in one sentence
+- First attempt: raw event is wrapped, failures schedule retry by resending EventWrapper; on max attempts we send EventWrapper to DLQ; listeners always receive a usable event value.

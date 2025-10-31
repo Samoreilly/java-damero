@@ -3,26 +3,27 @@ package net.damero.CustomKafkaSetup;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import net.damero.CustomKafkaSetup.RetryKafkaListener.KafkaRetryListener;
-import net.damero.CustomKafkaSetup.RetryKafkaListener.RetryDelayCalculator;
-import net.damero.CustomObject.EventMetadata;
+
 import net.damero.CustomObject.EventWrapper;
 import net.damero.KafkaServices.KafkaDLQ;
+import net.damero.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +34,7 @@ import java.util.Map;
  *
  * Can be disabled by setting: custom.kafka.auto-config.enabled=false
  */
-@AutoConfiguration
+@Configuration
 @ConditionalOnProperty(
         prefix = "custom.kafka.auto-config",
         name = "enabled",
@@ -51,27 +52,28 @@ public class CustomKafkaAutoConfiguration {
         return new KafkaDLQ();
     }
 
+    /*
+     * TaskScheduler for retrying failed messages
+     */
     @Bean
-    @ConditionalOnMissingBean
-    public KafkaRetryListener kafkaRetryListener(
-            KafkaTemplate<String, Object> defaultKafkaTemplate,
-            RetryDelayCalculator delayCalculator) {
-        return new KafkaRetryListener(defaultKafkaTemplate, delayCalculator);
+    @ConditionalOnMissingBean(name = "kafkaRetryScheduler")
+    public TaskScheduler kafkaRetryScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(20);
+        scheduler.setThreadNamePrefix("kafka-retry-scheduler-");
+        scheduler.setWaitForTasksToCompleteOnShutdown(true);
+        scheduler.setAwaitTerminationSeconds(30);
+        scheduler.setErrorHandler(t ->
+                System.err.println("⚠️ Scheduler error: " + t.getMessage())
+        );
+        scheduler.initialize();
+        return scheduler;
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public RetryDelayCalculator retryDelayCalculator() {
-        return new RetryDelayCalculator();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public KafkaListenerAspect kafkaListenerAspect(
-            KafkaDLQ kafkaDLQ,
-            ApplicationContext context,
-            KafkaTemplate<?, ?> defaultKafkaTemplate) {
-        return new KafkaListenerAspect(kafkaDLQ, context, defaultKafkaTemplate);
+    public RetrySched retrySched(TaskScheduler kafkaRetryScheduler) {
+        return new RetrySched(kafkaRetryScheduler);
     }
 
     /**
@@ -93,35 +95,6 @@ public class CustomKafkaAutoConfiguration {
         return mapper;
     }
 
-    @Bean
-    @ConditionalOnMissingBean(name = "retryContainerFactory")
-    public ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> retryContainerFactory(
-            ObjectMapper kafkaObjectMapper) {
-
-        Map<String, Object> props = new HashMap<>();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "kafka-retry-group");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        JsonDeserializer<EventWrapper<?>> deserializer =
-                new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
-        deserializer.addTrustedPackages("*");
-        deserializer.setUseTypeHeaders(false);
-
-        ConsumerFactory<String, EventWrapper<?>> consumerFactory = new DefaultKafkaConsumerFactory<>(
-                props,
-                new StringDeserializer(),
-                deserializer
-        );
-
-        ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory);
-        factory.setCommonErrorHandler(null);
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
-
-        return factory;
-    }
 
     /**
      * Default KafkaTemplate for sending to DLQ and other internal operations.
@@ -148,8 +121,8 @@ public class CustomKafkaAutoConfiguration {
      * Users typically don't need to interact with this.
      */
     @Bean
-    @ConditionalOnMissingBean(name = "defaultFactory")
-    public ConcurrentKafkaListenerContainerFactory<String, Object> defaultFactory(
+    @ConditionalOnMissingBean(name = "kafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
             ObjectMapper kafkaObjectMapper) {
 
         Map<String, Object> props = new HashMap<>();
@@ -159,7 +132,8 @@ public class CustomKafkaAutoConfiguration {
 
         JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
         jsonDeserializer.addTrustedPackages("*");
-        jsonDeserializer.setUseTypeHeaders(false);
+        // Honor type headers so EventWrapper<?> sent on main topic can be deserialized
+        jsonDeserializer.setUseTypeHeaders(true);
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                 props,

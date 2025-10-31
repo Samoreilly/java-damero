@@ -1,7 +1,10 @@
 package net.damero.CustomObject;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Builder;
+import lombok.Data;
 import net.damero.CustomKafkaSetup.DelayMethod;
 
 import java.time.LocalDateTime;
@@ -9,25 +12,55 @@ import java.time.LocalDateTime;
 /**
  * Metadata for tracking retry attempts and configuration
  */
+@Data
+@Builder(toBuilder = true)
 public class EventMetadata {
-    private final LocalDateTime firstFailureDateTime;
-    private final LocalDateTime lastFailureDateTime;
-    private final int attempts;
-    private final String originalTopic;
 
-    // Retry configuration
-    private final Long delayMs;
-    private final DelayMethod delayMethod;
-    private final Integer maxAttempts;
+
+    /*
+        WILL DEFAULT TO NULL IF NO VALUE IS GIVEN
+     */
+    @Builder.Default
+    private final LocalDateTime firstFailureDateTime = null;
+
+    @Builder.Default
+    private final LocalDateTime lastFailureDateTime = null;
+
+    @Builder.Default
+    private final Exception firstFailureException = null;
+
+    @Builder.Default
+    private final Exception lastFailureException = null;
+
+    @Builder.Default
+    private final int attempts = 0;
+
+    @Builder.Default
+    private final String originalTopic = null;
+
+    @Builder.Default
+    private final String dlqTopic = null;
+
+    // retry configuration
+    @Builder.Default
+    private final Long delayMs = null;
+
+    @Builder.Default
+    private final DelayMethod delayMethod = DelayMethod.EXPO;
+
+    @Builder.Default
+    private final Integer maxAttempts = 3;
 
     /**
      * Constructor for backward compatibility (without delay config)
      */
     public EventMetadata(LocalDateTime firstFailureDateTime,
                          LocalDateTime lastFailureDateTime,
+                         Exception firstFailureException,
+                         Exception lastFailureException,
                          int attempts,
-                         String originalTopic) {
-        this(firstFailureDateTime, lastFailureDateTime, attempts, originalTopic, null, null, 3);
+                         String originalTopic, String dlqTopic) {
+        this(firstFailureDateTime, lastFailureDateTime, firstFailureException, lastFailureException, attempts, originalTopic, dlqTopic, null, null, 3);
     }
 
     /**
@@ -37,15 +70,21 @@ public class EventMetadata {
     public EventMetadata(
             @JsonProperty("firstFailureDateTime") LocalDateTime firstFailureDateTime,
             @JsonProperty("lastFailureDateTime") LocalDateTime lastFailureDateTime,
+            @JsonProperty("firstFailureException") Exception firstFailureException,
+            @JsonProperty("lastFailureException") Exception lastFailureException,
             @JsonProperty("attempts") int attempts,
             @JsonProperty("originalTopic") String originalTopic,
+            @JsonProperty("dlqTopic") String dlqTopic,
             @JsonProperty("delayMs") Long delayMs,
             @JsonProperty("delayMethod") DelayMethod delayMethod,
             @JsonProperty("maxAttempts") Integer maxAttempts) {
         this.firstFailureDateTime = firstFailureDateTime;
         this.lastFailureDateTime = lastFailureDateTime;
+        this.firstFailureException = firstFailureException;
+        this.lastFailureException = lastFailureException;
         this.attempts = attempts;
         this.originalTopic = originalTopic;
+        this.dlqTopic = dlqTopic;
         this.delayMs = delayMs;
         this.delayMethod = delayMethod;
         this.maxAttempts = maxAttempts;
@@ -77,14 +116,27 @@ public class EventMetadata {
     public Integer getMaxAttempts() {
         return maxAttempts;
     }
+    public String getDlqTopic() {
+        return dlqTopic;
+    }
+
+    public Exception getLastFailureException() {
+        return lastFailureException;
+    }
+    public Exception getFirstFailureException() {
+        return firstFailureException;
+    }
 
     @Override
     public String toString() {
         return "EventMetadata{" +
                 "firstFailureDateTime=" + firstFailureDateTime +
                 ", lastFailureDateTime=" + lastFailureDateTime +
+                ", firstFailureException=" + firstFailureException +
+                ", lastFailureException=" + lastFailureException +
                 ", attempts=" + attempts +
                 ", originalTopic='" + originalTopic + '\'' +
+                ", dlqTopic='" + dlqTopic + '\'' +
                 ", delayMs=" + delayMs +
                 ", delayMethod=" + delayMethod +
                  ", maxAttempts=" + maxAttempts +

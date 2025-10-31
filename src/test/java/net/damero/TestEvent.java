@@ -6,20 +6,22 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 
 public class TestEvent {
+
     private String id;
-    private String message;
+    private String data;
     private boolean shouldFail;
 
+    // Default constructor for Jackson
     public TestEvent() {
     }
 
     @JsonCreator
     public TestEvent(
             @JsonProperty("id") String id,
-            @JsonProperty("message") String message,
+            @JsonProperty("data") String data,
             @JsonProperty("shouldFail") boolean shouldFail) {
         this.id = id;
-        this.message = message;
+        this.data = data;
         this.shouldFail = shouldFail;
     }
 
@@ -31,12 +33,12 @@ public class TestEvent {
         this.id = id;
     }
 
-    public String getMessage() {
-        return message;
+    public String getData() {
+        return data;
     }
 
-    public void setMessage(String message) {
-        this.message = message;
+    public void setData(String data) {
+        this.data = data;
     }
 
     public boolean isShouldFail() {
@@ -54,19 +56,19 @@ public class TestEvent {
         TestEvent testEvent = (TestEvent) o;
         return shouldFail == testEvent.shouldFail &&
                 Objects.equals(id, testEvent.id) &&
-                Objects.equals(message, testEvent.message);
+                Objects.equals(data, testEvent.data);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, message, shouldFail);
+        return Objects.hash(id, data, shouldFail);
     }
 
     @Override
     public String toString() {
         return "TestEvent{" +
                 "id='" + id + '\'' +
-                ", message='" + message + '\'' +
+                ", data='" + data + '\'' +
                 ", shouldFail=" + shouldFail +
                 '}';
     }

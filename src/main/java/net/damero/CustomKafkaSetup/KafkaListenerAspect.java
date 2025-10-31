@@ -3,6 +3,8 @@ package net.damero.CustomKafkaSetup;
 import net.damero.CustomObject.EventMetadata;
 import net.damero.CustomObject.EventWrapper;
 import net.damero.KafkaServices.KafkaDLQ;
+import net.damero.RetryScheduler.RetrySched;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -12,175 +14,174 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import net.damero.Annotations.CustomKafkaListener;
-
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Aspect
+@Component
 public class KafkaListenerAspect {
 
     private final KafkaDLQ kafkaDLQ;
     private final ApplicationContext context;
     private final KafkaTemplate<?, ?> defaultKafkaTemplate;
+    private final RetrySched retrySched;
 
     private final Map<String, Integer> eventAttempts = new ConcurrentHashMap<>();
+
     @Autowired
     public KafkaListenerAspect(KafkaDLQ kafkaDLQ,
                                ApplicationContext context,
-                               KafkaTemplate<?, ?> defaultKafkaTemplate) {
+                               KafkaTemplate<?, ?> defaultKafkaTemplate,
+                               RetrySched retrySched) {
         this.kafkaDLQ = kafkaDLQ;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
+        this.retrySched = retrySched;
     }
 
     @Around("@annotation(customKafkaListener)")
-    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
-        System.out.println("🔴🔴🔴 ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
-        System.out.println("🔴🔴🔴 Method: " + pjp.getSignature().getName());
+    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable{
+        System.out.println("🔴 ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
 
-        KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
         Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
 
+        Object arg0 = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
+
+        // Normalize to the actual payload value (unwrap ConsumerRecord/EventWrapper)
+        Object event;
+        if (arg0 instanceof ConsumerRecord<?, ?> record) {
+            event = record.value();
+        } else if (arg0 instanceof EventWrapper<?> ew) {
+            Object inner = ew.getEvent();
+            if (inner instanceof org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> innerRec) {
+                event = innerRec.value();
+            } else {
+                event = inner;
+            }
+        } else {
+            event = arg0;
+        }
+
+        KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
+
+        if (event == null) {
+            System.err.println("No event found to send to DLQ");
+            return null;
+        }
+
+        EventWrapper<?> wrappedEvent;
+
+        if (event instanceof EventWrapper<?> wrapper) {
+            wrappedEvent = wrapper;
+        } else {
+            wrappedEvent = wrapObject(event, customKafkaListener);
+        }
+
         try {
+
             Object result = pjp.proceed();
 
-            // Acknowledge after successful processing
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
-                System.out.println("✅ Message processed successfully and acknowledged");
+                System.out.println("Message processed successfully and acknowledged");
             }
 
             return result;
 
-        } catch (Throwable e) {
-            System.out.println("⚠️ Exception caught in aspect: " + e.getMessage());
+        } catch (Exception e) {
 
-            // ✅ ALWAYS acknowledge to prevent Spring from retrying
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
-                System.out.println("✅ Acknowledged message after exception");
+                System.out.println("Acknowledged message after exception");
             }
 
-            // Check if this is a non-retryable exception
-            if (isNonRetryableException(e)) {
-                System.err.println("❌ Non-retryable exception: " + e.getClass().getSimpleName());
-                // For non-retryable, send directly to DLQ
-                sendNonRetryableToDLQ(pjp, customKafkaListener, kafkaTemplate, e);
+            Object originalEvent = (event instanceof EventWrapper<?> we) ? we.getEvent() : event;
+            if (originalEvent instanceof ConsumerRecord<?, ?> rec) {
+                originalEvent = rec.value();
+            }
+            String eventId = extractEventId(originalEvent);
+            int currentAttempts = eventAttempts.getOrDefault(eventId, 0) + 1;
+            eventAttempts.put(eventId, currentAttempts);
+
+            if (currentAttempts >= customKafkaListener.maxAttempts()) {
+                System.err.println("Max attempts reached. Sending to DLQ: " + customKafkaListener.dlqTopic());
+                EventMetadata prior = (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
+                EventMetadata dlqMetadata = new EventMetadata(
+                        prior != null && prior.getFirstFailureDateTime() != null ? prior.getFirstFailureDateTime() : LocalDateTime.now(),
+                        LocalDateTime.now(),
+                        prior != null && prior.getFirstFailureException() != null ? prior.getFirstFailureException() : e,
+                        e,
+                        currentAttempts,
+                        customKafkaListener.topic(),
+                        customKafkaListener.dlqTopic(),
+                        (long) customKafkaListener.delay(),
+                        customKafkaListener.delayMethod(),
+                        customKafkaListener.maxAttempts()
+                );
+                EventWrapper<Object> dlqWrapper = new EventWrapper<>(originalEvent, LocalDateTime.now(), dlqMetadata);
+                kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), dlqWrapper, e, dlqMetadata);
+                if (eventId != null) {
+                    eventAttempts.remove(eventId);
+                }
                 return null;
             }
 
-            // Handle retryable failure (send to retry topic or DLQ based on attempts)
-            handleRetryableFailure(pjp, customKafkaListener, kafkaTemplate, e, acknowledgment);
+            // schedule retry by sending the original event back to the original topic
+            EventWrapper<Object> retryWrapper = new EventWrapper<>(originalEvent, LocalDateTime.now(), new EventMetadata(
+                    LocalDateTime.now(),
+                    LocalDateTime.now(),
+                    null,
+                    e,
+                    currentAttempts,
+                    customKafkaListener.topic(),
+                    customKafkaListener.dlqTopic(),
+                    (long) customKafkaListener.delay(),
+                    customKafkaListener.delayMethod(),
+                    customKafkaListener.maxAttempts()
+            ));
+            retrySched.scheduleRetry(customKafkaListener, retryWrapper, kafkaTemplate);
 
-            // Return null to indicate we've handled the exception
             return null;
         }
     }
 
-    private void sendNonRetryableToDLQ(ProceedingJoinPoint pjp,
-                                       CustomKafkaListener customKafkaListener,
-                                       KafkaTemplate<?, ?> kafkaTemplate,
-                                       Throwable exception) {
-        Object rawArg = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
-        if (rawArg == null) {
-            System.err.println("⚠️ No event found to send to DLQ");
-            return;
-        }
+    /*
+        This method takes in a new message(not a EventWrapper) from the queue and wraps in EventWrapper and EventMetaData to be sent back into the queue with metadata
+    */
 
-        Object actualEvent = rawArg instanceof EventWrapper<?> wrapper ? wrapper.getEvent() : rawArg;
+    public EventWrapper<?> wrapObject(Object event, CustomKafkaListener customKafkaListener){
 
         EventMetadata metadata = new EventMetadata(
                 LocalDateTime.now(),
                 LocalDateTime.now(),
-                1,
+                null,
+                null,
+                0,
                 customKafkaListener.topic(),
+                customKafkaListener.dlqTopic(),
                 (long) customKafkaListener.delay(),
                 customKafkaListener.delayMethod(),
                 customKafkaListener.maxAttempts()
         );
-
-        EventWrapper<Object> wrappedEvent = new EventWrapper<>(actualEvent, LocalDateTime.now(), metadata);
-
-        System.out.println("💀 Sending non-retryable exception to DLQ: " + customKafkaListener.dlqTopic());
-        sendToTopic(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent);
+        return new EventWrapper<>(event, LocalDateTime.now(), metadata);
     }
 
-    private void handleRetryableFailure(ProceedingJoinPoint pjp,
-                                        CustomKafkaListener customKafkaListener,
-                                        KafkaTemplate<?, ?> kafkaTemplate,
-                                        Throwable exception,
-                                        Acknowledgment acknowledgment) {
+    /*
+        UPDATE METADATA WITH NEW DATA | ATTEMPTS + 1 | RECENT FAILURE etc
+    */
 
-        Object rawArg = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
-        if (rawArg == null) {
-            System.err.println("⚠️ No event found in method arguments");
-            return;
-        }
+    public EventMetadata updateMetadata(EventMetadata oldMetadata, Exception failure){
 
-        Object actualEvent;
-        String eventId = null;
-        int currentAttempts;
-        LocalDateTime firstFailure = LocalDateTime.now();
+        return oldMetadata.toBuilder()
+                .attempts(oldMetadata.getAttempts() + 1)
+                .firstFailureException(oldMetadata.getFirstFailureException() != null ? oldMetadata.getFirstFailureException() : failure)
+                .lastFailureException(failure)
+                .firstFailureDateTime(oldMetadata.getFirstFailureDateTime() != null ? oldMetadata.getFirstFailureDateTime() : LocalDateTime.now())
+                .lastFailureDateTime(LocalDateTime.now())
+                .build();
 
-        if (rawArg instanceof EventWrapper<?> wrapper) {
-            actualEvent = wrapper.getEvent();
-            EventMetadata metadata = wrapper.getMetadata();
-            currentAttempts = metadata.getAttempts();
-            firstFailure = metadata.getFirstFailureDateTime();
-
-            // Try to extract event ID
-            eventId = extractEventId(actualEvent);
-        } else {
-            actualEvent = rawArg;
-            // ✅ Extract event ID and check if we've seen this before
-            eventId = extractEventId(actualEvent);
-            currentAttempts = eventAttempts.getOrDefault(eventId, 0);
-        }
-
-        int newAttempts = currentAttempts + 1;
-
-        // ✅ Store the new attempt count
-        if (eventId != null) {
-            eventAttempts.put(eventId, newAttempts);
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-
-        EventMetadata updatedMetadata = new EventMetadata(
-                firstFailure,
-                now,
-                newAttempts,
-                customKafkaListener.topic(),
-                (long) customKafkaListener.delay(),
-                customKafkaListener.delayMethod(),
-                customKafkaListener.maxAttempts()
-        );
-
-        EventWrapper<Object> wrappedEvent = new EventWrapper<>(actualEvent, now, updatedMetadata);
-
-        System.out.println("📊 Event " + eventId + " - Attempt " + newAttempts + "/" + customKafkaListener.maxAttempts());
-
-        if (newAttempts >= customKafkaListener.maxAttempts()) {
-            System.out.println("⚠️ Max attempts reached. Sending to DLQ: " + customKafkaListener.dlqTopic());
-            // ✅ Clean up tracking
-            if (eventId != null) {
-                eventAttempts.remove(eventId);
-            }
-            kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent, exception, updatedMetadata);
-
-        } else if (customKafkaListener.retryable() && !customKafkaListener.retryableTopic().isEmpty()) {
-            System.out.println("🔄 Sending to retry topic: " + customKafkaListener.retryableTopic());
-            sendToTopic(kafkaTemplate, customKafkaListener.retryableTopic(), wrappedEvent);
-
-        } else {
-            System.out.println("⚠️ No retry configured. Sending to DLQ: " + customKafkaListener.dlqTopic());
-            if (eventId != null) {
-                eventAttempts.remove(eventId);
-            }
-            kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent, exception, updatedMetadata);
-        }
     }
 
     private KafkaTemplate<?, ?> resolveKafkaTemplate(CustomKafkaListener customKafkaListener) {
@@ -207,77 +208,15 @@ public class KafkaListenerAspect {
         return null;
     }
 
-    private boolean isNonRetryableException(Throwable e) {
-        return e instanceof ClassCastException
-                || e instanceof IllegalArgumentException
-                || e instanceof IllegalStateException;
+    @SuppressWarnings("unchecked")
+    public static <K, V> void sendToTopic(KafkaTemplate<?, ?> template, String topic, V message) {
+        try {
+            ((KafkaTemplate<K, V>) template).send(topic, message);
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send message to topic " + topic + ": " + e.getMessage());
+            throw new RuntimeException("Failed to send to Kafka topic: " + topic, e);
+        }
     }
-
-//    private void handleRetryableFailure(ProceedingJoinPoint pjp,
-//                                        CustomKafkaListener customKafkaListener,
-//                                        KafkaTemplate<?, ?> kafkaTemplate,
-//                                        Throwable exception,
-//                                        Acknowledgment acknowledgment) {
-//
-//        Object rawArg = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
-//        if (rawArg == null) {
-//            System.err.println("⚠️ No event found in method arguments");
-//            return;
-//        }
-//
-//        Object actualEvent = rawArg instanceof EventWrapper<?> wrapper ? wrapper.getEvent() : rawArg;
-//
-//        EventMetadata metadata;
-//        LocalDateTime firstFailure;
-//        int currentAttempts;
-//
-//        if (rawArg instanceof EventWrapper<?> wrapper) {
-//            // already been retried - extract existing metadata
-//            metadata = wrapper.getMetadata();
-//            firstFailure = metadata.getFirstFailureDateTime() != null
-//                    ? metadata.getFirstFailureDateTime()
-//                    : LocalDateTime.now();
-//            currentAttempts = metadata.getAttempts();
-//        } else {
-//            // this was the first failure
-//            firstFailure = LocalDateTime.now();
-//            currentAttempts = 0;
-//        }
-//
-//        int newAttempts = currentAttempts + 1;
-//        LocalDateTime now = LocalDateTime.now();
-//
-//        // UPDATED: Include delay configuration in metadata
-//        EventMetadata updatedMetadata = new EventMetadata(
-//                firstFailure,
-//                now,
-//                newAttempts,
-//                customKafkaListener.topic(),
-//                (long) customKafkaListener.delay(), // Store delay config
-//                customKafkaListener.delayMethod()
-//                , customKafkaListener.maxAttempts() // Store delay method
-//        );
-//
-//        EventWrapper<Object> wrappedEvent = new EventWrapper<>(actualEvent, now, updatedMetadata);
-//
-//        if (newAttempts >= customKafkaListener.maxAttempts()) {
-//            // max attempts reached - send to DLQ
-//            System.out.println("⚠️ Max attempts (" + customKafkaListener.maxAttempts() +
-//                    ") reached for event. Sending to DLQ: " + customKafkaListener.dlqTopic());
-//            sendToTopic(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent);
-//            kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent, exception, updatedMetadata);
-//        } else if (customKafkaListener.retryable() && !customKafkaListener.retryableTopic().isEmpty()) {
-//            // Send to retryable topic
-//            System.out.println("🔄 Sending to retry topic (" + newAttempts + "/" +
-//                    customKafkaListener.maxAttempts() + "): " + customKafkaListener.retryableTopic());
-//            sendToTopic(kafkaTemplate, customKafkaListener.retryableTopic(), wrappedEvent);
-//        } else {
-//            //Retryable is disabled and event is sent to dlq topic
-//            System.out.println("⚠️ No retry topic configured. Sending to DLQ: " + customKafkaListener.dlqTopic());
-//            sendToTopic(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent);
-//            kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), wrappedEvent, exception, updatedMetadata);
-//        }
-//    }
 
     private String extractEventId(Object event) {
         try {
@@ -287,16 +226,6 @@ public class KafkaListenerAspect {
         } catch (Exception e) {
             System.err.println("⚠️ Could not extract event ID: " + e.getMessage());
             return null;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private <K, V> void sendToTopic(KafkaTemplate<?, ?> template, String topic, V message) {
-        try {
-            ((KafkaTemplate<K, V>) template).send(topic, message);
-        } catch (Exception e) {
-            System.err.println("❌ Failed to send message to topic " + topic + ": " + e.getMessage());
-            throw new RuntimeException("Failed to send to Kafka topic: " + topic, e);
         }
     }
 }

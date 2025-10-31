@@ -20,7 +20,7 @@ public class KafkaConsumerFactoryProvider {
     public static <T> ConsumerFactory<String, EventWrapper<T>> defaultConsumerFactory(Class<T> eventType) {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
-        // Enable default typing for proper generic deserialization
+        // enable default typing for proper generic deserialization
         mapper.activateDefaultTyping(
                 mapper.getPolymorphicTypeValidator(),
                 ObjectMapper.DefaultTyping.NON_FINAL,
