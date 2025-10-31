@@ -1,10 +1,10 @@
-package net.damero.CustomKafkaSetup;
+package net.damero.Kafka.CustomKafkaSetup;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import net.damero.CustomObject.EventWrapper;
+import net.damero.Kafka.CustomObject.EventWrapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.kafka.core.ConsumerFactory;

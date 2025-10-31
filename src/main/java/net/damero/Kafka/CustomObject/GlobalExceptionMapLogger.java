@@ -1,6 +1,5 @@
-package net.damero.CustomObject;
+package net.damero.Kafka.CustomObject;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

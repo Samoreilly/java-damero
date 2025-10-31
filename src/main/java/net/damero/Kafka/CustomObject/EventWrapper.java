@@ -1,4 +1,4 @@
-package net.damero.CustomObject;
+package net.damero.Kafka.CustomObject;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.time.LocalDateTime;

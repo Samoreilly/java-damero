@@ -1,22 +1,13 @@
-package net.damero.DeadLetterQueueAPI.ReadFromDLQ;
+package net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jdk.jfr.Event;
-import net.damero.CustomObject.EventWrapper;
-import org.apache.kafka.clients.consumer.Consumer;
+import net.damero.Kafka.CustomObject.EventWrapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.listener.MessageListener;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;

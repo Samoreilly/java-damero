@@ -1,12 +1,12 @@
-package net.damero.CustomKafkaSetup;
+package net.damero.Kafka.CustomKafkaSetup;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-import net.damero.CustomObject.EventWrapper;
-import net.damero.KafkaServices.KafkaDLQ;
-import net.damero.RetryScheduler.RetrySched;
+import net.damero.Kafka.CustomObject.EventWrapper;
+import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;

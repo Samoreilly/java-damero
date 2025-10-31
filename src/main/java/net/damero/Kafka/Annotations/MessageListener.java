@@ -1,4 +1,4 @@
-package net.damero.Annotations;
+package net.damero.Kafka.Annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

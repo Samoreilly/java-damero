@@ -1,6 +1,6 @@
 package net.damero;
 
-import net.damero.CustomObject.EventWrapper;
+import net.damero.Kafka.CustomObject.EventWrapper;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 

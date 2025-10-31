@@ -1,7 +1,7 @@
-package net.damero.DeadLetterQueueAPI;
+package net.damero.Kafka.DeadLetterQueueAPI;
 
-import net.damero.CustomObject.EventWrapper;
-import net.damero.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
+import net.damero.Kafka.CustomObject.EventWrapper;
+import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;

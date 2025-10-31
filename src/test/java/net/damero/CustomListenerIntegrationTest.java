@@ -1,8 +1,8 @@
 package net.damero;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.damero.CustomKafkaSetup.CustomKafkaAutoConfiguration;
-import net.damero.CustomObject.EventWrapper;
+import net.damero.Kafka.CustomKafkaSetup.CustomKafkaAutoConfiguration;
+import net.damero.Kafka.CustomObject.EventWrapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;

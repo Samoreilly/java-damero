@@ -1,10 +1,10 @@
 package net.damero;
 
-import net.damero.RetryScheduler.RetrySched;
-import net.damero.Annotations.CustomKafkaListener;
-import net.damero.CustomKafkaSetup.DelayMethod;
-import net.damero.CustomObject.EventMetadata;
-import net.damero.CustomObject.EventWrapper;
+import net.damero.Kafka.RetryScheduler.RetrySched;
+import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.CustomObject.EventWrapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

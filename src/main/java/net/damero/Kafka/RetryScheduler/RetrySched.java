@@ -1,8 +1,9 @@
-package net.damero.RetryScheduler;
-import net.damero.Annotations.CustomKafkaListener;
-import net.damero.CustomKafkaSetup.DelayMethod;
-import net.damero.CustomObject.EventMetadata;
-import net.damero.CustomObject.EventWrapper;
+package net.damero.Kafka.RetryScheduler;
+
+import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.CustomObject.EventWrapper;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;

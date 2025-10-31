@@ -1,15 +1,12 @@
-package net.damero.KafkaServices;
+package net.damero.Kafka.KafkaServices;
 
-import net.damero.CustomObject.EventMetadata;
-import net.damero.CustomObject.EventWrapper;
+import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.CustomObject.EventWrapper;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
-import java.util.List;
+import static net.damero.Kafka.CustomObject.GlobalExceptionMapLogger.exceptions;
 
-import static net.damero.CustomObject.GlobalExceptionMapLogger.exceptions;
 
 @Component
 public class KafkaDLQ {

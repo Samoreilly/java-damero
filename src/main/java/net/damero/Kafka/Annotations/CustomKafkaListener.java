@@ -1,6 +1,6 @@
-package net.damero.Annotations;
+package net.damero.Kafka.Annotations;
 
-import net.damero.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

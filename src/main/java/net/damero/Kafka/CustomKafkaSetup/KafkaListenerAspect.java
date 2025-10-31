@@ -1,9 +1,9 @@
-package net.damero.CustomKafkaSetup;
+package net.damero.Kafka.CustomKafkaSetup;
 
-import net.damero.CustomObject.EventMetadata;
-import net.damero.CustomObject.EventWrapper;
-import net.damero.KafkaServices.KafkaDLQ;
-import net.damero.RetryScheduler.RetrySched;
+import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.CustomObject.EventWrapper;
+import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -13,7 +13,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
-import net.damero.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.CustomKafkaListener;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.Map;

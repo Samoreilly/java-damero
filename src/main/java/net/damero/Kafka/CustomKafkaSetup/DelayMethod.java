@@ -1,4 +1,4 @@
-package net.damero.CustomKafkaSetup;
+package net.damero.Kafka.CustomKafkaSetup;
 
 
 //DELAY METHOD FOR RETRY FUNCTIONALITY

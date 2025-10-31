@@ -1,4 +1,4 @@
-package net.damero.ManageListener;
+package net.damero.Kafka.ManageListener;
 
 import jakarta.annotation.PostConstruct;
 import org.reflections.Reflections;
@@ -8,9 +8,9 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.KafkaListener;
 
-import net.damero.CustomKafkaSetup.CustomKafkaListenerConfig;
-import net.damero.Annotations.CustomKafkaListener;
-import net.damero.Annotations.MessageListener;
+import net.damero.Kafka.CustomKafkaSetup.CustomKafkaListenerConfig;
+import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.MessageListener;
 import java.lang.reflect.Method;
 import java.util.Set;
 
@@ -22,9 +22,6 @@ public class ListenerSetup {
 
     @Autowired
     ApplicationContext context;
-
-
-
 
     @PostConstruct
     public void listenerSetup(){
