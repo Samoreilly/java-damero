@@ -9,14 +9,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
-
 import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 @Component
 public class RetrySched {
 
     @Autowired
     private final TaskScheduler taskScheduler;
+    private static final Logger logger = LoggerFactory.getLogger(RetrySched.class);
 
     public RetrySched(TaskScheduler taskScheduler) {
         this.taskScheduler = taskScheduler;
@@ -33,14 +36,14 @@ public class RetrySched {
         taskScheduler.schedule(() -> executeRetry(customKafkaListener, eventWrapper, kafkaTemplate),
                 Instant.now().plusMillis(delay)
         );
-        System.out.println("SCHEDULED RETRY:" + eventWrapper.getEvent());
+        logger.info("Scheduled retry for event: {} to topic: {}", eventWrapper.getEvent().toString(), customKafkaListener.topic());
     }
 
 
     public void executeRetry(CustomKafkaListener customKafkaListener, EventWrapper<?> eventWrapper, KafkaTemplate<?, ?> kafkaTemplate) {
         // Resend the wrapper so metadata (attempts, timestamps) is preserved across retries
         sendToTopic(kafkaTemplate, customKafkaListener.topic(), eventWrapper);
-        System.out.println("SEND TO TOPIC CALLED IN EXECUTE RETRY");
+        logger.info("Retried event: {} to topic: {}", eventWrapper.getEvent().toString(), customKafkaListener.topic());
     }
 
     private long getBackOffDelay(CustomKafkaListener customKafkaListener, DelayMethod delayMethod, int attempts) {
