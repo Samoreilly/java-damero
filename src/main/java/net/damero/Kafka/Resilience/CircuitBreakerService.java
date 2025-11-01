@@ -11,8 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service to manage circuit breakers per topic.
- * Circuit breakers are optional - if Resilience4j is not available, this service won't be created.
- * Uses reflection to avoid compile-time dependency on Resilience4j.
+ * Circuit breaker is optional, if user doesnt provide Resilience4j, this service wont be created.
  */
 @Component
 @ConditionalOnClass(name = "io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry")
@@ -47,33 +46,32 @@ public class CircuitBreakerService {
 
         return circuitBreakers.computeIfAbsent(topic, t -> {
             try {
-                // Create CircuitBreakerConfig using reflection
+                //Get config class for circuit breaker
                 Class<?> configClass = Class.forName("io.github.resilience4j.circuitbreaker.CircuitBreakerConfig");
                 Method customMethod = configClass.getMethod("custom");
                 Object configBuilder = customMethod.invoke(null);
                 
-                // Configure using builder pattern via reflection
+                // Build config for circuit breaker
                 Class<?> builderClass = configBuilder.getClass();
-                builderClass.getMethod("failureRateThreshold", float.class).invoke(configBuilder, 50.0f);
-                builderClass.getMethod("slidingWindowSize", int.class).invoke(configBuilder, failureThreshold);
+                builderClass.getMethod("failureRateThreshold", float.class).invoke(configBuilder, 50.0f);//threshold for opening the circuit
+                builderClass.getMethod("slidingWindowSize", int.class).invoke(configBuilder, failureThreshold);//window size for tracking failures
                 
                 Class<?> slidingWindowTypeEnum = Class.forName("io.github.resilience4j.circuitbreaker.CircuitBreakerConfig$SlidingWindowType");
                 Object countBased = Enum.valueOf((Class<Enum>) slidingWindowTypeEnum, "COUNT_BASED");
-                builderClass.getMethod("slidingWindowType", slidingWindowTypeEnum).invoke(configBuilder, countBased);
+                builderClass.getMethod("slidingWindowType", slidingWindowTypeEnum).invoke(configBuilder, countBased);//type of window for tracking failures
                 
-                builderClass.getMethod("waitDurationInOpenState", Duration.class).invoke(configBuilder, Duration.ofMillis(waitDuration));
-                builderClass.getMethod("permittedNumberOfCallsInHalfOpenState", int.class).invoke(configBuilder, 3);
-                builderClass.getMethod("minimumNumberOfCalls", int.class).invoke(configBuilder, failureThreshold);
+                builderClass.getMethod("waitDurationInOpenState", Duration.class).invoke(configBuilder, Duration.ofMillis(waitDuration));//wait duration for half open state
+                builderClass.getMethod("permittedNumberOfCallsInHalfOpenState", int.class).invoke(configBuilder, 3);//number of calls permitted in half open state
+                builderClass.getMethod("minimumNumberOfCalls", int.class).invoke(configBuilder, failureThreshold);//minimum number of calls required to open the circuit
                 
-                // Build config
+
                 Method buildMethod = builderClass.getMethod("build");
                 Object config = buildMethod.invoke(configBuilder);
                 
-                // Create circuit breaker from registry
                 Method circuitBreakerMethod = circuitBreakerRegistry.getClass().getMethod("circuitBreaker", String.class, configClass);
                 return circuitBreakerMethod.invoke(circuitBreakerRegistry, topic, config);
             } catch (Exception e) {
-                // If reflection fails, return null (circuit breaker not available)
+                //return null if circuit breaker is not available
                 return null;
             }
         });
