@@ -20,10 +20,12 @@ public class RetryOrchestrator {
     private static final Logger logger = LoggerFactory.getLogger(RetryOrchestrator.class);
     
     private final RetrySched retrySched;
-    private final Map<String, Integer> eventAttempts = new ConcurrentHashMap<>();
 
-    public RetryOrchestrator(RetrySched retrySched) {
+    private final CaffeineCache eventAttempts;
+
+    public RetryOrchestrator(RetrySched retrySched, CaffeineCache caffeineCache) {
         this.retrySched = retrySched;
+        this.eventAttempts = caffeineCache;
     }
 
     /**

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
+import net.damero.Kafka.Aspect.Components.CaffeineCache;
 import net.damero.Kafka.Aspect.Components.DLQRouter;
 import net.damero.Kafka.Aspect.Components.MetricsRecorder;
 import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
@@ -68,8 +69,14 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RetryOrchestrator retryOrchestrator(RetrySched retrySched) {
-        return new RetryOrchestrator(retrySched);
+    public CaffeineCache caffeineCache() {
+        return new CaffeineCache();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryOrchestrator retryOrchestrator(RetrySched retrySched, CaffeineCache caffeineCache) {
+        return new RetryOrchestrator(retrySched, caffeineCache);
     }
 
     @Bean
