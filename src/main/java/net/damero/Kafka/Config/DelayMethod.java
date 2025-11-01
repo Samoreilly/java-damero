@@ -1,5 +1,4 @@
-package net.damero.Kafka.CustomKafkaSetup;
-
+package net.damero.Kafka.Config;
 
 //DELAY METHOD FOR RETRY FUNCTIONALITY
 public enum DelayMethod {
@@ -14,3 +13,4 @@ public enum DelayMethod {
         this.amount = amount;
     }
 }
+

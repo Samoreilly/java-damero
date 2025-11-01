@@ -8,7 +8,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.KafkaListener;
 
-import net.damero.Kafka.CustomKafkaSetup.CustomKafkaListenerConfig;
+import net.damero.Kafka.Config.CustomKafkaListenerConfig;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Annotations.MessageListener;
 import java.lang.reflect.Method;

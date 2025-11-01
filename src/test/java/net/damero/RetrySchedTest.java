@@ -2,7 +2,7 @@ package net.damero;
 
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
-import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import org.junit.jupiter.api.BeforeEach;

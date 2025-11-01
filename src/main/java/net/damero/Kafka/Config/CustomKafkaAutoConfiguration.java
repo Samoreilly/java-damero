@@ -1,4 +1,4 @@
-package net.damero.Kafka.CustomKafkaSetup;
+package net.damero.Kafka.Config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
@@ -12,6 +12,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -74,6 +76,24 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean
     public RetrySched retrySched(TaskScheduler kafkaRetryScheduler) {
         return new RetrySched(kafkaRetryScheduler);
+    }
+
+    /*
+     Circuit Breaker Registry for Resilience4j (optional) for the user
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "circuitBreakerRegistry")
+    @ConditionalOnClass(name = "io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry")
+    public Object circuitBreakerRegistry() {
+        try {
+            Class<?> registryClass = Class.forName("io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry");
+            Method ofDefaultsMethod = registryClass.getMethod("ofDefaults");
+            return ofDefaultsMethod.invoke(null);
+        } catch (Exception e) {
+            // If Resilience4j is not available, return null
+            // This bean won't be created due to @ConditionalOnClass
+            return null;
+        }
     }
 
     /**

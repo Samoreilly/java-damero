@@ -9,9 +9,10 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.stereotype.Component;
-
 import java.time.Duration;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 public class ReadFromDLQConsumer{
@@ -19,6 +20,7 @@ public class ReadFromDLQConsumer{
 
     private final ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory;
     private final ObjectMapper kafkaObjectMapper;
+    private static final Logger logger = LoggerFactory.getLogger(ReadFromDLQConsumer.class);
 
     public ReadFromDLQConsumer(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
                                ObjectMapper kafkaObjectMapper) {
@@ -52,7 +54,9 @@ public class ReadFromDLQConsumer{
                     }
                 }
             }
+            logger.info("Read from DLQ topic: {} and found {} events", topic, events.size());
         } catch (JsonProcessingException e) {
+            logger.error("Failed to read from DLQ topic: {} with Exception: {}", topic, e.getMessage());
             throw new RuntimeException(e);
         }
         return events;

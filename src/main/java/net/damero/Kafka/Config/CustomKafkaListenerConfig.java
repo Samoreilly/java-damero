@@ -1,8 +1,8 @@
-package net.damero.Kafka.CustomKafkaSetup;
+package net.damero.Kafka.Config;
 
 import lombok.Getter;
-
 import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Factory.KafkaConsumerFactoryProvider;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 

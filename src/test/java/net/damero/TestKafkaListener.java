@@ -1,6 +1,7 @@
 package net.damero;
 
 import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Config.DelayMethod;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,7 @@ public class TestKafkaListener {
             dlqTopic = "test-dlq",
             maxAttempts = 3,
             delay = 100,
-            delayMethod = net.damero.Kafka.CustomKafkaSetup.DelayMethod.LINEAR
+            delayMethod = DelayMethod.LINEAR
     )
     @KafkaListener(topics = "test-topic", groupId = "test-group", containerFactory = "kafkaListenerContainerFactory")
     public void listen(org.apache.kafka.clients.consumer.ConsumerRecord<String, Object> record, Acknowledgment acknowledgment) {

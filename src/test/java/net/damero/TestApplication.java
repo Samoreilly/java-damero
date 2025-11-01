@@ -11,11 +11,14 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 @EnableAspectJAutoProxy
 @ComponentScan(basePackages = {
         "net.damero",
-        "net.damero.Kafka.CustomKafkaSetup",
+        "net.damero.Kafka.Config",
+        "net.damero.Kafka.Aspect",
         "net.damero.Kafka.CustomObject",
         "net.damero.Kafka.KafkaServices",
         "net.damero.Kafka.Annotations",
-        "net.damero.Kafka.ManageListener"
+        "net.damero.Kafka.ManageListener",
+        "net.damero.Kafka.Resilience",
+        "net.damero.Kafka.Factory"
 })
 public class TestApplication {
     public static void main(String[] args) {

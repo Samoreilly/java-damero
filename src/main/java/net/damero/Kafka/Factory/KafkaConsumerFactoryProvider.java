@@ -1,4 +1,4 @@
-package net.damero.Kafka.CustomKafkaSetup;
+package net.damero.Kafka.Factory;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JavaType;

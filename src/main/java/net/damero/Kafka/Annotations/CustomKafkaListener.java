@@ -1,6 +1,6 @@
 package net.damero.Kafka.Annotations;
 
-import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.Config.DelayMethod;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -21,4 +21,10 @@ public @interface CustomKafkaListener {
     Class<Void> kafkaTemplate() default void.class;
     Class<Void> consumerFactory() default void.class;
     Class<?> eventType() default Void.class;
+    
+    // Circuit Breaker Configuration
+    boolean enableCircuitBreaker() default false;
+    int circuitBreakerFailureThreshold() default 50;  // Number of failures before opening (opening is bad)
+    long circuitBreakerWindowDuration() default 60000;  // Time window in milliseconds (default 1 minute)
+    long circuitBreakerWaitDuration() default 60000;  // Wait before half-open (default 1 minute)
 }

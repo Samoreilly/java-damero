@@ -1,8 +1,9 @@
-package net.damero.Kafka.CustomKafkaSetup;
+package net.damero.Kafka.Aspect;
 
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.Resilience.CircuitBreakerService;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 @Aspect
 @Component
@@ -37,23 +39,28 @@ public class KafkaListenerAspect {
 
     @Nullable //Can be null if null if user doesnt have Micrometer
     private final MeterRegistry meterRegistry;
+    
+    @Nullable
+    private final CircuitBreakerService circuitBreakerService;
 
     // @Autowired is optional here - Spring autowires single constructors automatically
     public KafkaListenerAspect(KafkaDLQ kafkaDLQ,
                                ApplicationContext context,
                                KafkaTemplate<?, ?> defaultKafkaTemplate,
                                RetrySched retrySched,
-                               @Nullable MeterRegistry meterRegistry) {
+                               @Nullable MeterRegistry meterRegistry,
+                               @Nullable CircuitBreakerService circuitBreakerService) {
         this.kafkaDLQ = kafkaDLQ;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
         this.retrySched = retrySched;
         this.meterRegistry = meterRegistry;  // Can be null if users don't have Micrometer
+        this.circuitBreakerService = circuitBreakerService;  // Can be null if Resilience4j not available
     }
 
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable{
-        System.out.println("🔴 ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
+        System.out.println("🔴ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
         
         //Record start time
         long startTime = System.currentTimeMillis();
@@ -68,7 +75,7 @@ public class KafkaListenerAspect {
             event = record.value();
         } else if (arg0 instanceof EventWrapper<?> ew) {
             Object inner = ew.getEvent();
-            if (inner instanceof org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> innerRec) {
+            if (inner instanceof ConsumerRecord<?, ?> innerRec) {
                 event = innerRec.value();
             } else {
                 event = inner;
@@ -92,9 +99,59 @@ public class KafkaListenerAspect {
             wrappedEvent = wrapObject(event, customKafkaListener);
         }
 
-        try {
+        // Check circuit breaker BEFORE processing (if enabled)
+        Object circuitBreaker = null;
+        if (customKafkaListener.enableCircuitBreaker() && circuitBreakerService != null && circuitBreakerService.isAvailable()) {
+            circuitBreaker = circuitBreakerService.getCircuitBreaker(
+                customKafkaListener.topic(),
+                customKafkaListener.circuitBreakerFailureThreshold(),
+                customKafkaListener.circuitBreakerWindowDuration(),
+                customKafkaListener.circuitBreakerWaitDuration()
+            );
+            
+            // If circuit is OPEN, skip processing and go straight to DLQ
+            if (circuitBreaker != null && isCircuitBreakerOpen(circuitBreaker)) {
+                System.err.println("Circuit breaker OPEN for topic: " + customKafkaListener.topic() + " - sending directly to DLQ");
+                
+                Object originalEvent = (event instanceof EventWrapper<?> we) ? we.getEvent() : event;
+                if (originalEvent instanceof ConsumerRecord<?, ?> rec) {
+                    originalEvent = rec.value();
+                }
+                
+                // Create DLQ metadata to send to DLQ
+                EventMetadata dlqMetadata = new EventMetadata(
+                    LocalDateTime.now(),
+                    LocalDateTime.now(),
+                    null,
+                    new RuntimeException("Circuit breaker OPEN - service unavailable"),
+                    1,
+                    customKafkaListener.topic(),
+                    customKafkaListener.dlqTopic(),
+                    (long) customKafkaListener.delay(),
+                    customKafkaListener.delayMethod(),
+                    customKafkaListener.maxAttempts()
+                );
+                //wrap the original event with the DLQ metadata in EventWrapper
+                EventWrapper<Object> dlqWrapper = new EventWrapper<>(originalEvent, LocalDateTime.now(), dlqMetadata);
+                kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), dlqWrapper, 
+                                  new RuntimeException("Circuit breaker OPEN"), dlqMetadata);
+                
+                if (acknowledgment != null) {
+                    acknowledgment.acknowledge();//acknowledge the message to avoid retries
+                }
+                return null;  // return to skip retry logic
+            }
+        }
 
-            Object result = pjp.proceed();
+        try {
+            // Execute with circuit breaker tracking if enabled
+            Object result;
+            if (circuitBreaker != null) {
+                result = executeWithCircuitBreaker(circuitBreaker, pjp);
+            } else {
+                // normal execution without circuit breaker
+                result = pjp.proceed();
+            }
 
             recordSuccessMetrics(customKafkaListener.topic(), startTime);
 
@@ -235,7 +292,7 @@ public class KafkaListenerAspect {
         try {
             ((KafkaTemplate<K, V>) template).send(topic, message);
         } catch (Exception e) {
-            System.err.println("❌ Failed to send message to topic " + topic + ": " + e.getMessage());
+            System.err.println("Failed to send message to topic " + topic + ": " + e.getMessage());
             throw new RuntimeException("Failed to send to Kafka topic: " + topic, e);
         }
     }
@@ -246,7 +303,7 @@ public class KafkaListenerAspect {
             Object id = getIdMethod.invoke(event);
             return id != null ? id.toString() : null;
         } catch (Exception e) {
-            System.err.println("⚠️ Could not extract event ID: " + e.getMessage());
+            System.err.println("Could not extract event ID: " + e.getMessage());
             return null;
         }
     }
@@ -289,6 +346,52 @@ public class KafkaListenerAspect {
                 .tag("attempt", String.valueOf(attempts))
                 .register(meterRegistry)
                 .increment();
+        }
+    }
+
+    /**
+     * Check if circuit breaker is OPEN using reflection (to avoid compile-time dependency).
+     */
+    private boolean isCircuitBreakerOpen(Object circuitBreaker) {
+        try {
+            Method getStateMethod = circuitBreaker.getClass().getMethod("getState");
+            Object state = getStateMethod.invoke(circuitBreaker);
+            
+            // Check if state is OPEN
+            Method nameMethod = state.getClass().getMethod("name");
+            String stateName = (String) nameMethod.invoke(state);
+            
+            return "OPEN".equals(stateName);
+        } catch (Exception e) {
+            // If reflection fails, assume circuit breaker is not open (fallback)
+            return false;
+        }
+    }
+
+    /**
+     * Execute with circuit breaker tracking using reflection (to avoid compile-time dependency).
+     */
+    private Object executeWithCircuitBreaker(Object circuitBreaker, ProceedingJoinPoint pjp) throws Throwable {
+        try {
+            // Use circuit breaker's executeSupplier method via reflection
+            Method executeSupplierMethod = circuitBreaker.getClass().getMethod("executeSupplier", 
+                Supplier.class);
+            
+            Supplier<Object> supplier = () -> {
+                try {
+                    return pjp.proceed();
+                } catch (Throwable throwable) {
+                    if (throwable instanceof RuntimeException) {
+                        throw (RuntimeException) throwable;
+                    }
+                    throw new RuntimeException(throwable);
+                }
+            };
+            
+            return executeSupplierMethod.invoke(circuitBreaker, supplier);
+        } catch (Exception e) {
+            // If reflection fails, fall back to normal execution
+            return pjp.proceed();
         }
     }
 

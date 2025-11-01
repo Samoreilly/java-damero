@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
-import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.Config.DelayMethod;
 
 import java.time.LocalDateTime;
 

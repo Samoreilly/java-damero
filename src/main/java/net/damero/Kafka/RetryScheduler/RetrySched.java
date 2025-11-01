@@ -1,7 +1,7 @@
 package net.damero.Kafka.RetryScheduler;
 
 import net.damero.Kafka.Annotations.CustomKafkaListener;
-import net.damero.Kafka.CustomKafkaSetup.DelayMethod;
+import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
 
