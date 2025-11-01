@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import static net.damero.Kafka.CustomObject.GlobalExceptionMapLogger.exceptions;
 
-
+@Slf4j
 @Component
 public class KafkaDLQ {
 

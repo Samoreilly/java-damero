@@ -63,7 +63,7 @@ public class TestEvent {
     public int hashCode() {
         return Objects.hash(id, data, shouldFail);
     }
-
+    
     @Override
     public String toString() {
         return "TestEvent{" +

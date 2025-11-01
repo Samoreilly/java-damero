@@ -12,12 +12,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Aspect
 @Component
@@ -30,20 +35,28 @@ public class KafkaListenerAspect {
 
     private final Map<String, Integer> eventAttempts = new ConcurrentHashMap<>();
 
-    @Autowired
+    @Nullable //Can be null if null if user doesnt have Micrometer
+    private final MeterRegistry meterRegistry;
+
+    // @Autowired is optional here - Spring autowires single constructors automatically
     public KafkaListenerAspect(KafkaDLQ kafkaDLQ,
                                ApplicationContext context,
                                KafkaTemplate<?, ?> defaultKafkaTemplate,
-                               RetrySched retrySched) {
+                               RetrySched retrySched,
+                               @Nullable MeterRegistry meterRegistry) {
         this.kafkaDLQ = kafkaDLQ;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
         this.retrySched = retrySched;
+        this.meterRegistry = meterRegistry;  // Can be null if users don't have Micrometer
     }
 
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable{
         System.out.println("🔴 ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
+        
+        //Record start time
+        long startTime = System.currentTimeMillis();
 
         Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
 
@@ -83,6 +96,8 @@ public class KafkaListenerAspect {
 
             Object result = pjp.proceed();
 
+            recordSuccessMetrics(customKafkaListener.topic(), startTime);
+
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
                 System.out.println("Message processed successfully and acknowledged");
@@ -91,7 +106,8 @@ public class KafkaListenerAspect {
             return result;
 
         } catch (Exception e) {
-
+            
+           
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
                 System.out.println("Acknowledged message after exception");
@@ -102,8 +118,14 @@ public class KafkaListenerAspect {
                 originalEvent = rec.value();
             }
             String eventId = extractEventId(originalEvent);
+
+            //Record failure metrics for the eventId
+            recordFailureMetrics(customKafkaListener.topic(), e, eventAttempts.getOrDefault(eventId, 0), startTime);
+
             int currentAttempts = eventAttempts.getOrDefault(eventId, 0) + 1;
             eventAttempts.put(eventId, currentAttempts);
+
+
 
             if (currentAttempts >= customKafkaListener.maxAttempts()) {
                 System.err.println("Max attempts reached. Sending to DLQ: " + customKafkaListener.dlqTopic());
@@ -228,4 +250,46 @@ public class KafkaListenerAspect {
             return null;
         }
     }
+
+    private void recordSuccessMetrics(String topic, long startTime) {
+        if (meterRegistry != null) {
+            Timer.Sample sample = Timer.start(meterRegistry);
+            sample.stop(Timer.builder("kafka.damero.processing.time")
+                .tag("topic", topic)
+                .tag("status", "success")
+                .register(meterRegistry));
+            
+            Counter.builder("kafka.damero.processing.count")
+                .tag("topic", topic)
+                .tag("status", "success")
+                .register(meterRegistry)
+                .increment();
+        }
+    }
+
+
+    private void recordFailureMetrics(String topic, Exception e, int attempts, long startTime) {
+        if (meterRegistry != null) {
+            String exceptionType = e.getClass().getSimpleName();
+            
+            Timer.builder("kafka.damero.processing.time")
+                .tag("topic", topic)
+                .tag("status", "failure")
+                .register(meterRegistry)
+                .record(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS);
+            
+            Counter.builder("kafka.damero.exception.count")
+                .tag("topic", topic)
+                .tag("exception", exceptionType)
+                .register(meterRegistry)
+                .increment();
+            
+            Counter.builder("kafka.damero.retry.count")
+                .tag("topic", topic)
+                .tag("attempt", String.valueOf(attempts))
+                .register(meterRegistry)
+                .increment();
+        }
+    }
+
 }

@@ -1,0 +1,950 @@
+================================================================================
+                    KAFKA DAMERO - PROJECT IDEAS & FEATURE SUGGESTIONS
+================================================================================
+
+This document contains niche, big-picture ideas that would add significant value
+to the Kafka Damero library. These are features library users would want in
+production-grade Kafka retry/DLQ management systems.
+
+================================================================================
+                        1. CIRCUIT BREAKER INTEGRATION
+================================================================================
+
+NICHE IDEA: Integrate circuit breaker patterns (Resilience4j/Hystrix) to prevent
+cascading failures when a downstream service is consistently failing.
+
+WHY IT MATTERS:
+- Currently, your library retries indefinitely (up to maxAttempts) even if the
+  target service is completely down
+- Users waste retry attempts on services that won't recover soon
+- A circuit breaker can short-circuit retries when failure rate exceeds threshold
+
+IMPLEMENTATION APPROACH:
+- Add @CircuitBreaker annotation or configuration on @CustomKafkaListener
+- Track failure rates per topic/service
+- Open circuit after X failures in Y time window
+- Half-open state to test recovery
+- When circuit is open, immediately send to DLQ without retries
+- Optional: send circuit breaker state events to monitoring topic
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    dlqTopic = "orders-dlq",
+    circuitBreaker = true,
+    circuitBreakerFailureThreshold = 50,  // failures
+    circuitBreakerWindowDuration = 60000  // 1 minute window
+  )
+
+
+================================================================================
+                        2. RATE LIMITING & THROTTLING
+================================================================================
+
+NICHE IDEA: Built-in rate limiting per listener to prevent overwhelming downstream
+services or violating API rate limits.
+
+WHY IT MATTERS:
+- Users often process Kafka messages faster than downstream services can handle
+- Without rate limiting, retries can compound the problem
+- Critical for avoiding API throttling (429 errors)
+- Enables graceful degradation under load
+
+IMPLEMENTATION APPROACH:
+- Token bucket or sliding window rate limiter per @CustomKafkaListener
+- Configurable messages per second/minute/hour
+- Pause consumer threads when rate limit reached
+- Optional: exponential backoff on rate limit errors (429)
+- Metrics: track rate limit hits
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    rateLimit = "100/m",  // 100 messages per minute
+    rateLimitBurst = 20    // allow burst of 20
+  )
+
+
+================================================================================
+                   3. MESSAGE DEDUPLICATION & IDEMPOTENCY
+================================================================================
+
+NICHE IDEA: Prevent duplicate message processing using message IDs and in-memory
+or distributed cache (Redis) for deduplication.
+
+WHY IT MATTERS:
+- Kafka can redeliver messages (rebalances, manual seeks, consumer lag)
+- Retries can cause duplicate processing if not handled
+- Critical for financial transactions, order processing
+- Users currently must implement this themselves
+
+IMPLEMENTATION APPROACH:
+- Extract message ID from event (via extractEventId) or Kafka message key
+- Store processed message IDs with TTL (in-memory or Redis)
+- Skip processing if ID already seen
+- Optional: configurable deduplication window
+- Support both per-instance (in-memory) and distributed (Redis) modes
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    enableDeduplication = true,
+    deduplicationStore = "redis",  // or "memory"
+    deduplicationWindow = "24h"
+  )
+
+
+================================================================================
+                   4. SCHEDULED/CRON-BASED RETRY STRATEGY
+================================================================================
+
+NICHE IDEA: Retry messages only during specific time windows (e.g., business hours,
+avoiding maintenance windows, rate limit reset times).
+
+WHY IT MATTERS:
+- Some services are only available during business hours
+- External APIs have rate limit reset windows
+- Users want to retry during off-peak hours to reduce load
+- Avoid retrying during scheduled maintenance
+
+IMPLEMENTATION APPROACH:
+- Cron expression support in retry scheduling
+- Schedule retry for next available window
+- Skip retries outside allowed windows (send to DLQ after window expires)
+- Support timezone-aware scheduling
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    retrySchedule = "0 9-17 * * MON-FRI",  // 9 AM to 5 PM weekdays
+    timezone = "America/New_York"
+  )
+
+
+================================================================================
+             5. DLQ REPLAY & FORENSICS TOOLING
+================================================================================
+
+NICHE IDEA: Built-in API and tooling to replay messages from DLQ, either to
+original topic or a different topic, with metadata reset or preserved.
+
+WHY IT MATTERS:
+- Operations teams need to investigate and replay failed messages
+- Current DLQ is read-only; users need programmatic replay capability
+- Critical for fixing data issues and reprocessing corrected events
+- Reduces manual intervention and operational overhead
+
+IMPLEMENTATION APPROACH:
+- REST API: POST /api/dlq/{topic}/replay
+- Support replay to original topic or custom topic
+- Options: reset metadata (fresh retry) or preserve history
+- Bulk replay with filters (date range, exception type, attempts)
+- Audit log of replay operations
+
+EXAMPLE USAGE:
+  POST /api/dlq/orders-dlq/replay
+  {
+    "targetTopic": "orders",
+    "resetMetadata": true,
+    "filter": {
+      "fromDate": "2024-01-01",
+      "exceptionType": "TimeoutException"
+    }
+  }
+
+
+================================================================================
+                   6. HEALTH CHECKS & READINESS PROBES
+================================================================================
+
+NICHE IDEA: Spring Boot Actuator health indicators for Kafka connectivity,
+consumer lag, DLQ depth, and circuit breaker states.
+
+WHY IT MATTERS:
+- Kubernetes deployments need health/readiness probes
+- Operations teams need visibility into library health
+- Critical for automated deployments and scaling decisions
+- Enables proactive alerting on degraded states
+
+IMPLEMENTATION APPROACH:
+- Implement HealthIndicator for:
+  * Kafka broker connectivity
+  * Consumer lag per topic
+  * DLQ depth (if too many messages, service is degraded)
+  * Circuit breaker states (how many are open)
+  * Retry scheduler health (thread pool saturation)
+- Expose via /actuator/health
+- Configurable health thresholds
+
+EXAMPLE USAGE:
+  GET /actuator/health
+  {
+    "status": "UP",
+    "kafka": {
+      "status": "UP",
+      "consumerLag": { "orders": 0, "payments": 5 },
+      "dlqDepth": { "orders-dlq": 10, "payments-dlq": 0 },
+      "openCircuits": 0
+    }
+  }
+
+
+================================================================================
+             7. DISTRIBUTED TRACING & CORRELATION IDS
+================================================================================
+
+NICHE IDEA: Automatic correlation ID propagation through Kafka headers and
+integration with OpenTelemetry/Zipkin for end-to-end tracing.
+
+WHY IT MATTERS:
+- Users need to trace messages across multiple services and retries
+- Current retries create new traces; hard to track retry history
+- Critical for debugging complex event flows
+- Enables performance analysis across retry attempts
+
+IMPLEMENTATION APPROACH:
+- Auto-generate or extract correlation ID from Kafka headers
+- Propagate correlation ID in EventWrapper metadata
+- Integration with OpenTelemetry for automatic span creation
+- Create child spans for each retry attempt
+- Add correlation ID to all logs and DLQ messages
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    enableTracing = true,
+    correlationIdHeader = "X-Correlation-ID"
+  )
+
+
+================================================================================
+                  8. METRICS EXPORT (MICROMETER/PROMETHEUS)
+================================================================================
+
+NICHE IDEA: Comprehensive metrics export for retry counts, DLQ depths, processing
+times, exception rates, and circuit breaker states.
+
+WHY IT MATTERS:
+- Users need metrics for monitoring and alerting
+- Currently no visibility into retry patterns or failure rates
+- Critical for production observability
+- Enables SLO/SLA tracking
+
+IMPLEMENTATION APPROACH:
+- Micrometer integration for Spring Boot Actuator
+- Metrics:
+  * kafka.damero.retry.count{topic,attempt}
+  * kafka.damero.dlq.depth{topic}
+  * kafka.damero.processing.time{topic,success/failure}
+  * kafka.damero.exception.count{topic,exception_type}
+  * kafka.damero.circuit.state{topic,open/closed/half-open}
+  * kafka.damero.rate.limit.hits{topic}
+
+EXAMPLE USAGE:
+  # Prometheus metrics automatically exported
+  kafka_damero_retry_count_total{topic="orders",attempt="1"} 150.0
+  kafka_damero_dlq_depth{topic="orders-dlq"} 5.0
+
+
+================================================================================
+             9. EXCEPTION-TYPE CONDITIONAL RETRY LOGIC
+================================================================================
+
+NICHE IDEA: Configure retry behavior based on exception types. Some exceptions
+should retry (TimeoutException), others should go straight to DLQ (IllegalArgumentException).
+
+WHY IT MATTERS:
+- Not all exceptions warrant retries (e.g., validation errors won't succeed on retry)
+- Users waste retry attempts on non-retriable failures
+- Improves DLQ quality (only true failures, not validation errors)
+- Reduces latency for non-retriable errors
+
+IMPLEMENTATION APPROACH:
+- Configure retriable exception types per listener
+- Whitelist or blacklist approach
+- Custom exception classifier strategy interface
+- Default: retry on all exceptions (current behavior)
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    retriableExceptions = {TimeoutException.class, IOException.class},
+    nonRetriableExceptions = {IllegalArgumentException.class, ValidationException.class}
+  )
+
+
+================================================================================
+                 10. EVENT SOURCING INTEGRATION
+================================================================================
+
+NICHE IDEA: Native support for event sourcing patterns with version handling,
+event replay, and snapshot support.
+
+WHY IT MATTERS:
+- Many Kafka users implement event sourcing
+- Retries can create duplicate events if not handled
+- Need to handle event versioning and idempotency
+- Critical for CQRS architectures
+
+IMPLEMENTATION APPROACH:
+- Support event version in EventWrapper
+- Automatic event replay from event store
+- Snapshot integration for fast recovery
+- Idempotency handling for event sourcing
+- Optional: separate DLQ for version conflicts
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    eventSourcing = true,
+    eventStore = "event-store"
+  )
+
+
+================================================================================
+                 11. SCHEMA REGISTRY INTEGRATION
+================================================================================
+
+NICHE IDEA: Support for Confluent Schema Registry with Avro/Protobuf serialization
+and schema evolution handling in retries.
+
+WHY IT MATTERS:
+- Many production Kafka deployments use Schema Registry
+- Current implementation only supports JSON
+- Schema evolution can break retries if schemas change
+- Critical for large-scale, polyglot Kafka deployments
+
+IMPLEMENTATION APPROACH:
+- Integrate Confluent Schema Registry client
+- Support Avro and Protobuf serializers/deserializers
+- Schema version tracking in EventWrapper
+- Handle schema evolution in retries (read with old schema, write with new)
+- Auto-configured schema registry beans
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    schemaRegistry = true,
+    schemaFormat = "avro"  // or "protobuf"
+  )
+
+
+================================================================================
+                   12. MULTI-BROKER SUPPORT
+================================================================================
+
+NICHE IDEA: Support different Kafka brokers for different topics (e.g., primary
+broker for processing, secondary broker for DLQ, separate brokers per environment).
+
+WHY IT MATTERS:
+- Enterprise deployments often have separate Kafka clusters
+- Users may want DLQ in a different cluster for isolation
+- Disaster recovery scenarios
+- Multi-region deployments
+
+IMPLEMENTATION APPROACH:
+- Per-topic broker configuration
+- Separate KafkaTemplate per broker
+- Auto-discovery of broker for topic
+- Configuration via properties or annotations
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    broker = "primary-kafka:9092",
+    dlqTopic = "orders-dlq",
+    dlqBroker = "secondary-kafka:9092"
+  )
+
+
+================================================================================
+              13. EXACTLY-ONCE SEMANTICS & TRANSACTIONS
+================================================================================
+
+NICHE IDEA: Support Kafka transactions for exactly-once processing semantics
+across retries and DLQ writes.
+
+WHY IT MATTERS:
+- Critical for financial and transactional use cases
+- Current implementation uses at-least-once (messages can be processed multiple times)
+- Ensures DLQ writes are atomic with processing
+- Prevents duplicate processing across retries
+
+IMPLEMENTATION APPROACH:
+- Transactional KafkaTemplate support
+- Wrap retry/DLQ operations in transactions
+- Idempotent producer configuration
+- Transactional consumer configuration
+- Handle transaction rollback on failures
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    transactional = true,
+    transactionTimeout = 60000
+  )
+
+
+================================================================================
+                 14. MESSAGE ENRICHMENT PIPELINE
+================================================================================
+
+NICHE IDEA: Interceptor-style pipeline to enrich messages before processing
+(e.g., fetch user data, validate, add context).
+
+WHY IT MATTERS:
+- Users often need to enrich messages before processing
+- Retries should use cached enrichment data
+- Avoids repeated enrichment calls on retries
+- Common pattern in event-driven architectures
+
+IMPLEMENTATION APPROACH:
+- Interceptor interface for message enrichment
+- Enrichment data cached in EventWrapper
+- Skip enrichment on retries (use cached data)
+- Chain multiple interceptors
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    enrichments = {UserEnrichment.class, ValidationEnrichment.class}
+  )
+
+
+================================================================================
+                   15. PARALLEL & CONCURRENT PROCESSING
+================================================================================
+
+NICHE IDEA: Built-in support for parallel message processing with thread pools,
+worker queues, and backpressure handling.
+
+WHY IT MATTERS:
+- Some messages are CPU-intensive or I/O-bound
+- Current implementation processes sequentially
+- Users need parallel processing with controlled concurrency
+- Critical for high-throughput scenarios
+
+IMPLEMENTATION APPROACH:
+- Configurable thread pool per listener
+- Async processing mode with CompletableFuture
+- Backpressure when thread pool is saturated
+- Order preservation option (per partition key)
+- Metrics for queue depth and processing times
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    parallelProcessing = true,
+    threadPoolSize = 10,
+    preserveOrder = true
+  )
+
+
+================================================================================
+                      16. MESSAGE PRIORITY QUEUES
+================================================================================
+
+NICHE IDEA: Support message priority handling within Kafka topics using
+custom partitioners and priority-aware consumers.
+
+WHY IT MATTERS:
+- Some messages are more urgent than others
+- Users need to process high-priority messages first
+- Current FIFO processing doesn't support priorities
+- Critical for SLA-sensitive applications
+
+IMPLEMENTATION APPROACH:
+- Priority field in EventWrapper or Kafka headers
+- Custom partitioner that routes by priority
+- Priority-aware consumer that processes high-priority partitions first
+- Retry with priority preserved
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    priorityEnabled = true,
+    priorityHeader = "X-Priority"  // HIGH, MEDIUM, LOW
+  )
+
+
+================================================================================
+                   17. TIME-BASED RETRY WINDOWS
+================================================================================
+
+NICHE IDEA: Retry messages only within specific time windows from initial failure
+(e.g., retry within 24 hours, then send to DLQ).
+
+WHY IT MATTERS:
+- Some failures are time-sensitive (e.g., expired tokens)
+- Users want to stop retrying after a certain time period
+- Reduces unnecessary retries on stale failures
+- Works with scheduled retry windows
+
+IMPLEMENTATION APPROACH:
+- Max retry window duration configuration
+- Calculate time since first failure
+- Stop retries after window expires
+- Send to DLQ with "RETRY_WINDOW_EXPIRED" reason
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    maxRetryWindow = "24h",
+    retrySchedule = "0 9-17 * * MON-FRI"
+  )
+
+
+================================================================================
+                   18. WEBHOOK & ALERT INTEGRATIONS
+================================================================================
+
+NICHE IDEA: Send webhook notifications or alerts when messages go to DLQ,
+circuit breakers open, or retry limits are reached.
+
+WHY IT MATTERS:
+- Operations teams need immediate alerts on failures
+- Integration with PagerDuty, Slack, email, etc.
+- Proactive monitoring and incident response
+- Critical for production operations
+
+IMPLEMENTATION APPROACH:
+- Configurable webhook URLs per listener or globally
+- Event hooks: onDlq, onCircuitOpen, onMaxRetries
+- Retry webhook delivery with exponential backoff
+- Template-based message formatting
+- Integration with popular alerting services
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    webhooks = {
+      "https://hooks.slack.com/...",
+      "https://api.pagerduty.com/..."
+    },
+    alertOnDlq = true,
+    alertOnCircuitOpen = true
+  )
+
+
+================================================================================
+                 19. DLQ ANALYTICS & DASHBOARD
+================================================================================
+
+NICHE IDEA: Built-in dashboard or API to analyze DLQ patterns: failure trends,
+top exceptions, failure rates by time, topic health scores.
+
+WHY IT MATTERS:
+- Users need insights into failure patterns
+- Identify problematic services or time periods
+- Prioritize DLQ remediation efforts
+- Track improvement over time
+
+IMPLEMENTATION APPROACH:
+- Aggregate DLQ metadata into analytics store (in-memory or DB)
+- REST API for analytics queries
+- Optional: simple dashboard UI
+- Metrics: failure rate trends, exception distribution, top failing messages
+- Export analytics data
+
+EXAMPLE USAGE:
+  GET /api/dlq/analytics/orders-dlq?window=7d
+  {
+    "failureRate": 0.05,
+    "topExceptions": [
+      {"type": "TimeoutException", "count": 45},
+      {"type": "SQLException", "count": 12}
+    ],
+    "trend": "decreasing",
+    "healthScore": 0.95
+  }
+
+
+================================================================================
+                 20. MESSAGE TRANSFORMATION PIPELINE
+================================================================================
+
+NICHE IDEA: Declarative message transformation before processing (validation,
+format conversion, field mapping, enrichment).
+
+WHY IT MATTERS:
+- Messages often need transformation before processing
+- Users duplicate transformation logic across listeners
+- Retries should use transformed version, not re-transform
+- Common pattern in event-driven systems
+
+IMPLEMENTATION APPROACH:
+- Transformation interface/SPI
+- Chain multiple transformations
+- Cache transformed message in EventWrapper
+- Built-in transformations: JSON path extraction, field mapping, validation
+- Custom transformation plugins
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    transformations = {
+      @Transform(type = "validate", schema = "order-schema.json"),
+      @Transform(type = "enrich", source = "user-service"),
+      @Transform(type = "map", mapping = "order-mapping.yaml")
+    }
+  )
+
+
+================================================================================
+                   21. DEAD LETTER QUEUE EXPIRATION
+================================================================================
+
+NICHE IDEA: Automatic cleanup of old DLQ messages based on retention policies
+with optional archival to cold storage.
+
+WHY IT MATTERS:
+- DLQ can grow indefinitely without cleanup
+- Storage costs increase over time
+- Some messages are no longer relevant after time period
+- Compliance requirements for data retention
+
+IMPLEMENTATION APPROACH:
+- Configurable DLQ retention policy (time-based or size-based)
+- Automatic archival to S3/GCS before deletion
+- Expiration metadata in EventWrapper
+- Optional: notification before expiration
+- Audit log of expired messages
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    dlqTopic = "orders-dlq",
+    dlqRetention = "90d",
+    dlqArchiveTo = "s3://dlq-archive/orders-dlq"
+  )
+
+
+================================================================================
+                   22. BATCH PROCESSING SUPPORT
+================================================================================
+
+NICHE IDEA: Process Kafka messages in batches for improved throughput and
+atomic batch operations.
+
+WHY IT MATTERS:
+- Batch processing is more efficient than single messages
+- Users need atomic batch operations (all succeed or all fail)
+- Reduces overhead in high-throughput scenarios
+- Common pattern in data processing pipelines
+
+IMPLEMENTATION APPROACH:
+- Batch mode annotation
+- Collect messages up to batch size or timeout
+- Process batch atomically
+- Retry entire batch if any message fails
+- DLQ entire batch or individual messages
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    batchMode = true,
+    batchSize = 100,
+    batchTimeout = 5000
+  )
+  public void processBatch(List<OrderEvent> events) {
+    // Process entire batch
+  }
+
+
+================================================================================
+                  23. CUSTOM RETRY STRATEGY SPI
+================================================================================
+
+NICHE IDEA: Strategy pattern interface for custom retry logic implementations
+beyond the built-in delay methods.
+
+WHY IT MATTERS:
+- Built-in delay methods don't cover all use cases
+- Users need custom retry logic (e.g., adaptive delays based on response times)
+- Enables plugin ecosystem for custom strategies
+- Future-proofs the library
+
+IMPLEMENTATION APPROACH:
+- RetryStrategy interface with calculateDelay method
+- Register custom strategies as beans
+- Reference strategy by name in annotation
+- Built-in strategies: LINEAR, EXPO, etc.
+- Strategy receives context: attempts, exceptions, metadata
+
+EXAMPLE USAGE:
+  @Component
+  public class AdaptiveRetryStrategy implements RetryStrategy {
+    public long calculateDelay(RetryContext context) {
+      // Custom logic based on context
+    }
+  }
+
+  @CustomKafkaListener(
+    topic = "orders",
+    retryStrategy = "adaptiveRetryStrategy"
+  )
+
+
+================================================================================
+                   24. MESSAGE ROUTING & SPLITTER
+================================================================================
+
+NICHE IDEA: Route messages to different topics or listeners based on content,
+with support for message splitting and aggregation.
+
+WHY IT MATTERS:
+- Users need conditional routing based on message content
+- Split large messages into smaller ones
+- Route to different processors based on message type
+- Common pattern in event-driven architectures
+
+IMPLEMENTATION APPROACH:
+- Router interface for message routing decisions
+- Support routing to multiple topics (splitter pattern)
+- Route based on message content, headers, or metadata
+- Preserve retry/DLQ behavior per route
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    router = OrderRouter.class
+  )
+  public class OrderRouter implements MessageRouter {
+    public List<String> route(OrderEvent event) {
+      if (event.isHighValue()) return List.of("high-value-orders");
+      return List.of("standard-orders");
+    }
+  }
+
+
+================================================================================
+                   25. SECURITY & ENCRYPTION SUPPORT
+================================================================================
+
+NICHE IDEA: Built-in support for message encryption at rest and in transit,
+with key management integration.
+
+WHY IT MATTERS:
+- Production Kafka deployments require encryption
+- Compliance requirements (GDPR, HIPAA, PCI-DSS)
+- Users need field-level encryption for sensitive data
+- Critical for enterprise deployments
+
+IMPLEMENTATION APPROACH:
+- Encryption/decryption interceptors
+- Support for multiple encryption algorithms
+- Integration with key management services (AWS KMS, HashiCorp Vault)
+- Field-level encryption support
+- Encrypted EventWrapper serialization
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    encryption = true,
+    encryptionAlgorithm = "AES-256-GCM",
+    keyManager = "aws-kms",
+    encryptedFields = {"creditCard", "ssn"}
+  )
+
+
+================================================================================
+                        26. MULTI-TENANT SUPPORT
+================================================================================
+
+NICHE IDEA: Isolated retry/DLQ handling per tenant in multi-tenant applications,
+with tenant-specific configurations.
+
+WHY IT MATTERS:
+- SaaS applications need per-tenant isolation
+- Different retry policies per tenant
+- Tenant-specific DLQ topics
+- Critical for enterprise SaaS
+
+IMPLEMENTATION APPROACH:
+- Extract tenant ID from message (header or content)
+- Tenant-specific retry configuration lookup
+- Isolated DLQ per tenant or tenant-prefixed topics
+- Tenant-aware metrics and monitoring
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    multiTenant = true,
+    tenantExtractor = TenantIdExtractor.class,
+    tenantDlqPattern = "{tenant}-orders-dlq"
+  )
+
+
+================================================================================
+                   27. EVENT-DRIVEN ARCHITECTURE PATTERNS
+================================================================================
+
+NICHE IDEA: Built-in support for Saga pattern, Event Sourcing, CQRS, and other
+event-driven architecture patterns with retry/DLQ integration.
+
+WHY IT MATTERS:
+- Users implement these patterns frequently
+- Retries can break saga orchestration if not handled correctly
+- Need specialized retry behavior for sagas (compensating transactions)
+- Critical for distributed system architectures
+
+IMPLEMENTATION APPROACH:
+- Saga orchestrator integration
+- Compensating transaction support on DLQ
+- Event sourcing replay integration
+- CQRS read model update retries
+- Saga state machine with retry states
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "order-saga",
+    sagaPattern = true,
+    compensatingAction = OrderCompensation.class
+  )
+
+
+================================================================================
+                   28. PERFORMANCE PROFILING & BOTTLENECK DETECTION
+================================================================================
+
+NICHE IDEA: Automatic performance profiling of message processing to identify
+bottlenecks, slow operations, and optimization opportunities.
+
+WHY IT MATTERS:
+- Users need visibility into processing performance
+- Identify slow listeners or operations
+- Optimize retry timing based on actual processing times
+- Critical for high-performance systems
+
+IMPLEMENTATION APPROACH:
+- Automatic method-level timing
+- Slow operation detection and alerting
+- Performance metrics per listener
+- Bottleneck analysis reports
+- Integration with APM tools
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    enableProfiling = true,
+    slowOperationThreshold = 1000  // ms
+  )
+
+
+================================================================================
+                     29. GRACEFUL DEGRADATION MODES
+================================================================================
+
+NICHE IDEA: Configurable degradation modes when systems are under stress:
+throttle, skip non-critical messages, or use cached responses.
+
+WHY IT MATTERS:
+- Systems under load need graceful degradation
+- Prevent cascading failures
+- Maintain critical operations while skipping non-critical
+- Critical for resilience patterns
+
+IMPLEMENTATION APPROACH:
+- Degradation strategy interface
+- Automatic degradation triggers (circuit open, high load, rate limits)
+- Message priority for degradation decisions
+- Configurable degradation modes per listener
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    degradationMode = DegradationMode.THROTTLE,
+    degradationThreshold = 0.8  // CPU usage
+  )
+
+
+================================================================================
+                    30. MESSAGE VERSIONING & MIGRATION
+================================================================================
+
+NICHE IDEA: Handle message schema versioning and automatic migration between
+versions during processing and retries.
+
+WHY IT MATTERS:
+- Event schemas evolve over time
+- Retries may encounter old schema versions
+- Need automatic migration to current schema
+- Critical for long-running event processing
+
+IMPLEMENTATION APPROACH:
+- Schema version tracking in EventWrapper
+- Version migration strategies
+- Backward/forward compatibility handling
+- Automatic schema migration on retry
+- Version-aware serialization
+
+EXAMPLE USAGE:
+  @CustomKafkaListener(
+    topic = "orders",
+    schemaVersioning = true,
+    migrationStrategy = OrderMigrationStrategy.class,
+    supportedVersions = {"1.0", "2.0", "2.1"}
+  )
+
+
+================================================================================
+                            SUMMARY OF BIG IDEAS
+================================================================================
+
+HIGHEST IMPACT (Most Requested by Users):
+1. Circuit Breaker Integration - Prevent cascading failures
+2. Metrics Export (Micrometer/Prometheus) - Production observability
+3. Exception-Type Conditional Retry Logic - Smart retry decisions
+4. DLQ Replay & Forensics Tooling - Operational tooling
+5. Health Checks & Readiness Probes - Kubernetes integration
+
+NICHE BUT VALUABLE:
+- Scheduled/Cron-Based Retry Strategy
+- Message Deduplication & Idempotency
+- Schema Registry Integration
+- Exactly-Once Semantics & Transactions
+- Multi-Tenant Support
+
+ADVANCED/FUTURE:
+- Event Sourcing Integration
+- Saga Pattern Support
+- Performance Profiling
+- Security & Encryption Support
+- Message Versioning & Migration
+
+================================================================================
+                              IMPLEMENTATION PRIORITY
+================================================================================
+
+PHASE 1 (Essential for Production):
+- Metrics Export (Micrometer)
+- Health Checks
+- Exception-Type Conditional Retries
+- DLQ Replay API
+
+PHASE 2 (High User Value):
+- Circuit Breaker Integration
+- Rate Limiting
+- Message Deduplication
+- Distributed Tracing
+
+PHASE 3 (Advanced Features):
+- Schema Registry
+- Exactly-Once Semantics
+- Multi-Tenant Support
+- Event Sourcing Integration
+
+================================================================================
+                              CONCLUSION
+================================================================================
+
+These features would transform Kafka Damero from a retry/DLQ library into a
+comprehensive Kafka resilience and observability platform. Focus on the highest
+impact features first (metrics, health checks, conditional retries) while
+keeping the library's simplicity and ease of use.
+
+The key is to balance feature richness with maintainability and user experience.
+Each feature should be opt-in and well-documented.
+
+================================================================================
+
