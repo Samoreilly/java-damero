@@ -33,8 +33,8 @@ The library is designed to be user friendly. You only need to add an annotation 
 ```xml
 <dependency>
     <groupId>java.damero</groupId>
-    <artifactId>demo</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <artifactId>kafka-damero</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 

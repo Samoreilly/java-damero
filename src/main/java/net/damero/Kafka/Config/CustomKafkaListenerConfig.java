@@ -48,10 +48,21 @@ public class CustomKafkaListenerConfig{
 
         KafkaTemplate<?, ?> kafkaTemplate = null;
 
-//        Class<?> factoryClass = annotation.kafkaTemplate();
-//        if (!factoryClass.equals(void.class)) {
-//            kafkaTemplate = (KafkaTemplate<?, ?>) context.getBean(factoryClass);
-//        }
+        // validate retryable topic configuration
+        if(build.retryable && (build.retryableTopic == null || build.retryableTopic.isEmpty())) {
+            throw new IllegalArgumentException("Retryable topic cannot be empty when retryable is true");
+        }
+        if(build.retryable && build.retryableTopic.equals(build.topic)) {
+            throw new IllegalArgumentException("Retryable topic cannot be the same as the topic");
+        }
+        if(build.retryable && build.retryableTopic.equals(build.dlqTopic)) {
+            throw new IllegalArgumentException("Retryable topic cannot be the same as the DLQ topic");
+        }
+        
+        // validate topic and dlqTopic are different
+        if(build.topic != null && build.dlqTopic != null && build.topic.equals(build.dlqTopic)) {
+            throw new IllegalArgumentException("Topic and DLQ topic cannot be the same");
+        }
 
         build.kafkaTemplate(kafkaTemplate);
         return build.build();
@@ -84,11 +95,17 @@ public class CustomKafkaListenerConfig{
         private Class<T> eventType;
 
         Builder topic(String topic) {
+            if (topic == null || topic.isEmpty()) {
+                throw new IllegalArgumentException("Topic cannot be null or empty");
+            }
             this.topic = topic;
             return this;
         }
 
         Builder dlqTopic(String dlqTopic) {
+            if (dlqTopic == null || dlqTopic.isEmpty()) {
+                throw new IllegalArgumentException("DLQ topic cannot be null or empty");
+            }
             this.dlqTopic = dlqTopic;
             return this;
         }
@@ -99,16 +116,22 @@ public class CustomKafkaListenerConfig{
 
         Builder maxAttempts(int maxAttempts) {
             this.maxAttempts = maxAttempts;
+            if (maxAttempts <= 0) {
+                throw new IllegalArgumentException("Max attempts must be greater than 0");
+            }
             return this;
         }
 
         Builder delay(double delay) {
             this.delay = delay;
+            if (delay < 0) {
+                throw new IllegalArgumentException("Delay must be greater than or equal to 0");
+            }
             return this;
         }
 
         Builder delayMethod(DelayMethod delayMethod) {
-            this.delayMethod = delayMethod;
+            this.delayMethod = delayMethod != null ? delayMethod : DelayMethod.EXPO;
             return this;
         }
 
@@ -135,6 +158,35 @@ public class CustomKafkaListenerConfig{
         //custom kafkalistenerconfig takes in builder config
 
         CustomKafkaListenerConfig build() {
+            // validate required fields
+            if (topic == null || topic.isEmpty()) {
+                throw new IllegalStateException("Topic is required");
+            }
+            if (dlqTopic == null || dlqTopic.isEmpty()) {
+                throw new IllegalStateException("DLQ topic is required");
+            }
+            if (topic.equals(dlqTopic)) {
+                throw new IllegalStateException("Topic and DLQ topic cannot be the same");
+            }
+            if (maxAttempts <= 0) {
+                throw new IllegalStateException("Max attempts must be greater than 0");
+            }
+            if (delay < 0) {
+                throw new IllegalStateException("Delay must be greater than or equal to 0");
+            }
+            if (delayMethod == null) {
+                delayMethod = DelayMethod.EXPO;
+            }
+            if (retryable && (retryableTopic == null || retryableTopic.isEmpty())) {
+                throw new IllegalStateException("Retryable topic is required when retryable is true");
+            }
+            if (retryable && retryableTopic.equals(topic)) {
+                throw new IllegalStateException("Retryable topic cannot be the same as the topic");
+            }
+            if (retryable && retryableTopic.equals(dlqTopic)) {
+                throw new IllegalStateException("Retryable topic cannot be the same as the DLQ topic");
+            }
+            
             if (consumerFactory == null && eventType != null) {
                 // fallback to default consumer factory with generics
                 consumerFactory = KafkaConsumerFactoryProvider.defaultConsumerFactory(eventType);
