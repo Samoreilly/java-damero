@@ -63,7 +63,6 @@ class CustomKafkaListenerIntegrationTest {
     void setUp() {
         testKafkaListener.reset();
         dlqCollector.reset();
-        System.out.println("Test setup complete, all counters reset");
     }
 
     @Test
@@ -213,7 +212,6 @@ class CustomKafkaListenerIntegrationTest {
                 .andReturn();
 
         String responseBody = result.getResponse().getContentAsString();
-        System.out.println("\nSTART123" +responseBody +"END123\n");
 
         assertTrue(responseBody.contains("end-to-end-dlq"),
                 "API response should contain the DLQ event ID");

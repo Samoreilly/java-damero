@@ -1,31 +1,38 @@
+# Kafka Damero
 
-## PROJECT IS FULLY IN DEVELOPMENT AND FEATURES HAVE NOT BEEN VIGOROUSLY TESTED YET
-# Kafka Damero 
+Kafka Damero is a Spring Boot library that simplifies working with Kafka listeners by adding automatic retry logic, dead letter queue handling, circuit breaker support, and metrics tracking with minimal configuration.
 
-A Spring Boot library that adds intelligent retry logic and dead letter queue (DLQ) handling to your Kafka listeners with minimal configuration
-(in development)
+## Status
 
-
+This project is currently in active development. Features have been implemented and tested, but they have not been thoroughly tested in production environments yet. Use at your own discretion.
 
 ## Features
 
-**Automatic Retries** - Configurable retry attempts with multiple delay strategies  
-**Dead Letter Queue** - Automatic DLQ routing for failed messages with metadata tracking  
-**Auto-Configuration** - Zero config setup for most use cases  
-**Flexible Overrides** - Override any bean for custom behavior
-**Metadata Tracking** - Track attempt counts and failure timestamps  
-**Manual Acknowledgment** - Proper message acknowledgment to prevent duplicate processing
+**Automatic Retries**: Configure retry attempts with multiple delay strategies to handle transient failures gracefully.
 
----
+**Dead Letter Queue**: Failed messages are automatically routed to a dead letter queue with full metadata tracking including attempt counts and failure timestamps.
+
+**Auto Configuration**: The library provides sensible defaults for most use cases, so you can get started quickly with minimal setup.
+
+**Flexible Overrides**: You can override any auto configured bean to customize behavior for your specific needs.
+
+**Metadata Tracking**: Every failed message includes metadata about when it first failed, how many times it was retried, and what exceptions occurred.
+
+**Manual Acknowledgment**: The library handles Kafka message acknowledgment properly to prevent duplicate processing.
+
+**Circuit Breaker Support**: Optional integration with Resilience4j for circuit breaker functionality when downstream services are unavailable.
+
+**Metrics Integration**: Optional Micrometer integration for tracking processing times, success rates, and failure counts.
 
 ## Quick Start
 
-Most users need only:
-- Set `spring.kafka.bootstrap-servers`
-- Add a listener using the built-in `kafkaListenerContainerFactory`
-- Annotate with `@CustomKafkaListener`
+For most use cases, you only need to:
 
-Minimal example
+1. Set your Kafka bootstrap servers in application properties
+2. Add a listener using the provided container factory
+3. Annotate your listener method with CustomKafkaListener
+
+Here is a minimal example:
 
 ```java
 @Component
@@ -41,22 +48,22 @@ public class OrderListener {
     @KafkaListener(
         topics = "orders",
         groupId = "order-group",
-        containerFactory = "kafkaListenerContainerFactory" // provided by this library
+        containerFactory = "kafkaListenerContainerFactory"
     )
     public void listen(Object payload, Acknowledgment acknowledgment) {
-        // The aspect unwraps ConsumerRecord/EventWrapper for you.
         OrderEvent event = (OrderEvent) payload;
         process(event);
     }
 }
 ```
 
-Notes
-- You can also accept `ConsumerRecord<String, Object>`; the aspect unwraps it before retry/DLQ logic.
-- On retry, the library resends `EventWrapper<?>` back to the original topic (metadata preserved).
-- On max attempts, it sends one `EventWrapper<?>` to the DLQ. Use the provided `dlqKafkaListenerContainerFactory` to read it.
+Note that the aspect automatically unwraps ConsumerRecord and EventWrapper for you. You can accept ConsumerRecord directly if you prefer, and the library will extract the actual event before processing retry and DLQ logic.
 
-### 1. Add the Dependency
+When a message is retried, the library sends it back to the original topic wrapped in an EventWrapper to preserve metadata. After max attempts are reached, it sends one EventWrapper to the DLQ topic. Use the provided dlqKafkaListenerContainerFactory to read from the DLQ.
+
+## Installation
+
+### Add the Dependency
 
 ```xml
 <dependency>
@@ -66,10 +73,12 @@ Notes
 </dependency>
 ```
 
-### 2. Configure Kafka Properties
+### Configure Kafka Properties
 
+You can configure Kafka using either YAML or properties files.
 
 #### YAML Configuration
+
 ```yaml
 spring:
   kafka:
@@ -80,14 +89,16 @@ spring:
 ```
 
 #### Application Properties
-```application.properties
+
+```properties
 spring.kafka.bootstrap-servers=localhost:9092
 spring.kafka.consumer.group-id=my-app-group
 spring.kafka.consumer.auto-offset-reset=earliest
 ```
 
+## Optional Custom Consumer Factory
 
-### 3. (Optional) Create Your Own Consumer Factory
+You can create your own consumer factory if you need custom configuration:
 
 ```java
 @Configuration
@@ -114,7 +125,7 @@ public class KafkaConfig {
             new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(orderConsumerFactory);
         
-        //required for retry handling to avoid duplicate processing
+        // required for retry handling to avoid duplicate processing
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
         factory.setCommonErrorHandler(null);
         
@@ -123,86 +134,84 @@ public class KafkaConfig {
 }
 ```
 
-### 4. Create Your Listener (alternative signature)
+## Creating Your Listener
+
+Here is an example listener with custom configuration:
 
 ```java
 @Component
 public class OrderListener {
 
     @CustomKafkaListener(
-        topic = "orders", //source topic to consume from
-        dlqTopic = "orders-dlq", //topic to send failed messages to
+        topic = "orders",
+        dlqTopic = "orders-dlq",
         maxAttempts = 3,
-        delay = 1000, // in milliseconds
-        delayMethod = DelayMethod.EXPO //custom delay method
+        delay = 1000,
+        delayMethod = DelayMethod.EXPO
     )
     @KafkaListener(
-        topics = "orders", //must match topic in @CustomKafkaListener
+        topics = "orders",
         groupId = "order-group",
         containerFactory = "orderListenerFactory"
     )
     public void processOrder(Object payload, Acknowledgment acknowledgment) {
-        OrderEvent event = (OrderEvent) payload; // aspect ensures you get the actual event
-        // your logic
+        OrderEvent event = (OrderEvent) payload;
+        // your business logic here
         // if this throws an exception, the library handles retries automatically
-        // Method is intercepted using AspectJ
-        processPayment(event);
     }
 }
 ```
 
-**Important**: Always include the `Acknowledgment` parameter in your listener method signature. The library handles acknowledgment automatically.
-
----
+Important: Always include the Acknowledgment parameter in your listener method signature. The library handles acknowledgment automatically to prevent duplicate message processing.
 
 ## Configuration Options
 
-### @CustomKafkaListener Annotation
+### CustomKafkaListener Annotation
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `topic` | String | Required | Source topic to consume from |
-| `dlqTopic` | String | Required | Dead letter queue topic for failed messages |
-| `maxAttempts` | int | 3 | Maximum retry attempts before sending to DLQ |
-| `delay` | long | 1000 | Base delay in milliseconds between retries |
-| `delayMethod` | DelayMethod | EXPO | Retry delay strategy |
-| `kafkaTemplate` | Class | void.class | Custom KafkaTemplate bean class (optional) |
+| topic | String | Required | Source topic to consume from |
+| dlqTopic | String | Required | Dead letter queue topic for failed messages |
+| maxAttempts | int | 3 | Maximum retry attempts before sending to DLQ |
+| delay | long | 1000 | Base delay in milliseconds between retries |
+| delayMethod | DelayMethod | EXPO | Retry delay strategy |
+| kafkaTemplate | Class | void.class | Custom KafkaTemplate bean class (optional) |
+| enableCircuitBreaker | boolean | false | Enable circuit breaker integration |
+| circuitBreakerFailureThreshold | int | 50 | Number of failures before opening circuit |
+| circuitBreakerWindowDuration | long | 60000 | Time window in milliseconds for tracking failures |
+| circuitBreakerWaitDuration | long | 60000 | Wait duration before transitioning to half open state |
 
 ### Delay Methods
 
-Choose how delays are calculated between retries:
+You can choose how delays are calculated between retries:
 
 | Method | Formula | Example (base=1000ms) |
 |--------|---------|----------------------|
-| **LINEAR** | `delay * attempts` | 1s, 2s, 3s, 4s... |
-| **EXPO** | `delay * 2^attempts` | 1s, 2s, 4s, 8s... |
-| **MAX** | Fixed maximum | 1s, 1s, 1s, 1s... |
+| LINEAR | delay multiplied by attempts | 1s, 2s, 3s, 4s |
+| EXPO | delay multiplied by 2 to the power of attempts | 1s, 2s, 4s, 8s |
+| MAX | Fixed maximum delay | 1s, 1s, 1s, 1s |
+| CUSTOM | Uses configured delay value | Uses delay value directly |
 
----
+## Auto Configuration
 
-## Auto-Configuration
-
-The library provides **automatic configuration** for common use cases. The following beans are auto-configured and available immediately:
-
-### Auto-Configured Beans
+The library provides automatic configuration for common use cases. The following beans are auto configured and available immediately:
 
 | Bean Name | Type | Purpose |
 |-----------|------|---------|
-| `kafkaObjectMapper` | `ObjectMapper` | JSON serialization with Java Time support and polymorphic type handling |
-| `defaultKafkaTemplate` | `KafkaTemplate<String, Object>` | For sending messages to DLQ |
-| `defaultFactory` | `ConcurrentKafkaListenerContainerFactory` | Default consumer factory (internal use) |
-| `dlqConsumerFactory` | `ConsumerFactory<String, EventWrapper<?>>` | Consumer factory for DLQ messages |
-| `dlqKafkaListenerContainerFactory` | `ConcurrentKafkaListenerContainerFactory` | Container factory for DLQ listeners |
+| kafkaObjectMapper | ObjectMapper | JSON serialization with Java Time support and polymorphic type handling |
+| defaultKafkaTemplate | KafkaTemplate | For sending messages to DLQ |
+| dlqConsumerFactory | ConsumerFactory | Consumer factory for DLQ messages |
+| dlqKafkaListenerContainerFactory | ConcurrentKafkaListenerContainerFactory | Container factory for DLQ listeners |
 
 ### What This Means
 
-#### You don't need to configure DLQ serialization  
-#### You don't need to create templates for DLQ messages  
-#### You don't need to configure JSON serialization  
-#### There may be cases where you need to override auto-configured beans 
+You do not need to configure DLQ serialization. The library handles it automatically.
 
+You do not need to create templates for DLQ messages. A default template is provided.
 
----
+You do not need to configure JSON serialization. An ObjectMapper is configured with appropriate settings.
+
+You may override any auto configured bean if you need custom behavior.
 
 ## Monitoring DLQ Messages
 
@@ -215,16 +224,15 @@ public class OrderDLQListener {
     @KafkaListener(
         topics = "orders-dlq",
         groupId = "order-dlq-monitor",
-        containerFactory = "dlqKafkaListenerContainerFactory"  // Use auto-configured factory
+        containerFactory = "dlqKafkaListenerContainerFactory"
     )
     public void handleFailedOrder(EventWrapper<?> wrapper) {
         OrderEvent failedOrder = (OrderEvent) wrapper.getEvent();
         EventMetadata metadata = wrapper.getMetadata();
         
-        System.out.println("❌ Failed after " + metadata.getAttempts() + " attempts");
+        System.out.println("Failed after " + metadata.getAttempts() + " attempts");
         System.out.println("First failure: " + metadata.getFirstFailureDateTime());
         System.out.println("Last failure: " + metadata.getLastFailureDateTime());
-        System.out.println("Order ID: " + failedOrder.getId());
         
         // Send alert, log to monitoring system, trigger manual review, etc.
         alertOps(failedOrder, metadata);
@@ -247,16 +255,18 @@ public class EventMetadata {
     private LocalDateTime firstFailureDateTime;  // When first attempt failed
     private LocalDateTime lastFailureDateTime;   // When last attempt failed
     private int attempts;                        // Total number of attempts
+    private String originalTopic;                // Original topic name
+    private String dlqTopic;                     // DLQ topic name
+    private Exception firstFailureException;     // First exception encountered
+    private Exception lastFailureException;      // Most recent exception
 }
 ```
 
----
-
 ## Advanced Configuration
 
-### Overriding Auto-Configured Beans
+### Overriding Auto Configured Beans
 
-You can override any auto-configured bean by defining your own with the same name:
+You can override any auto configured bean by defining your own with the same name.
 
 #### Override ObjectMapper for Custom Serialization
 
@@ -272,9 +282,6 @@ public class CustomKafkaConfig {
         // Custom: ISO date format instead of timestamps
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         
-        // Custom: Pretty print JSON in dev
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        
         // Required for EventWrapper deserialization
         BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(Object.class)
@@ -283,8 +290,6 @@ public class CustomKafkaConfig {
         
         return mapper;
     }
-    
-    // All other auto-configured beans will now use this ObjectMapper!
 }
 ```
 
@@ -300,7 +305,7 @@ public class CustomKafkaConfig {
         
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "my-broker:9092");
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "my-custom-dlq-group");  // Custom group
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "my-custom-dlq-group");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         
         JsonDeserializer<EventWrapper<?>> deserializer = 
@@ -313,8 +318,6 @@ public class CustomKafkaConfig {
             deserializer
         );
     }
-    
-    // defaultKafkaTemplate and other beans still auto-configured!
 }
 ```
 
@@ -326,7 +329,6 @@ public class CustomKafkaConfig {
     
     @Bean
     public KafkaTemplate<String, OrderEvent> customOrderTemplate() {
-        // Your custom producer configuration
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -342,7 +344,7 @@ public class CustomKafkaConfig {
 @CustomKafkaListener(
     topic = "orders",
     dlqTopic = "orders-dlq",
-    kafkaTemplate = CustomOrderTemplate.class  // Specify custom template
+    kafkaTemplate = CustomOrderTemplate.class
 )
 @KafkaListener(topics = "orders", containerFactory = "orderListenerFactory")
 public void processOrder(OrderEvent event, Acknowledgment ack) {
@@ -350,59 +352,52 @@ public void processOrder(OrderEvent event, Acknowledgment ack) {
 }
 ```
 
-### Disable Auto-Configuration
+### Disable Auto Configuration
 
-If you want complete control, disable auto-configuration:
+If you want complete control, you can disable auto configuration:
 
 ```yaml
-# application.yml
 custom:
   kafka:
     auto-config:
       enabled: false
 ```
-#### Application Properties
-```application.properties
+
+Or in application properties:
+
+```properties
 custom.kafka.auto-config.enabled=false
 ```
 
-
 Then define all beans manually in your configuration.
-
----
 
 ## How It Works
 
 ### Retry Flow
 
-```
-Message Received
-      ↓
-   Process
-      ↓
-  Success? -> Yes -> Acknowledge & Done ✓
-      ↓
-     No
-      ↓
-  Attempt < Max? -> No -> Send to DLQ → Acknowledge
-      ↓
-     Yes
-      ↓
-   Wait (delay)
-      ↓
-  Retry Process
-```
+When a message is received, it is processed by your listener method. If processing succeeds, the message is acknowledged and processing is complete.
+
+If processing fails with an exception:
+
+1. The library checks if the maximum number of attempts has been reached
+2. If max attempts reached, the message is sent to the DLQ with full metadata
+3. If max attempts not reached, the message is scheduled for retry with a configured delay
+4. After the delay, the message is resent to the original topic wrapped in EventWrapper
+5. The retry cycle continues until max attempts are reached or processing succeeds
 
 ### Key Features
 
-1. **In-Memory Retries**: Retries happen in the same thread without re consuming from Kafka
-2. **Manual Acknowledgment**: Messages are only acknowledged after success or max retries reached
-3. **No Duplicate Processing**: Proper acknowledgment prevents Kafka from redelivering messages
-4. **Metadata Tracking**: DLQ messages include full retry history
+**In Memory Retries**: Retries happen by resending messages to the original topic rather than consuming from Kafka repeatedly. This avoids duplicate processing.
 
----
+**Manual Acknowledgment**: Messages are only acknowledged after success or when max retries are reached. This prevents Kafka from redelivering messages.
 
-## Example: Complete Setup
+**No Duplicate Processing**: Proper acknowledgment prevents Kafka from redelivering messages that are being retried.
+
+**Metadata Tracking**: DLQ messages include full retry history so you can understand what went wrong and why.
+
+## Complete Setup Example
+
+Here is a complete example showing how to set up the library:
 
 ```java
 // 1. Event Class
@@ -492,96 +487,84 @@ public class OrderDLQListener {
 }
 ```
 
----
-
 ## Requirements
 
-- **Java**: 21 or higher
-- **Spring Boot**: 3.x
-- **Spring Kafka**: Compatible with Spring Boot 3.x
+**Java**: 21 or higher
 
----
+**Spring Boot**: 3.x
+
+**Spring Kafka**: Compatible with Spring Boot 3.x
 
 ## Best Practices
 
-### 1. Choose Appropriate Max Attempts
-- **Transient failures** (network issues): 3-5 attempts
-- **External API calls**: 3-4 attempts with exponential backoff
-- **Database issues**: 2-3 attempts with linear backoff
+### Choose Appropriate Max Attempts
 
-### 2. Set Reasonable Delays
-- **Fast retries**: 100-500ms base delay
-- **External services**: 1000-2000ms base delay
-- **Rate-limited APIs**: 5000ms+ base delay with exponential backoff
+For transient failures like network issues, use 3 to 5 attempts. For external API calls that might be temporarily unavailable, use 3 to 4 attempts with exponential backoff. For database connection issues, use 2 to 3 attempts with linear backoff.
 
-### 3. Monitor Your DLQ
+### Set Reasonable Delays
+
+For fast retries during brief outages, use 100 to 500 millisecond base delay. For external services that might take time to recover, use 1000 to 2000 millisecond base delay. For rate limited APIs, use 5000 millisecond or higher base delay with exponential backoff.
+
+### Monitor Your DLQ
+
 Always set up a DLQ listener to:
-- Alert operations team
-- Log to monitoring system (Datadog, New Relic, etc.)
+- Alert operations team when messages fail
+- Log to monitoring system like Datadog or New Relic
 - Trigger manual review workflows
 - Collect metrics on failure patterns
 
-### 4. Use Manual Acknowledgment
-Always include `Acknowledgment` parameter in your listener methods:
-```java
-public void listen(MyEvent event, Acknowledgment acknowledgment) {
-    // The library handles acknowledgment automatically
-}
-```
+### Use Manual Acknowledgment
 
-### 5. Container Factory Configuration
-Always configure your container factory with:
+Always include the Acknowledgment parameter in your listener methods so the library can handle acknowledgment automatically and prevent duplicate processing.
+
+### Container Factory Configuration
+
+Always configure your container factory with manual acknowledgment mode and disable the common error handler to let the library handle retries:
+
 ```java
 factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
 factory.setCommonErrorHandler(null);
 ```
 
----
-
 ## Troubleshooting
 
 ### Messages Being Reprocessed After Max Attempts
-**Problem**: Messages retry infinitely  
-**Solution**: Ensure manual ack mode is enabled and `Acknowledgment` parameter is in listener method
+
+If messages retry infinitely, ensure manual acknowledgment mode is enabled and that your listener method includes the Acknowledgment parameter. The library handles acknowledgment automatically.
 
 ### Deserialization Errors in DLQ
-**Problem**: Can't deserialize messages from DLQ  
-**Solution**: Use the auto-configured `dlqKafkaListenerContainerFactory` in your DLQ listener
+
+If you cannot deserialize messages from the DLQ, use the auto configured dlqKafkaListenerContainerFactory in your DLQ listener. This factory is configured to handle EventWrapper deserialization correctly.
 
 ### Custom ObjectMapper Not Being Used
-**Problem**: Changes to ObjectMapper don't take effect  
-**Solution**: Ensure your bean is named exactly `kafkaObjectMapper`
 
-### Auto-Configuration Not Working
-**Problem**: Beans not found  
-**Solution**: Check that `custom.kafka.auto-config.enabled` is not set to `false`
+If changes to ObjectMapper do not take effect, ensure your bean is named exactly kafkaObjectMapper. The library uses bean name matching for auto configuration.
 
----
+### Auto Configuration Not Working
+
+If beans are not found, check that custom.kafka.auto-config.enabled is not set to false in your application properties.
 
 ## Roadmap
 
-- [ ] Async retry support
-- [ ] Metrics and monitoring integration
-- [ ] RabbitMQ support
-- [ ] Conditional retry logic (retry only on specific exceptions)
-- [ ] Retry event hooks for custom logic
+Planned features for future releases:
 
----
+- Async retry support for better performance
+- Enhanced metrics and monitoring integration
+- Conditional retry logic to retry only on specific exceptions
+- Retry event hooks for custom logic
+- Additional delay strategies
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues and pull requests.
-
----
+Contributions are welcome. Please feel free to submit issues and pull requests.
 
 ## License
 
 [Your License Here]
 
----
-
 ## Support
 
 For issues and questions:
+
 - GitHub Issues: [Your Repo URL]
 - Documentation: [Your Docs URL]

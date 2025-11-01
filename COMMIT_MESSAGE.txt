@@ -1,0 +1,28 @@
+refactor: modularize aspect and replace system prints with logging
+
+This commit refactors the KafkaListenerAspect to improve maintainability
+and code quality by:
+
+- Breaking down the monolithic 425-line aspect into focused components:
+  * EventUnwrapper: handles event unwrapping from various formats
+  * RetryOrchestrator: manages retry logic and attempt tracking
+  * DLQRouter: handles dead letter queue routing
+  * MetricsRecorder: records metrics using Micrometer
+  * CircuitBreakerWrapper: wraps circuit breaker functionality
+
+- Replacing all System.out.println and System.err.println calls with
+  proper SLF4J logging throughout the codebase
+
+- Updating logging messages to start with lowercase letters for
+  consistency
+
+- Fixing exception message casing to match test expectations
+
+- Maintaining full backward compatibility with existing functionality
+
+- All tests pass successfully after refactoring
+
+This refactoring improves code organization, maintainability, and makes
+the library more suitable for collaboration while preserving all existing
+functionality.
+

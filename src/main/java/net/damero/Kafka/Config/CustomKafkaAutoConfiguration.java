@@ -4,8 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
+import net.damero.Kafka.Aspect.Components.DLQRouter;
+import net.damero.Kafka.Aspect.Components.MetricsRecorder;
+import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.Resilience.CircuitBreakerService;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -18,6 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.lang.Nullable;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
@@ -54,6 +60,30 @@ public class CustomKafkaAutoConfiguration {
         return new KafkaDLQ();
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public DLQRouter dlqRouter() {
+        return new DLQRouter();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public RetryOrchestrator retryOrchestrator(RetrySched retrySched) {
+        return new RetryOrchestrator(retrySched);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public MetricsRecorder metricsRecorder(@Nullable io.micrometer.core.instrument.MeterRegistry meterRegistry) {
+        return new MetricsRecorder(meterRegistry);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CircuitBreakerWrapper circuitBreakerWrapper(@Nullable CircuitBreakerService circuitBreakerService) {
+        return new CircuitBreakerWrapper(circuitBreakerService);
+    }
+
     /*
      * TaskScheduler for retrying failed messages
      */
@@ -66,7 +96,8 @@ public class CustomKafkaAutoConfiguration {
         scheduler.setWaitForTasksToCompleteOnShutdown(true);
         scheduler.setAwaitTerminationSeconds(30);
         scheduler.setErrorHandler(t ->
-                System.err.println("⚠️ Scheduler error: " + t.getMessage())
+                org.slf4j.LoggerFactory.getLogger("kafka-retry-scheduler")
+                    .error("scheduler error: {}", t.getMessage(), t)
         );
         scheduler.initialize();
         return scheduler;

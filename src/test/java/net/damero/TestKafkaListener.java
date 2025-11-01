@@ -55,17 +55,12 @@ public class TestKafkaListener {
         String eventId = event.getId();
         attemptCounts.merge(eventId, 1, Integer::sum);
 
-        System.out.println("🔵 Processing event: " + eventId +
-                " (attempt " + attemptCounts.get(eventId) + ")");
-
         if (event.isShouldFail() && !("retry-success-1".equals(eventId) && attemptCounts.get(eventId) >= 2)) {
             failedEvents.add(event);
-            System.out.println("❌ Event " + eventId + " is configured to fail");
             throw new RuntimeException("Simulated failure for event: " + eventId);
         }
 
         successfulEvents.add(event);
-        System.out.println("✅ Event " + eventId + " processed successfully");
     }
 
     public List<TestEvent> getSuccessfulEvents() {
@@ -84,6 +79,5 @@ public class TestKafkaListener {
         successfulEvents.clear();
         failedEvents.clear();
         attemptCounts.clear();
-        System.out.println("🔄 TestKafkaListener reset");
     }
 }

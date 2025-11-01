@@ -1,266 +1,175 @@
 package net.damero.Kafka.Aspect;
 
-import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
+import net.damero.Kafka.Aspect.Components.DLQRouter;
+import net.damero.Kafka.Aspect.Components.EventUnwrapper;
+import net.damero.Kafka.Aspect.Components.MetricsRecorder;
+import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
 import net.damero.Kafka.CustomObject.EventWrapper;
-import net.damero.Kafka.KafkaServices.KafkaDLQ;
-import net.damero.Kafka.Resilience.CircuitBreakerService;
-import net.damero.Kafka.RetryScheduler.RetrySched;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import net.damero.Kafka.Annotations.CustomKafkaListener;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
-import java.lang.reflect.Method;
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+/**
+ * Aspect that intercepts @CustomKafkaListener annotated methods to provide
+ * retry logic, DLQ routing, circuit breaker, and metrics functionality.
+ */
 @Aspect
 @Component
 public class KafkaListenerAspect {
 
-    private final KafkaDLQ kafkaDLQ;
+    private static final Logger logger = LoggerFactory.getLogger(KafkaListenerAspect.class);
+
+    private final DLQRouter dlqRouter;
     private final ApplicationContext context;
     private final KafkaTemplate<?, ?> defaultKafkaTemplate;
-    private final RetrySched retrySched;
+    private final RetryOrchestrator retryOrchestrator;
+    private final MetricsRecorder metricsRecorder;
+    private final CircuitBreakerWrapper circuitBreakerWrapper;
 
-    private final Map<String, Integer> eventAttempts = new ConcurrentHashMap<>();
-
-    @Nullable //Can be null if null if user doesnt have Micrometer
-    private final MeterRegistry meterRegistry;
-    
-    @Nullable
-    private final CircuitBreakerService circuitBreakerService;
-
-    // @Autowired is optional here - Spring autowires single constructors automatically
-    public KafkaListenerAspect(KafkaDLQ kafkaDLQ,
+    public KafkaListenerAspect(DLQRouter dlqRouter,
                                ApplicationContext context,
                                KafkaTemplate<?, ?> defaultKafkaTemplate,
-                               RetrySched retrySched,
-                               @Nullable MeterRegistry meterRegistry,
-                               @Nullable CircuitBreakerService circuitBreakerService) {
-        this.kafkaDLQ = kafkaDLQ;
+                               RetryOrchestrator retryOrchestrator,
+                               MetricsRecorder metricsRecorder,
+                               CircuitBreakerWrapper circuitBreakerWrapper) {
+        this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
-        this.retrySched = retrySched;
-        this.meterRegistry = meterRegistry;  // Can be null if users don't have Micrometer
-        this.circuitBreakerService = circuitBreakerService;  // Can be null if Resilience4j not available
+        this.retryOrchestrator = retryOrchestrator;
+        this.metricsRecorder = metricsRecorder;
+        this.circuitBreakerWrapper = circuitBreakerWrapper;
     }
 
     @Around("@annotation(customKafkaListener)")
-    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable{
-        System.out.println("🔴ASPECT TRIGGERED for topic: " + customKafkaListener.topic());
+    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
+        logger.debug("aspect triggered for topic: {}", customKafkaListener.topic());
         
-        //Record start time
         long startTime = System.currentTimeMillis();
 
         Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
 
         Object arg0 = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
-
-        // Normalize to the actual payload value (unwrap ConsumerRecord/EventWrapper)
-        Object event;
-        if (arg0 instanceof ConsumerRecord<?, ?> record) {
-            event = record.value();
-        } else if (arg0 instanceof EventWrapper<?> ew) {
-            Object inner = ew.getEvent();
-            if (inner instanceof ConsumerRecord<?, ?> innerRec) {
-                event = innerRec.value();
-            } else {
-                event = inner;
-            }
-        } else {
-            event = arg0;
-        }
+        Object event = EventUnwrapper.unwrapEvent(arg0);
 
         KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
 
         if (event == null) {
-            System.err.println("No event found to send to DLQ");
+            logger.warn("no event found in listener arguments for topic: {}", customKafkaListener.topic());
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
             return null;
         }
 
-        EventWrapper<?> wrappedEvent;
+        EventWrapper<?> wrappedEvent = event instanceof EventWrapper<?> wrapper 
+            ? wrapper 
+            : wrapObject(event, customKafkaListener);
 
-        if (event instanceof EventWrapper<?> wrapper) {
-            wrappedEvent = wrapper;
-        } else {
-            wrappedEvent = wrapObject(event, customKafkaListener);
-        }
-
-        // Check circuit breaker BEFORE processing (if enabled)
-        Object circuitBreaker = null;
-        if (customKafkaListener.enableCircuitBreaker() && circuitBreakerService != null && circuitBreakerService.isAvailable()) {
-            circuitBreaker = circuitBreakerService.getCircuitBreaker(
-                customKafkaListener.topic(),
-                customKafkaListener.circuitBreakerFailureThreshold(),
-                customKafkaListener.circuitBreakerWindowDuration(),
-                customKafkaListener.circuitBreakerWaitDuration()
-            );
+        // Check circuit breaker if enabled
+        Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(customKafkaListener);
+        
+        if (circuitBreaker != null && circuitBreakerWrapper.isOpen(circuitBreaker)) {
+            logger.warn("circuit breaker open for topic: {} - sending directly to dlq", customKafkaListener.topic());
             
-            // If circuit is OPEN, skip processing and go straight to DLQ
-            if (circuitBreaker != null && isCircuitBreakerOpen(circuitBreaker)) {
-                System.err.println("Circuit breaker OPEN for topic: " + customKafkaListener.topic() + " - sending directly to DLQ");
-                
-                Object originalEvent = (event instanceof EventWrapper<?> we) ? we.getEvent() : event;
-                if (originalEvent instanceof ConsumerRecord<?, ?> rec) {
-                    originalEvent = rec.value();
-                }
-                
-                // Create DLQ metadata to send to DLQ
-                EventMetadata dlqMetadata = new EventMetadata(
-                    LocalDateTime.now(),
-                    LocalDateTime.now(),
-                    null,
-                    new RuntimeException("Circuit breaker OPEN - service unavailable"),
-                    1,
-                    customKafkaListener.topic(),
-                    customKafkaListener.dlqTopic(),
-                    (long) customKafkaListener.delay(),
-                    customKafkaListener.delayMethod(),
-                    customKafkaListener.maxAttempts()
-                );
-                //wrap the original event with the DLQ metadata in EventWrapper
-                EventWrapper<Object> dlqWrapper = new EventWrapper<>(originalEvent, LocalDateTime.now(), dlqMetadata);
-                kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), dlqWrapper, 
-                                  new RuntimeException("Circuit breaker OPEN"), dlqMetadata);
-                
-                if (acknowledgment != null) {
-                    acknowledgment.acknowledge();//acknowledge the message to avoid retries
-                }
-                return null;  // return to skip retry logic
+            Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
+            dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, customKafkaListener);
+            
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
             }
+            return null;
         }
 
         try {
             // Execute with circuit breaker tracking if enabled
             Object result;
             if (circuitBreaker != null) {
-                result = executeWithCircuitBreaker(circuitBreaker, pjp);
+                result = circuitBreakerWrapper.execute(circuitBreaker, pjp);
             } else {
-                // normal execution without circuit breaker
                 result = pjp.proceed();
             }
 
-            recordSuccessMetrics(customKafkaListener.topic(), startTime);
+            // Success path
+            metricsRecorder.recordSuccess(customKafkaListener.topic(), startTime);
 
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
-                System.out.println("Message processed successfully and acknowledged");
+                logger.debug("message processed successfully and acknowledged for topic: {}", customKafkaListener.topic());
             }
 
             return result;
 
         } catch (Exception e) {
+            logger.debug("exception caught during processing for topic: {}: {}", 
+                customKafkaListener.topic(), e.getMessage());
             
-           
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
-                System.out.println("Acknowledged message after exception");
+                logger.debug("acknowledged message after exception for topic: {}", customKafkaListener.topic());
             }
 
-            Object originalEvent = (event instanceof EventWrapper<?> we) ? we.getEvent() : event;
-            if (originalEvent instanceof ConsumerRecord<?, ?> rec) {
-                originalEvent = rec.value();
-            }
-            String eventId = extractEventId(originalEvent);
+            Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
+            String eventId = EventUnwrapper.extractEventId(originalEvent);
 
-            //Record failure metrics for the eventId
-            recordFailureMetrics(customKafkaListener.topic(), e, eventAttempts.getOrDefault(eventId, 0), startTime);
+            int currentAttempts = retryOrchestrator.incrementAttempts(eventId);
+            metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, startTime);
 
-            int currentAttempts = eventAttempts.getOrDefault(eventId, 0) + 1;
-            eventAttempts.put(eventId, currentAttempts);
-
-
-
-            if (currentAttempts >= customKafkaListener.maxAttempts()) {
-                System.err.println("Max attempts reached. Sending to DLQ: " + customKafkaListener.dlqTopic());
-                EventMetadata prior = (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
-                EventMetadata dlqMetadata = new EventMetadata(
-                        prior != null && prior.getFirstFailureDateTime() != null ? prior.getFirstFailureDateTime() : LocalDateTime.now(),
-                        LocalDateTime.now(),
-                        prior != null && prior.getFirstFailureException() != null ? prior.getFirstFailureException() : e,
-                        e,
-                        currentAttempts,
-                        customKafkaListener.topic(),
-                        customKafkaListener.dlqTopic(),
-                        (long) customKafkaListener.delay(),
-                        customKafkaListener.delayMethod(),
-                        customKafkaListener.maxAttempts()
+            if (retryOrchestrator.hasReachedMaxAttempts(eventId, customKafkaListener.maxAttempts())) {
+                logger.info("max attempts reached ({}) for event in topic: {} - sending to dlq: {}", 
+                    currentAttempts, customKafkaListener.topic(), customKafkaListener.dlqTopic());
+                
+                net.damero.Kafka.CustomObject.EventMetadata prior = 
+                    (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
+                
+                dlqRouter.sendToDLQAfterMaxAttempts(
+                    kafkaTemplate,
+                    originalEvent,
+                    e,
+                    currentAttempts,
+                    prior,
+                    customKafkaListener
                 );
-                EventWrapper<Object> dlqWrapper = new EventWrapper<>(originalEvent, LocalDateTime.now(), dlqMetadata);
-                kafkaDLQ.sendToDLQ(kafkaTemplate, customKafkaListener.dlqTopic(), dlqWrapper, e, dlqMetadata);
-                if (eventId != null) {
-                    eventAttempts.remove(eventId);
-                }
+                
+                retryOrchestrator.clearAttempts(eventId);
                 return null;
             }
 
-            // schedule retry by sending the original event back to the original topic
-            EventWrapper<Object> retryWrapper = new EventWrapper<>(originalEvent, LocalDateTime.now(), new EventMetadata(
-                    LocalDateTime.now(),
-                    LocalDateTime.now(),
-                    null,
-                    e,
-                    currentAttempts,
-                    customKafkaListener.topic(),
-                    customKafkaListener.dlqTopic(),
-                    (long) customKafkaListener.delay(),
-                    customKafkaListener.delayMethod(),
-                    customKafkaListener.maxAttempts()
-            ));
-            retrySched.scheduleRetry(customKafkaListener, retryWrapper, kafkaTemplate);
+            // Schedule retry
+            retryOrchestrator.scheduleRetry(customKafkaListener, originalEvent, e, currentAttempts, kafkaTemplate);
 
             return null;
         }
     }
 
-    /*
-        This method takes in a new message(not a EventWrapper) from the queue and wraps in EventWrapper and EventMetaData to be sent back into the queue with metadata
-    */
-
-    public EventWrapper<?> wrapObject(Object event, CustomKafkaListener customKafkaListener){
-
-        EventMetadata metadata = new EventMetadata(
-                LocalDateTime.now(),
-                LocalDateTime.now(),
-                null,
-                null,
-                0,
-                customKafkaListener.topic(),
-                customKafkaListener.dlqTopic(),
-                (long) customKafkaListener.delay(),
-                customKafkaListener.delayMethod(),
-                customKafkaListener.maxAttempts()
+    /**
+     * Wraps a new message (not an EventWrapper) with EventWrapper and EventMetadata.
+     * 
+     * @param event the event to wrap
+     * @param customKafkaListener the listener configuration
+     * @return the wrapped event
+     */
+    private EventWrapper<?> wrapObject(Object event, CustomKafkaListener customKafkaListener) {
+        net.damero.Kafka.CustomObject.EventMetadata metadata = new net.damero.Kafka.CustomObject.EventMetadata(
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now(),
+            null,
+            null,
+            0,
+            customKafkaListener.topic(),
+            customKafkaListener.dlqTopic(),
+            (long) customKafkaListener.delay(),
+            customKafkaListener.delayMethod(),
+            customKafkaListener.maxAttempts()
         );
-        return new EventWrapper<>(event, LocalDateTime.now(), metadata);
-    }
-
-    /*
-        UPDATE METADATA WITH NEW DATA | ATTEMPTS + 1 | RECENT FAILURE etc
-    */
-
-    public EventMetadata updateMetadata(EventMetadata oldMetadata, Exception failure){
-
-        return oldMetadata.toBuilder()
-                .attempts(oldMetadata.getAttempts() + 1)
-                .firstFailureException(oldMetadata.getFirstFailureException() != null ? oldMetadata.getFirstFailureException() : failure)
-                .lastFailureException(failure)
-                .firstFailureDateTime(oldMetadata.getFirstFailureDateTime() != null ? oldMetadata.getFirstFailureDateTime() : LocalDateTime.now())
-                .lastFailureDateTime(LocalDateTime.now())
-                .build();
-
+        return new EventWrapper<>(event, java.time.LocalDateTime.now(), metadata);
     }
 
     private KafkaTemplate<?, ?> resolveKafkaTemplate(CustomKafkaListener customKafkaListener) {
@@ -273,7 +182,8 @@ public class KafkaListenerAspect {
         try {
             return (KafkaTemplate<?, ?>) context.getBean(templateClass);
         } catch (Exception e) {
-            System.err.println("⚠️ Failed to resolve custom KafkaTemplate, using default: " + e.getMessage());
+            logger.warn("failed to resolve custom kafka template {}, using default: {}", 
+                templateClass.getName(), e.getMessage());
             return defaultKafkaTemplate;
         }
     }
@@ -286,113 +196,4 @@ public class KafkaListenerAspect {
         }
         return null;
     }
-
-    @SuppressWarnings("unchecked")
-    public static <K, V> void sendToTopic(KafkaTemplate<?, ?> template, String topic, V message) {
-        try {
-            ((KafkaTemplate<K, V>) template).send(topic, message);
-        } catch (Exception e) {
-            System.err.println("Failed to send message to topic " + topic + ": " + e.getMessage());
-            throw new RuntimeException("Failed to send to Kafka topic: " + topic, e);
-        }
-    }
-
-    private String extractEventId(Object event) {
-        try {
-            Method getIdMethod = event.getClass().getMethod("getId");
-            Object id = getIdMethod.invoke(event);
-            return id != null ? id.toString() : null;
-        } catch (Exception e) {
-            System.err.println("Could not extract event ID: " + e.getMessage());
-            return null;
-        }
-    }
-
-    private void recordSuccessMetrics(String topic, long startTime) {
-        if (meterRegistry != null) {
-            Timer.Sample sample = Timer.start(meterRegistry);
-            sample.stop(Timer.builder("kafka.damero.processing.time")
-                .tag("topic", topic)
-                .tag("status", "success")
-                .register(meterRegistry));
-            
-            Counter.builder("kafka.damero.processing.count")
-                .tag("topic", topic)
-                .tag("status", "success")
-                .register(meterRegistry)
-                .increment();
-        }
-    }
-
-
-    private void recordFailureMetrics(String topic, Exception e, int attempts, long startTime) {
-        if (meterRegistry != null) {
-            String exceptionType = e.getClass().getSimpleName();
-            
-            Timer.builder("kafka.damero.processing.time")
-                .tag("topic", topic)
-                .tag("status", "failure")
-                .register(meterRegistry)
-                .record(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS);
-            
-            Counter.builder("kafka.damero.exception.count")
-                .tag("topic", topic)
-                .tag("exception", exceptionType)
-                .register(meterRegistry)
-                .increment();
-            
-            Counter.builder("kafka.damero.retry.count")
-                .tag("topic", topic)
-                .tag("attempt", String.valueOf(attempts))
-                .register(meterRegistry)
-                .increment();
-        }
-    }
-
-    /**
-     * Check if circuit breaker is OPEN using reflection (to avoid compile-time dependency).
-     */
-    private boolean isCircuitBreakerOpen(Object circuitBreaker) {
-        try {
-            Method getStateMethod = circuitBreaker.getClass().getMethod("getState");
-            Object state = getStateMethod.invoke(circuitBreaker);
-            
-            // Check if state is OPEN
-            Method nameMethod = state.getClass().getMethod("name");
-            String stateName = (String) nameMethod.invoke(state);
-            
-            return "OPEN".equals(stateName);
-        } catch (Exception e) {
-            // If reflection fails, assume circuit breaker is not open (fallback)
-            return false;
-        }
-    }
-
-    /**
-     * Execute with circuit breaker tracking using reflection (to avoid compile-time dependency).
-     */
-    private Object executeWithCircuitBreaker(Object circuitBreaker, ProceedingJoinPoint pjp) throws Throwable {
-        try {
-            // Use circuit breaker's executeSupplier method via reflection
-            Method executeSupplierMethod = circuitBreaker.getClass().getMethod("executeSupplier", 
-                Supplier.class);
-            
-            Supplier<Object> supplier = () -> {
-                try {
-                    return pjp.proceed();
-                } catch (Throwable throwable) {
-                    if (throwable instanceof RuntimeException) {
-                        throw (RuntimeException) throwable;
-                    }
-                    throw new RuntimeException(throwable);
-                }
-            };
-            
-            return executeSupplierMethod.invoke(circuitBreaker, supplier);
-        } catch (Exception e) {
-            // If reflection fails, fall back to normal execution
-            return pjp.proceed();
-        }
-    }
-
 }
