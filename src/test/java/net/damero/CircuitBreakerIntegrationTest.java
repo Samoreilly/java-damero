@@ -152,9 +152,25 @@ class CircuitBreakerIntegrationTest {
 
     @Test
     void testCircuitBreakerRetryStillWorksWhenClosed() throws Exception {
-        // Given: Circuit breaker enabled and reset to CLOSED state, sending a failing message
+        // Given: Circuit breaker enabled and reset to CLOSED state
         resetCircuitBreaker("circuit-breaker-topic");
+        // Ensure clean state - wait a bit for any pending messages to be processed
+        Thread.sleep(500);
+        circuitBreakerTestListener.reset();
         
+        // Verify circuit breaker is CLOSED before sending message
+        Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
+            "circuit-breaker-topic", 10, 60000, 60000);
+        if (circuitBreaker != null) {
+            String state = getCircuitBreakerState(circuitBreaker);
+            // Circuit should be CLOSED after reset, but if it's OPEN from previous test, reset again
+            if ("OPEN".equals(state)) {
+                resetCircuitBreaker("circuit-breaker-topic");
+                Thread.sleep(200);
+            }
+        }
+        
+        // Send a failing message
         TestEvent failEvent = new TestEvent("retry-cb-1", "data", true);
         kafkaTemplate.send("circuit-breaker-topic", failEvent);
 
@@ -164,9 +180,21 @@ class CircuitBreakerIntegrationTest {
             // Should have attempted retries (will eventually go to DLQ after max attempts)
             assertTrue(attempts >= 1, "Should have attempted processing");
             
+            // Filter circuit breaker DLQ messages to only those with our test event ID
+            long circuitBreakerDLQCount = circuitBreakerTestListener.getCircuitBreakerDLQMessages().stream()
+                .filter(wrapper -> {
+                    if (wrapper.getEvent() instanceof TestEvent) {
+                        TestEvent event = (TestEvent) wrapper.getEvent();
+                        return "retry-cb-1".equals(event.getId());
+                    }
+                    return false;
+                })
+                .count();
+            
             // Should NOT be in circuit breaker DLQ list (those are only for OPEN state)
-            assertEquals(0, circuitBreakerTestListener.getCircuitBreakerDLQMessages().size(),
-                "Message should not go to DLQ via circuit breaker when circuit is CLOSED");
+            assertEquals(0, circuitBreakerDLQCount,
+                "Message should not go to DLQ via circuit breaker when circuit is CLOSED. Found " + 
+                circuitBreakerTestListener.getCircuitBreakerDLQMessages().size() + " total circuit breaker DLQ messages");
         });
     }
 

@@ -1,5 +1,9 @@
 package net.damero.Kafka.Resilience;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
@@ -17,13 +21,18 @@ import java.util.concurrent.ConcurrentHashMap;
 @ConditionalOnClass(name = "io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry")
 public class CircuitBreakerService {
 
+    private static final Logger logger = LoggerFactory.getLogger(CircuitBreakerService.class);
+
     @Nullable
     private final Object circuitBreakerRegistry;
 
     private final Map<String, Object> circuitBreakers = new ConcurrentHashMap<>();
 
-    public CircuitBreakerService(@Nullable Object circuitBreakerRegistry) {
+    @Autowired(required = false)
+    public CircuitBreakerService(@Qualifier("circuitBreakerRegistry") @Nullable Object circuitBreakerRegistry) {
         this.circuitBreakerRegistry = circuitBreakerRegistry;
+        logger.debug("CircuitBreakerService initialized with circuitBreakerRegistry: {}", 
+            circuitBreakerRegistry != null ? "available" : "null");
     }
 
     /**
@@ -62,7 +71,9 @@ public class CircuitBreakerService {
                 
                 builderClass.getMethod("waitDurationInOpenState", Duration.class).invoke(configBuilder, Duration.ofMillis(waitDuration));//wait duration for half open state
                 builderClass.getMethod("permittedNumberOfCallsInHalfOpenState", int.class).invoke(configBuilder, 3);//number of calls permitted in half open state
-                builderClass.getMethod("minimumNumberOfCalls", int.class).invoke(configBuilder, failureThreshold);//minimum number of calls required to open the circuit
+                // Set minimumNumberOfCalls to be less than or equal to slidingWindowSize to allow circuit to open
+                // Use 1 to allow the circuit to open as soon as we have enough failures
+                builderClass.getMethod("minimumNumberOfCalls", int.class).invoke(configBuilder, Math.min(1, failureThreshold));
                 
 
                 Method buildMethod = builderClass.getMethod("build");
@@ -71,7 +82,8 @@ public class CircuitBreakerService {
                 Method circuitBreakerMethod = circuitBreakerRegistry.getClass().getMethod("circuitBreaker", String.class, configClass);
                 return circuitBreakerMethod.invoke(circuitBreakerRegistry, topic, config);
             } catch (Exception e) {
-                //return null if circuit breaker is not available
+                // Log the exception for debugging instead of silently returning null
+                logger.error("Failed to create circuit breaker for topic {}: {}", topic, e.getMessage(), e);
                 return null;
             }
         });

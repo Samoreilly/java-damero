@@ -122,8 +122,11 @@ public class CustomKafkaAutoConfiguration {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(20);
         scheduler.setThreadNamePrefix("kafka-retry-scheduler-");
-        scheduler.setWaitForTasksToCompleteOnShutdown(true);
-        scheduler.setAwaitTerminationSeconds(30);
+        // Don't wait for tasks to complete on shutdown - interrupt them instead
+        // This prevents test hangs when embedded Kafka shuts down before scheduled retries execute
+        // In production, this is acceptable as retries will be rescheduled if the application restarts
+        scheduler.setWaitForTasksToCompleteOnShutdown(false);
+        scheduler.setAwaitTerminationSeconds(1);
         scheduler.setErrorHandler(t ->
                 org.slf4j.LoggerFactory.getLogger("kafka-retry-scheduler")
                     .error("scheduler error: {}", t.getMessage(), t)

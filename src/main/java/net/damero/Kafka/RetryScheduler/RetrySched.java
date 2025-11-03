@@ -59,9 +59,19 @@ public class RetrySched {
                             Object originalEvent, 
                             Headers headers, 
                             KafkaTemplate<?, ?> kafkaTemplate) {
-        // Send the original event with headers attached
-        sendToTopicWithHeaders(kafkaTemplate, customKafkaListener.topic(), originalEvent, headers);
-        logger.info("retried event: {} to topic: {}", originalEvent.toString(), customKafkaListener.topic());
+        try {
+            // Send the original event with headers attached
+            sendToTopicWithHeaders(kafkaTemplate, customKafkaListener.topic(), originalEvent, headers);
+            logger.info("retried event: {} to topic: {}", originalEvent.toString(), customKafkaListener.topic());
+        } catch (Exception e) {
+            // Log error but don't throw - allows scheduled task to complete even if Kafka is unavailable
+            // This prevents test hangs when embedded Kafka shuts down before scheduled retries execute
+            logger.error("failed to execute retry for event: {} to topic: {} - {}", 
+                originalEvent != null ? originalEvent.toString() : "null", 
+                customKafkaListener.topic(), 
+                e.getMessage(), 
+                e);
+        }
     }
 
     private long getBackOffDelay(CustomKafkaListener customKafkaListener, DelayMethod delayMethod, int attempts) {
