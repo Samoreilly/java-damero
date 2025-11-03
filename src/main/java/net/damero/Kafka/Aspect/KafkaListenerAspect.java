@@ -14,6 +14,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
+import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,6 +109,7 @@ public class KafkaListenerAspect {
             return result;
 
         } catch (Exception e) {
+            
             logger.debug("exception caught during processing for topic: {}: {}", 
                 customKafkaListener.topic(), e.getMessage());
             
@@ -119,6 +121,31 @@ public class KafkaListenerAspect {
             Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
             String eventId = EventUnwrapper.extractEventId(originalEvent);
 
+            // Check if exception is non-retryable, if true send to dlq
+            /*
+             * USERS WILL PROVIDE IT IN THIS FORMAT
+             *  nonRetryableExceptions = {IllegalArgumentException.class, ValidationException.class}
+             */
+            if (isNonRetryableException(e, customKafkaListener)) {
+                logger.info("exception {} is non-retryable for topic: {} - sending directly to dlq", 
+                    e.getClass().getSimpleName(), customKafkaListener.topic());
+                
+                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, startTime);
+                
+                EventMetadata prior = 
+                    (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
+                
+                dlqRouter.sendToDLQAfterMaxAttempts(
+                    kafkaTemplate,
+                    originalEvent,
+                    e,
+                    1,
+                    prior,
+                    customKafkaListener
+                );
+                
+                return null;
+            }
             int currentAttempts = retryOrchestrator.incrementAttempts(eventId);
             metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, startTime);
 
@@ -126,7 +153,7 @@ public class KafkaListenerAspect {
                 logger.info("max attempts reached ({}) for event in topic: {} - sending to dlq: {}", 
                     currentAttempts, customKafkaListener.topic(), customKafkaListener.dlqTopic());
                 
-                net.damero.Kafka.CustomObject.EventMetadata prior = 
+                EventMetadata prior = 
                     (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
                 
                 dlqRouter.sendToDLQAfterMaxAttempts(
@@ -195,5 +222,31 @@ public class KafkaListenerAspect {
             }
         }
         return null;
+    }
+
+    /**
+     * Checks if an exception is non-retryable based on the configured nonRetryableExceptions.
+     * If nonRetryableExceptions is empty, all exceptions are retryable.
+     * 
+     * @param exception the exception to check
+     * @param customKafkaListener the listener configuration
+     * @return true if the exception is non-retryable (should go to DLQ), false if it should be retried
+     */
+    private boolean isNonRetryableException(Exception exception, CustomKafkaListener customKafkaListener) {
+        Class<? extends Throwable>[] nonRetryableExceptions = customKafkaListener.nonRetryableExceptions();
+        
+        // If no non-retryable exceptions specified, all exceptions are retryable
+        if (nonRetryableExceptions == null || nonRetryableExceptions.length == 0) {
+            return false;
+        }
+        
+        Class<?> exceptionClass = exception.getClass();
+        for (Class<? extends Throwable> nonRetryableException : nonRetryableExceptions) {
+            if (nonRetryableException != null && nonRetryableException.isAssignableFrom(exceptionClass)) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 }

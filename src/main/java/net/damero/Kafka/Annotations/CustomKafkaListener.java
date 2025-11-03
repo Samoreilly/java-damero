@@ -18,6 +18,7 @@ public @interface CustomKafkaListener {
     DelayMethod delayMethod() default DelayMethod.EXPO;
     boolean retryable() default true;
     String retryableTopic() default "retryable-topic";
+    Class<? extends Throwable>[] nonRetryableExceptions() default {};
     Class<Void> kafkaTemplate() default void.class;
     Class<Void> consumerFactory() default void.class;
     Class<?> eventType() default Void.class;

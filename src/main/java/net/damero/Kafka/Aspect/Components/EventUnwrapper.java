@@ -48,6 +48,7 @@ public class EventUnwrapper {
      * @param event the event (may be wrapped or unwrapped)
      * @return the original unwrapped event
      */
+    
     public static Object extractOriginalEvent(Object event) {
         if (event instanceof EventWrapper<?> we) {
             Object inner = we.getEvent();

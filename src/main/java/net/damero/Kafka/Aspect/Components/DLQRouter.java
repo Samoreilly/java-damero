@@ -18,7 +18,6 @@ public class DLQRouter {
     private static final Logger logger = LoggerFactory.getLogger(DLQRouter.class);
 
     public DLQRouter() {
-        // No dependencies needed as KafkaDLQ.sendToDLQ is static
     }
 
     /**
@@ -28,6 +27,7 @@ public class DLQRouter {
      * @param originalEvent the original event to send
      * @param customKafkaListener the listener configuration
      */
+
     public void sendToDLQForCircuitBreakerOpen(KafkaTemplate<?, ?> kafkaTemplate,
                                                 Object originalEvent,
                                                 CustomKafkaListener customKafkaListener) {
@@ -53,9 +53,7 @@ public class DLQRouter {
         KafkaDLQ.sendToDLQ(
             kafkaTemplate,
             customKafkaListener.dlqTopic(),
-            dlqWrapper,
-            new RuntimeException("Circuit breaker OPEN"),
-            dlqMetadata
+            dlqWrapper
         );
         
         logger.info("sent event to dlq due to circuit breaker OPEN for topic: {}", 
@@ -104,9 +102,7 @@ public class DLQRouter {
         KafkaDLQ.sendToDLQ(
             kafkaTemplate,
             customKafkaListener.dlqTopic(),
-            dlqWrapper,
-            exception,
-            dlqMetadata
+            dlqWrapper
         );
         
         logger.info("sent event to dlq after {} attempts for topic: {}", 

@@ -5,6 +5,7 @@ import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Factory.KafkaConsumerFactoryProvider;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import java.util.List;
 
 @Getter
 public class CustomKafkaListenerConfig{
@@ -19,7 +20,8 @@ public class CustomKafkaListenerConfig{
     private final String retryableTopic;
     private final KafkaTemplate<?, ?> kafkaTemplate;
     private final ConsumerFactory<?, ?> consumerFactory;//allow the user to provide custom consumer config
-
+    private final Class<? extends Throwable>[] nonRetryableExceptions;
+    
     CustomKafkaListenerConfig(Builder builder) {//takes in builder config
         this.topic = builder.topic;
         this.dlqTopic = builder.dlqTopic;
@@ -30,6 +32,7 @@ public class CustomKafkaListenerConfig{
         this.consumerFactory = builder.consumerFactory;
         this.retryable = builder.retryable;
         this.retryableTopic = builder.retryableTopic;
+        this.nonRetryableExceptions = builder.nonRetryableExceptions;
     }
 
     public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation) {
@@ -44,6 +47,7 @@ public class CustomKafkaListenerConfig{
             .delayMethod(annotation.delayMethod())
             .retryable(annotation.retryable())
             .retryableTopic(annotation.retryableTopic())
+            .nonRetryableExceptions(annotation.nonRetryableExceptions())
             .consumerFactory(null);
 
         KafkaTemplate<?, ?> kafkaTemplate = null;
@@ -90,9 +94,13 @@ public class CustomKafkaListenerConfig{
 
         private String retryableTopic;
 
+        private Class<? extends Throwable>[] nonRetryableExceptions;
+
+
         private KafkaTemplate<?, ?> kafkaTemplate;
         private ConsumerFactory<?, ?> consumerFactory;
         private Class<T> eventType;
+        
 
         Builder topic(String topic) {
             if (topic == null || topic.isEmpty()) {
@@ -144,6 +152,10 @@ public class CustomKafkaListenerConfig{
             this.retryableTopic = retryableTopic;
             return this;
         }
+        Builder nonRetryableExceptions(Class<? extends Throwable>[] nonRetryableExceptions){
+            this.nonRetryableExceptions = nonRetryableExceptions;
+            return this;
+        }
 
         Builder kafkaTemplate(KafkaTemplate<?, ?> kafkaTemplate){
             this.kafkaTemplate = kafkaTemplate;
@@ -186,6 +198,8 @@ public class CustomKafkaListenerConfig{
             if (retryable && retryableTopic.equals(dlqTopic)) {
                 throw new IllegalStateException("Retryable topic cannot be the same as the DLQ topic");
             }
+
+
             
             if (consumerFactory == null && eventType != null) {
                 // fallback to default consumer factory with generics

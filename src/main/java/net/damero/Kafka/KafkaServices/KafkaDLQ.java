@@ -14,9 +14,7 @@ public class KafkaDLQ {
     private static final Logger logger = LoggerFactory.getLogger(KafkaDLQ.class);
     //static method to call it avoid uneccessary injections
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper, Throwable throwable, EventMetadata eventMetadata){
-
-
+    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper){
 
         try {
             logger.debug("sending to dlq topic: {}", topic);
