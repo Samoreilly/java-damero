@@ -5,7 +5,6 @@ import net.damero.Kafka.CustomObject.EventWrapper;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import java.util.ArrayList;
-import static net.damero.Kafka.CustomObject.GlobalExceptionMapLogger.exceptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,7 +17,6 @@ public class KafkaDLQ {
     public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper, Throwable throwable, EventMetadata eventMetadata){
 
 
-        exceptions.computeIfAbsent(eventWrapper, k -> new ArrayList<>()).add(throwable);
 
         try {
             logger.debug("sending to dlq topic: {}", topic);
