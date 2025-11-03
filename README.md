@@ -127,14 +127,11 @@ public class OrderListener {
         containerFactory = "kafkaListenerContainerFactory"
     )
     public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        // With header-based approach, value is always your original event type
+        // Retry metadata (attempts, failures, etc.) is stored in Kafka headers, not in the payload
         Object value = record.value();
-        OrderEvent order;
-        if (value instanceof OrderEvent oe) {
-            order = oe;
-        } else if (value instanceof net.damero.Kafka.CustomObject.EventWrapper<?> wrapper) {
-            order = (OrderEvent) wrapper.getEvent();
-        } else {
-            return;
+        if (!(value instanceof OrderEvent order)) {
+            return; // unexpected event type
         }
         
         // business logic
@@ -206,9 +203,9 @@ If processing fails with an exception:
 1. The library checks if the exception is in nonRetryableExceptions
 2. If non retryable, the message goes directly to DLQ with attempts = 1
 3. If retryable, the library checks if maximum attempts have been reached
-4. If max attempts reached, the message is sent to DLQ with full metadata
+4. If max attempts reached, the message is sent to DLQ wrapped in EventWrapper with full metadata
 5. If max attempts not reached, the message is scheduled for retry with configured delay
-6. After the delay, the message is resent to the original topic wrapped in EventWrapper
+6. After the delay, the message is resent to the original topic with retry metadata stored in Kafka headers
 7. The retry cycle continues until max attempts are reached or processing succeeds
 
 ### Important Points
@@ -221,7 +218,7 @@ DLQ messages include full retry history so you can understand what went wrong an
 
 Non retryable exceptions bypass retry logic entirely and go directly to the DLQ on first failure.
 
-Handle both OrderEvent and EventWrapper in your listener. EventWrapper is used internally for retries.
+Your listener always receives your original event type (OrderEvent in this example). Retry metadata is stored in Kafka headers, not in the message payload. EventWrapper is only used for DLQ messages.
 
 ## Auto Configuration
 

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 public class TestController {
 
     @Autowired
-    private KafkaTemplate<String, OrderEvent> kafkaTemplate;
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @PostMapping("/order/non-retryable/illegal-argument")
     public String testIllegalArgumentException() {

@@ -30,17 +30,14 @@ public class OrderProcessingService {
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
-        // Unwrap from Object (can be OrderEvent or EventWrapper)
+        // With header-based approach, value is always the original OrderEvent
+        // Metadata (attempts, failures, etc.) is stored in Kafka headers, not in the payload
         Object value = record.value();
-        OrderEvent order;
-        if (value instanceof OrderEvent oe) {
-            order = oe;
-        } else if (value instanceof net.damero.Kafka.CustomObject.EventWrapper<?> wrapper) {
-            order = (OrderEvent) wrapper.getEvent();
-        } else {
-            logger.error("unexpected event type: {}", value.getClass().getName());
+        if (!(value instanceof OrderEvent order)) {
+            logger.error("unexpected event type: {}", value != null ? value.getClass().getName() : "null");
             return;
         }
+        
         logger.info("processing order: {}", order.getOrderId());
 
         // Validation checks - these exceptions are non-retryable

@@ -34,24 +34,23 @@ public class TestKafkaListener {
 
         Object payload = record.value();
         TestEvent event = null;
-        if (payload instanceof net.damero.Kafka.CustomObject.EventWrapper<?> wrapper) {
-            Object inner = wrapper.getEvent();
-            if (inner instanceof TestEvent) {
-                event = (TestEvent) inner;
-            }
-        } else if (payload instanceof TestEvent te) {
+        
+        // With header-based approach, payload is always the original event, not EventWrapper
+        if (payload instanceof TestEvent te) {
             event = te;
         } else if (payload instanceof java.util.Map<?, ?> map) {
-                Object id = map.get("id");
-                Object data = map.get("data");
-                Object shouldFail = map.get("shouldFail");
-                if (id instanceof String) {
-                    event = new TestEvent((String) id, data != null ? data.toString() : null, Boolean.TRUE.equals(shouldFail));
-                }
+            Object id = map.get("id");
+            Object data = map.get("data");
+            Object shouldFail = map.get("shouldFail");
+            if (id instanceof String) {
+                event = new TestEvent((String) id, data != null ? data.toString() : null, Boolean.TRUE.equals(shouldFail));
+            }
         }
+        
         if (event == null) {
             return;
         }
+        
         String eventId = event.getId();
         attemptCounts.merge(eventId, 1, Integer::sum);
 

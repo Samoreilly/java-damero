@@ -21,12 +21,18 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.context.annotation.Primary;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.lang.Nullable;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
@@ -46,6 +52,7 @@ import java.util.Map;
  * Can be disabled by setting: custom.kafka.auto-config.enabled=false
  */
 @AutoConfiguration
+@AutoConfigureBefore(JacksonAutoConfiguration.class)
 @EnableAspectJAutoProxy
 @ConditionalOnProperty(
         prefix = "custom.kafka.auto-config",
@@ -151,21 +158,68 @@ public class CustomKafkaAutoConfiguration {
 
     /**
      * Provides a pre-configured ObjectMapper for Kafka serialization.
+     * This ObjectMapper has polymorphic typing enabled for EventWrapper support.
      * Users can override this bean to customize serialization behavior.
+     * 
+     * This bean is NOT @Primary, so Spring Boot will use its own ObjectMapper
+     * (or the one we provide below) for REST controllers.
      */
-    @Bean
+    @Bean(name = "kafkaObjectMapper")
     @ConditionalOnMissingBean(name = "kafkaObjectMapper")
     public ObjectMapper kafkaObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
 
-        // Enable polymorphic type handling for EventWrapper
+        //enable polymorphic type handling for EventWrapper
         BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(Object.class)
                 .build();
         mapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL);
 
         return mapper;
+    }
+
+    /**
+     * Provides a standard ObjectMapper for REST controllers if Spring Boot hasn't created one.
+     * This ensures REST JSON serialization/deserialization works without polymorphic typing,
+     * preventing conflicts with the kafkaObjectMapper which has polymorphic typing enabled.
+     * 
+     * Users can override this bean if they need custom REST JSON configuration.
+     */
+    @Bean(name = "objectMapper")
+    @Primary
+    @ConditionalOnMissingBean(name = "objectMapper")
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        // Explicitly do NOT enable polymorphic typing - just plain JSON for REST
+        return mapper;
+    }
+
+    /**
+     * Configures HttpMessageConverters to use the @Primary ObjectMapper (without polymorphic typing)
+     * for REST controllers, ensuring that REST JSON serialization/deserialization works correctly
+     * even if the kafkaObjectMapper exists.
+     * 
+     * Uses extendMessageConverters so it runs after Spring Boot's Jackson auto-configuration,
+     * allowing us to replace any MappingJackson2HttpMessageConverter that was created with
+     * the wrong ObjectMapper. Spring will automatically inject the @Primary ObjectMapper.
+     */
+    @Bean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    @ConditionalOnClass(WebMvcConfigurer.class)
+    @ConditionalOnMissingBean(name = "customKafkaWebMvcConfigurer")
+    public WebMvcConfigurer customKafkaWebMvcConfigurer(ObjectMapper objectMapper) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void extendMessageConverters(java.util.List<org.springframework.http.converter.HttpMessageConverter<?>> converters) {
+                // Remove any existing MappingJackson2HttpMessageConverter and add ours with @Primary ObjectMapper
+                converters.removeIf(converter -> converter instanceof MappingJackson2HttpMessageConverter);
+                MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter(objectMapper);
+                // Add at the beginning to ensure it's used first
+                converters.add(0, jsonConverter);
+            }
+        };
     }
 
 
@@ -176,6 +230,26 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "defaultKafkaTemplate")
     public KafkaTemplate<String, Object> defaultKafkaTemplate(ObjectMapper kafkaObjectMapper) {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+        DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
+        JsonSerializer<Object> serializer = new JsonSerializer<>(kafkaObjectMapper);
+        serializer.setAddTypeInfo(true);
+        factory.setValueSerializer(serializer);
+
+        return new KafkaTemplate<>(factory);
+    }
+
+    /**
+     * Generic KafkaTemplate for user applications to send messages.
+     * This is the same as defaultKafkaTemplate but with a generic name that users can inject.
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "kafkaTemplate")
+    public KafkaTemplate<String, Object> kafkaTemplate(ObjectMapper kafkaObjectMapper) {
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);

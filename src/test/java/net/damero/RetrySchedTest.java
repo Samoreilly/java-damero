@@ -3,8 +3,9 @@ package net.damero;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
+import net.damero.Kafka.Aspect.Components.HeaderUtils;
 import net.damero.Kafka.CustomObject.EventMetadata;
-import net.damero.Kafka.CustomObject.EventWrapper;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,10 +54,11 @@ class RetrySchedTest {
         when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.LINEAR);
 
         EventMetadata metadata = createMetadata(1);
-        EventWrapper<String> eventWrapper = new EventWrapper<>("test-event", LocalDateTime.now(), metadata);
+        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 1, new RuntimeException("Test"));
+        String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, eventWrapper, kafkaTemplate);
+        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -75,10 +77,11 @@ class RetrySchedTest {
         when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
 
         EventMetadata metadata = createMetadata(2);
-        EventWrapper<String> eventWrapper = new EventWrapper<>("test-event", LocalDateTime.now(), metadata);
+        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 2, new RuntimeException("Test"));
+        String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, eventWrapper, kafkaTemplate);
+        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -99,10 +102,11 @@ class RetrySchedTest {
 
         // Simulate many attempts - should hit 5 second max
         EventMetadata metadata = createMetadata(20);
-        EventWrapper<String> eventWrapper = new EventWrapper<>("test-event", LocalDateTime.now(), metadata);
+        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 20, new RuntimeException("Test"));
+        String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, eventWrapper, kafkaTemplate);
+        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -123,10 +127,11 @@ class RetrySchedTest {
         when(customKafkaListener.delay()).thenReturn(2500.0);
 
         EventMetadata metadata = createMetadata(1);
-        EventWrapper<String> eventWrapper = new EventWrapper<>("test-event", LocalDateTime.now(), metadata);
+        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 1, new RuntimeException("Test"));
+        String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, eventWrapper, kafkaTemplate);
+        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -145,13 +150,21 @@ class RetrySchedTest {
         when(customKafkaListener.topic()).thenReturn("test-topic");
 
         EventMetadata metadata = createMetadata(1);
-        EventWrapper<String> eventWrapper = new EventWrapper<>("test-event", LocalDateTime.now(), metadata);
+        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 1, new RuntimeException("Test"));
+        String originalEvent = "test-event";
 
         // When
-        retrySched.executeRetry(customKafkaListener, eventWrapper, kafkaTemplate);
+        retrySched.executeRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
 
-        // Then
-        verify(kafkaTemplate).send(eq("test-topic"), eq(eventWrapper));
+        // Then - verify ProducerRecord is sent with headers
+        ArgumentCaptor<org.apache.kafka.clients.producer.ProducerRecord> recordCaptor = 
+            ArgumentCaptor.forClass(org.apache.kafka.clients.producer.ProducerRecord.class);
+        verify(kafkaTemplate).send(recordCaptor.capture());
+        
+        org.apache.kafka.clients.producer.ProducerRecord<?, ?> sentRecord = recordCaptor.getValue();
+        assertEquals("test-topic", sentRecord.topic());
+        assertEquals(originalEvent, sentRecord.value());
+        assertNotNull(sentRecord.headers());
     }
 
     private EventMetadata createMetadata(int attempts) {

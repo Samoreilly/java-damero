@@ -1,9 +1,9 @@
 package net.damero.Kafka.Aspect.Components;
 
 import net.damero.Kafka.CustomObject.EventMetadata;
-import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.RetryScheduler.RetrySched;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,37 +71,49 @@ public class RetryOrchestrator {
     }
 
     /**
-     * Schedules a retry for the given event.
+     * Schedules a retry for the given event with headers-based metadata.
      * 
      * @param customKafkaListener the listener configuration
      * @param originalEvent the original event
      * @param exception the exception that occurred
      * @param currentAttempts the current attempt count
+     * @param existingMetadata existing metadata from headers (if any)
      * @param kafkaTemplate the Kafka template to use
      */
     public void scheduleRetry(CustomKafkaListener customKafkaListener,
                               Object originalEvent,
                               Exception exception,
                               int currentAttempts,
+                              EventMetadata existingMetadata,
                               KafkaTemplate<?, ?> kafkaTemplate) {
-        EventWrapper<Object> retryWrapper = new EventWrapper<>(
-            originalEvent,
+        // Build metadata for the retry
+        EventMetadata configMetadata = new EventMetadata(
+            existingMetadata != null && existingMetadata.getFirstFailureDateTime() != null 
+                ? existingMetadata.getFirstFailureDateTime() 
+                : LocalDateTime.now(),
             LocalDateTime.now(),
-            new EventMetadata(
-                LocalDateTime.now(),
-                LocalDateTime.now(),
-                null,
-                exception,
-                currentAttempts,
-                customKafkaListener.topic(),
-                customKafkaListener.dlqTopic(),
-                (long) customKafkaListener.delay(),
-                customKafkaListener.delayMethod(),
-                customKafkaListener.maxAttempts()
-            )
+            existingMetadata != null && existingMetadata.getFirstFailureException() != null 
+                ? existingMetadata.getFirstFailureException() 
+                : exception,
+            exception,
+            currentAttempts,
+            customKafkaListener.topic(),
+            customKafkaListener.dlqTopic(),
+            (long) customKafkaListener.delay(),
+            customKafkaListener.delayMethod(),
+            customKafkaListener.maxAttempts()
         );
         
-        retrySched.scheduleRetry(customKafkaListener, retryWrapper, kafkaTemplate);
+        // Build headers from metadata
+        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(
+            existingMetadata,
+            configMetadata,
+            currentAttempts,
+            exception
+        );
+        
+        // Schedule retry with original event and headers
+        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
         
         logger.debug("scheduled retry attempt {} for event in topic: {}", 
             currentAttempts, customKafkaListener.topic());

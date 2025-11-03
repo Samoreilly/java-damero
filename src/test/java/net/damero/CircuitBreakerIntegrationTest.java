@@ -568,12 +568,8 @@ class CircuitBreakerIntegrationTest {
             Object payload = record.value();
             TestEvent event = null;
             
-            if (payload instanceof EventWrapper<?> wrapper) {
-                Object inner = wrapper.getEvent();
-                if (inner instanceof TestEvent) {
-                    event = (TestEvent) inner;
-                }
-            } else if (payload instanceof TestEvent te) {
+            // With header-based approach, payload is always the original event, not EventWrapper
+            if (payload instanceof TestEvent te) {
                 event = te;
             }
 

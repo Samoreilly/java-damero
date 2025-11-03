@@ -3,10 +3,12 @@ package net.damero.Kafka.Aspect;
 import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
 import net.damero.Kafka.Aspect.Components.DLQRouter;
 import net.damero.Kafka.Aspect.Components.EventUnwrapper;
+import net.damero.Kafka.Aspect.Components.HeaderUtils;
 import net.damero.Kafka.Aspect.Components.MetricsRecorder;
 import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -47,6 +49,14 @@ public class KafkaListenerAspect {
         this.circuitBreakerWrapper = circuitBreakerWrapper;
     }
 
+    /**
+        PLAN TO FIX SENDING DIFFERENT OBJECTS
+        ON RECEIVING AN EVENT, ATTACH HEADERS IF THE EVENT HAS NOT BEEN RETRIED OTHERWISE
+        ATTACH HEADERS TO THE OBJECT AND SEND IT BACK
+        PROS OF THIS METHOD: USER RECEIVED SEND OBJECT THEY SENT,
+        JUST WITH SOME EXTRAS HEADERS FOR METADATA TO TRACK LAST FAILURE, FIRST FAILURE, ATTEMPTS etc
+     */
+
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
         logger.debug("aspect triggered for topic: {}", customKafkaListener.topic());
@@ -56,6 +66,14 @@ public class KafkaListenerAspect {
         Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
 
         Object arg0 = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
+        
+        // Extract ConsumerRecord if present to get headers
+        ConsumerRecord<?, ?> consumerRecord = extractConsumerRecord(arg0);
+        EventMetadata existingMetadata = null;
+        if (consumerRecord != null) {
+            existingMetadata = HeaderUtils.extractMetadataFromHeaders(consumerRecord.headers());
+        }
+        
         Object event = EventUnwrapper.unwrapEvent(arg0);
 
         KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
@@ -67,10 +85,9 @@ public class KafkaListenerAspect {
             }
             return null;
         }
-        //if its a previously used event, use the existing EventWrapper, otherwise wrap the event
-        EventWrapper<?> wrappedEvent = event instanceof EventWrapper<?> wrapper 
-            ? wrapper 
-            : wrapObject(event, customKafkaListener);
+        
+        Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
+        String eventId = EventUnwrapper.extractEventId(originalEvent);
 
         // Check circuit breaker if enabled
         Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(customKafkaListener);
@@ -78,7 +95,6 @@ public class KafkaListenerAspect {
         if (circuitBreaker != null && circuitBreakerWrapper.isOpen(circuitBreaker)) {
             logger.warn("circuit breaker open for topic: {} - sending directly to dlq", customKafkaListener.topic());
             
-            Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
             dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, customKafkaListener);
             
             if (acknowledgment != null) {
@@ -88,7 +104,7 @@ public class KafkaListenerAspect {
         }
 
         try {
-            // Execute with circuit breaker tracking if enabled
+            // execute circuit breaker tracking if enabled
             Object result;
             if (circuitBreaker != null) {
                 result = circuitBreakerWrapper.execute(circuitBreaker, pjp);
@@ -96,13 +112,15 @@ public class KafkaListenerAspect {
                 result = pjp.proceed();
             }
 
-            // Success path
             metricsRecorder.recordSuccess(customKafkaListener.topic(), startTime);
 
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
                 logger.debug("message processed successfully and acknowledged for topic: {}", customKafkaListener.topic());
             }
+
+            // Clear attempts on success
+            retryOrchestrator.clearAttempts(eventId);
 
             return result;
 
@@ -116,9 +134,6 @@ public class KafkaListenerAspect {
                 logger.debug("acknowledged message after exception for topic: {}", customKafkaListener.topic());
             }
 
-            Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
-            String eventId = EventUnwrapper.extractEventId(originalEvent);
-
             // Check if exception is non-retryable, if true send to dlq
             /*
              * USERS WILL PROVIDE IT IN THIS FORMAT
@@ -130,15 +145,12 @@ public class KafkaListenerAspect {
                 
                 metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, startTime);
                 
-                EventMetadata prior = 
-                    (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
-                
                 dlqRouter.sendToDLQAfterMaxAttempts(
                     kafkaTemplate,
                     originalEvent,
                     e,
                     1,
-                    prior,
+                    existingMetadata,
                     customKafkaListener
                 );
                 
@@ -152,15 +164,12 @@ public class KafkaListenerAspect {
                 logger.info("max attempts reached ({}) for event in topic: {} - sending to dlq: {}", 
                     currentAttempts, customKafkaListener.topic(), customKafkaListener.dlqTopic());
                 
-                EventMetadata prior = 
-                    (event instanceof EventWrapper<?> wePrior) ? wePrior.getMetadata() : wrappedEvent.getMetadata();
-                
                 dlqRouter.sendToDLQAfterMaxAttempts(
                     kafkaTemplate,
                     originalEvent,
                     e,
                     currentAttempts,
-                    prior,
+                    existingMetadata,
                     customKafkaListener
                 );
                 
@@ -168,35 +177,14 @@ public class KafkaListenerAspect {
                 return null;
             }
 
-            // Schedule retry
-            retryOrchestrator.scheduleRetry(customKafkaListener, originalEvent, e, currentAttempts, kafkaTemplate);
+            // Schedule retry with existing metadata from headers
+            retryOrchestrator.scheduleRetry(customKafkaListener, originalEvent, e, currentAttempts, existingMetadata, kafkaTemplate);
 
             return null;
         }
     }
 
-    /**
-     * Wraps a new message (not an EventWrapper) with EventWrapper and EventMetadata.
-     * 
-     * @param event the event to wrap
-     * @param customKafkaListener the listener configuration
-     * @return the wrapped event
-     */
-    private EventWrapper<?> wrapObject(Object event, CustomKafkaListener customKafkaListener) {
-        net.damero.Kafka.CustomObject.EventMetadata metadata = new net.damero.Kafka.CustomObject.EventMetadata(
-            java.time.LocalDateTime.now(),
-            java.time.LocalDateTime.now(),
-            null,
-            null,
-            0,
-            customKafkaListener.topic(),
-            customKafkaListener.dlqTopic(),
-            (long) customKafkaListener.delay(),
-            customKafkaListener.delayMethod(),
-            customKafkaListener.maxAttempts()
-        );
-        return new EventWrapper<>(event, java.time.LocalDateTime.now(), metadata);
-    }
+
 
     private KafkaTemplate<?, ?> resolveKafkaTemplate(CustomKafkaListener customKafkaListener) {
         Class<?> templateClass = customKafkaListener.kafkaTemplate();
@@ -219,6 +207,20 @@ public class KafkaListenerAspect {
             if (arg instanceof Acknowledgment) {
                 return (Acknowledgment) arg;
             }
+        }
+        return null;
+    }
+
+    /**
+     * Extracts ConsumerRecord from method arguments if present.
+     * 
+     * @param arg the first argument from the join point
+     * @return ConsumerRecord if present, null otherwise
+     */
+    @SuppressWarnings("unchecked")
+    private ConsumerRecord<?, ?> extractConsumerRecord(Object arg) {
+        if (arg instanceof ConsumerRecord<?, ?>) {
+            return (ConsumerRecord<?, ?>) arg;
         }
         return null;
     }
