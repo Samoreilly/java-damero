@@ -61,7 +61,7 @@ public class RetrySched {
 
             case LINEAR -> base * attempts;
             case CUSTOM -> customKafkaListener.delay();
-            case MAX -> Math.min(base, customKafkaListener.delay());
+            case MAX -> base;
             default -> base;
         };
     }

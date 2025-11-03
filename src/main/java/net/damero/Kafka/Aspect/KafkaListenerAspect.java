@@ -13,7 +13,6 @@ import org.aspectj.lang.annotation.Aspect;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.stereotype.Component;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +22,6 @@ import org.slf4j.LoggerFactory;
  * retry logic, DLQ routing, circuit breaker, and metrics functionality.
  */
 @Aspect
-@Component
 public class KafkaListenerAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(KafkaListenerAspect.class);
@@ -69,7 +67,7 @@ public class KafkaListenerAspect {
             }
             return null;
         }
-
+        //if its a previously used event, use the existing EventWrapper, otherwise wrap the event
         EventWrapper<?> wrappedEvent = event instanceof EventWrapper<?> wrapper 
             ? wrapper 
             : wrapObject(event, customKafkaListener);
@@ -146,6 +144,7 @@ public class KafkaListenerAspect {
                 
                 return null;
             }
+            //increment by event id to track events across retries
             int currentAttempts = retryOrchestrator.incrementAttempts(eventId);
             metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, startTime);
 

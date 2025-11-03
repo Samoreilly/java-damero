@@ -5,7 +5,6 @@ import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Factory.KafkaConsumerFactoryProvider;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import java.util.List;
 
 @Getter
 public class CustomKafkaListenerConfig{

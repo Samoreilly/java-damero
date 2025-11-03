@@ -29,8 +29,18 @@ public class OrderProcessingService {
         }
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
-    public void processOrder(ConsumerRecord<String, OrderEvent> record, Acknowledgment ack) {
-        OrderEvent order = record.value();
+    public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        // Unwrap from Object (can be OrderEvent or EventWrapper)
+        Object value = record.value();
+        OrderEvent order;
+        if (value instanceof OrderEvent oe) {
+            order = oe;
+        } else if (value instanceof net.damero.Kafka.CustomObject.EventWrapper<?> wrapper) {
+            order = (OrderEvent) wrapper.getEvent();
+        } else {
+            logger.error("unexpected event type: {}", value.getClass().getName());
+            return;
+        }
         logger.info("processing order: {}", order.getOrderId());
 
         // Validation checks - these exceptions are non-retryable

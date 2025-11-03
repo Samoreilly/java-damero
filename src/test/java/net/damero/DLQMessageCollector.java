@@ -4,9 +4,6 @@ import net.damero.Kafka.CustomObject.EventWrapper;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Component
 public class DLQMessageCollector {
     private EventWrapper<?> lastMessage;
