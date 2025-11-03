@@ -232,6 +232,7 @@ public class KafkaListenerAspect {
      * @param customKafkaListener the listener configuration
      * @return true if the exception is non-retryable (should go to DLQ), false if it should be retried
      */
+    
     private boolean isNonRetryableException(Exception exception, CustomKafkaListener customKafkaListener) {
         Class<? extends Throwable>[] nonRetryableExceptions = customKafkaListener.nonRetryableExceptions();
         
