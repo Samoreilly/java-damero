@@ -109,7 +109,7 @@ public class CustomKafkaListenerConfig{
             this.dlqTopic = dlqTopic;
             return this;
         }
-        Builder eventType(Class<T> evemtType){
+        Builder eventType(Class<T> eventType){
             this.eventType = eventType;
             return this;
         }
