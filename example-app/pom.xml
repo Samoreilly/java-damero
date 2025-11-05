@@ -39,11 +39,13 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		
-		<!-- Kafka Damero Library (local dependency) -->
+		<!-- Kafka Damero Library (local JAR file) -->
 		<dependency>
 			<groupId>java.damero</groupId>
 			<artifactId>kafka-damero</artifactId>
 			<version>0.1.0-SNAPSHOT</version>
+			<scope>system</scope>
+			<systemPath>${project.basedir}/kafka-damero-0.1.0-SNAPSHOT.jar</systemPath>
 		</dependency>
 		
 		<!-- Jackson for JSON -->
@@ -68,6 +70,21 @@
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-core</artifactId>
+			<optional>true</optional>
+		</dependency>
+		
+		<!-- Caffeine Cache (required by library) -->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+			<version>3.1.8</version>
+		</dependency>
+		
+		<!-- Resilience4j Circuit Breaker (optional, used by library) -->
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-circuitbreaker</artifactId>
+			<version>2.1.0</version>
 			<optional>true</optional>
 		</dependency>
 		

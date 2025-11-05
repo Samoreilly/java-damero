@@ -19,10 +19,16 @@ import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Aspect that intercepts @CustomKafkaListener annotated methods to provide
  * retry logic, DLQ routing, circuit breaker, and metrics functionality.
  */
+
 @Aspect
 public class KafkaListenerAspect {
 
@@ -34,6 +40,14 @@ public class KafkaListenerAspect {
     private final RetryOrchestrator retryOrchestrator;
     private final MetricsRecorder metricsRecorder;
     private final CircuitBreakerWrapper circuitBreakerWrapper;
+
+    // Per-topic rate limiting state
+    private static class RateLimitState {
+        final AtomicInteger messageCounter = new AtomicInteger(0);
+        final AtomicLong windowStartTime = new AtomicLong(System.currentTimeMillis());
+    }
+    
+    private final ConcurrentHashMap<String, RateLimitState> rateLimitStates = new ConcurrentHashMap<>();
 
     public KafkaListenerAspect(DLQRouter dlqRouter,
                                ApplicationContext context,
@@ -59,9 +73,15 @@ public class KafkaListenerAspect {
 
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
+
+        // Handle rate limiting per topic
+        if (customKafkaListener.messagesPerWindow() > 0 && customKafkaListener.messageWindow() > 0) {
+            handleRateLimiting(customKafkaListener);
+        }
+
         logger.debug("aspect triggered for topic: {}", customKafkaListener.topic());
         
-        long startTime = System.currentTimeMillis();
+        long processingStartTime = System.currentTimeMillis();
 
         Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
 
@@ -69,6 +89,7 @@ public class KafkaListenerAspect {
         
         // Extract ConsumerRecord if present to get headers
         ConsumerRecord<?, ?> consumerRecord = extractConsumerRecord(arg0);
+
         EventMetadata existingMetadata = null;
         if (consumerRecord != null) {
             existingMetadata = HeaderUtils.extractMetadataFromHeaders(consumerRecord.headers());
@@ -112,14 +133,14 @@ public class KafkaListenerAspect {
                 result = pjp.proceed();
             }
 
-            metricsRecorder.recordSuccess(customKafkaListener.topic(), startTime);
+            metricsRecorder.recordSuccess(customKafkaListener.topic(), processingStartTime);
 
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
                 logger.debug("message processed successfully and acknowledged for topic: {}", customKafkaListener.topic());
             }
 
-            // Clear attempts on success
+            // clear attempts on success
             retryOrchestrator.clearAttempts(eventId);
 
             return result;
@@ -143,7 +164,7 @@ public class KafkaListenerAspect {
                 logger.info("exception {} is non-retryable for topic: {} - sending directly to dlq", 
                     e.getClass().getSimpleName(), customKafkaListener.topic());
                 
-                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, startTime);
+                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
                 
                 dlqRouter.sendToDLQAfterMaxAttempts(
                     kafkaTemplate,
@@ -156,9 +177,11 @@ public class KafkaListenerAspect {
                 
                 return null;
             }
+
+
             //increment by event id to track events across retries
             int currentAttempts = retryOrchestrator.incrementAttempts(eventId);
-            metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, startTime);
+            metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, processingStartTime);
 
             if (retryOrchestrator.hasReachedMaxAttempts(eventId, customKafkaListener.maxAttempts())) {
                 logger.info("max attempts reached ({}) for event in topic: {} - sending to dlq: {}", 
@@ -250,5 +273,74 @@ public class KafkaListenerAspect {
         }
         
         return false;
+    }
+
+    /**
+     * Handles rate limiting per topic using a fixed window algorithm.
+     * Each topic has its own independent rate limiting state.
+     * Multiple threads can safely access the same topic's rate limit state.
+     * 
+     * Thread-safety guarantees:
+     * - ConcurrentHashMap ensures thread-safe access to the map
+     * - AtomicInteger and AtomicLong provide atomic operations
+     * - compareAndSet ensures atomic window resets
+     * 
+     * @param customKafkaListener the listener configuration
+     * @throws InterruptedException if thread is interrupted during sleep
+     */
+    private void handleRateLimiting(CustomKafkaListener customKafkaListener) throws InterruptedException {
+        String topic = customKafkaListener.topic();
+        int messagesPerWindow = customKafkaListener.messagesPerWindow();
+        long messageWindowMs = customKafkaListener.messageWindow();
+        
+        //new window for each topic,
+        //
+        RateLimitState state = rateLimitStates.computeIfAbsent(topic, 
+            k -> new RateLimitState());
+        
+        long now = System.currentTimeMillis();
+        long windowStart = state.windowStartTime.get();
+        long elapsed = now - windowStart;
+        
+        // checks if window has expired
+        if (elapsed >= messageWindowMs) {
+            // creates new window
+            if (state.windowStartTime.compareAndSet(windowStart, now)) {
+                // reset variables for new window
+                state.messageCounter.set(0);
+                state.messageCounter.incrementAndGet();
+                return;
+            }
+            // another thread reset window, recalculate elapsed
+            elapsed = now - state.windowStartTime.get();
+        }
+        
+        /*
+         * MESSSAGE COUNT logic
+         */
+        int currentCount = state.messageCounter.incrementAndGet();
+        //if more messages than allowed
+        if (currentCount > messagesPerWindow) {
+            //gets difference between the window time and time taken to process messages
+            long sleepTime = messageWindowMs - elapsed;
+            
+            if (sleepTime > 0) {
+                logger.debug("Topic: {}, Rate limit reached ({}/{} messages), sleeping for {} ms", 
+                    topic, currentCount, messagesPerWindow, sleepTime);
+                
+                Thread.sleep(sleepTime);
+                
+                //reset window and message count
+                long newWindowStart = System.currentTimeMillis();
+                state.windowStartTime.set(newWindowStart);
+                state.messageCounter.set(0);
+            } else {
+                // window expired during check, reset it
+                // this handles the case where window expired between check and increment
+                long newWindowStart = System.currentTimeMillis();
+                state.windowStartTime.set(newWindowStart);
+                state.messageCounter.set(1); // current message is the first in new window
+            }
+        }
     }
 }

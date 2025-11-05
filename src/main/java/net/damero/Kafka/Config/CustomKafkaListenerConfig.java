@@ -20,6 +20,8 @@ public class CustomKafkaListenerConfig{
     private final KafkaTemplate<?, ?> kafkaTemplate;
     private final ConsumerFactory<?, ?> consumerFactory;//allow the user to provide custom consumer config
     private final Class<? extends Throwable>[] nonRetryableExceptions;
+    private final int messagePerWindow;//how many message can be consumer per messageAmountTime
+    private final long messageWindow;//time unit for messageAmount
     
     CustomKafkaListenerConfig(Builder builder) {//takes in builder config
         this.topic = builder.topic;
@@ -32,6 +34,8 @@ public class CustomKafkaListenerConfig{
         this.retryable = builder.retryable;
         this.retryableTopic = builder.retryableTopic;
         this.nonRetryableExceptions = builder.nonRetryableExceptions;
+        this.messagePerWindow = builder.messageAmount;
+        this.messageWindow = builder.messageAmountTime;
     }
 
     public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation) {
@@ -47,6 +51,8 @@ public class CustomKafkaListenerConfig{
             .retryable(annotation.retryable())
             .retryableTopic(annotation.retryableTopic())
             .nonRetryableExceptions(annotation.nonRetryableExceptions())
+            .messageAmount(annotation.messagesPerWindow())
+            .messageAmountTime(annotation.messageWindow())
             .consumerFactory(null);
 
         KafkaTemplate<?, ?> kafkaTemplate = null;
@@ -95,6 +101,8 @@ public class CustomKafkaListenerConfig{
 
         private Class<? extends Throwable>[] nonRetryableExceptions;
 
+        private int messageAmount;
+        private long messageAmountTime;
 
         private KafkaTemplate<?, ?> kafkaTemplate;
         private ConsumerFactory<?, ?> consumerFactory;
@@ -163,6 +171,14 @@ public class CustomKafkaListenerConfig{
 
         Builder consumerFactory(ConsumerFactory<?, ?> factory) {
             this.consumerFactory = factory;
+            return this;
+        }
+        Builder messageAmount(int messageAmount){
+            this.messageAmount = messageAmount;
+            return this;
+        }
+        Builder messageAmountTime(long messageAmountTime){
+            this.messageAmountTime = messageAmountTime;
             return this;
         }
 

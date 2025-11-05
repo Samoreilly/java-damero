@@ -1,0 +1,697 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] Some problems were encountered while building the effective model for com.example:kafka-example-app:jar:1.0.0
+[[1;33mWARNING[m] 'dependencies.dependency.systemPath' for java.damero:kafka-damero:jar should not point at files within the project directory, ${project.basedir}/kafka-damero-0.1.0-SNAPSHOT.jar will be unresolvable by dependent projects @ line 48, column 16
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] It is highly recommended to fix these problems because they threaten the stability of your build.
+[[1;33mWARNING[m] 
+[[1;33mWARNING[m] For this reason, future Maven versions might no longer support building such malformed projects.
+[[1;33mWARNING[m] 
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-------------------< [0;36mcom.example:kafka-example-app[0;1m >--------------------[m
+[[1;34mINFO[m] [1mBuilding Kafka Example Application 1.0.0[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m>>> [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[0;1m > [0;1mtest-compile[m @ [36mkafka-example-app[0;1m >>>[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:resources[m [1m(default-resources)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Copying 1 resource from src/main/resources to target/classes
+[[1;34mINFO[m] Copying 0 resource from src/main/resources to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:compile[m [1m(default-compile)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Nothing to compile - all classes are up to date.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:testResources[m [1m(default-testResources)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] skip non existing resourceDirectory /home/sam-o-reilly/Downloads/java-damero/example-app/src/test/resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:testCompile[m [1m(default-testCompile)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Nothing to compile - all classes are up to date.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m<<< [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[0;1m < [0;1mtest-compile[m @ [36mkafka-example-app[0;1m <<<[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2025-11-05T13:03:48.574Z  INFO 75437 --- [           main] c.e.k.KafkaExampleApplication            : Starting KafkaExampleApplication using Java 21.0.8 with PID 75437 (/home/sam-o-reilly/Downloads/java-damero/example-app/target/classes started by sam-o-reilly in /home/sam-o-reilly/Downloads/java-damero/example-app)
+2025-11-05T13:03:48.576Z DEBUG 75437 --- [           main] c.e.k.KafkaExampleApplication            : Running with Spring Boot v3.5.7, Spring v6.2.12
+2025-11-05T13:03:48.577Z  INFO 75437 --- [           main] c.e.k.KafkaExampleApplication            : No active profile set, falling back to 1 default profile: "default"
+2025-11-05T13:03:49.085Z  INFO 75437 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2025-11-05T13:03:49.092Z  INFO 75437 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-11-05T13:03:49.093Z  INFO 75437 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.48]
+2025-11-05T13:03:49.113Z  INFO 75437 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-11-05T13:03:49.114Z  INFO 75437 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 516 ms
+2025-11-05T13:03:49.474Z  INFO 75437 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2025-11-05T13:03:49.496Z  INFO 75437 --- [           main] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.include.jmx.reporter = true
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-dlq-monitor-1
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	enable.metrics.push = true
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = dlq-monitor
+	group.instance.id = null
+	group.protocol = classic
+	group.remote.assignor = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metadata.recovery.strategy = none
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.max.ms = 1000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.login.retry.backoff.max.ms = 10000
+	sasl.login.retry.backoff.ms = 100
+	sasl.mechanism = GSSAPI
+	sasl.oauthbearer.clock.skew.seconds = 30
+	sasl.oauthbearer.expected.audience = null
+	sasl.oauthbearer.expected.issuer = null
+	sasl.oauthbearer.header.urlencode = false
+	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
+	sasl.oauthbearer.jwks.endpoint.url = null
+	sasl.oauthbearer.scope.claim.name = scope
+	sasl.oauthbearer.sub.claim.name = sub
+	sasl.oauthbearer.token.endpoint.url = null
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.certificate.chain = null
+	ssl.keystore.key = null
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.certificates = null
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.springframework.kafka.support.serializer.JsonDeserializer
+
+2025-11-05T13:03:49.517Z  INFO 75437 --- [           main] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2025-11-05T13:03:49.588Z  INFO 75437 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
+2025-11-05T13:03:49.589Z  INFO 75437 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
+2025-11-05T13:03:49.589Z  INFO 75437 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1762347829588
+2025-11-05T13:03:49.590Z  INFO 75437 --- [           main] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Subscribed to topic(s): orders-dlq
+2025-11-05T13:03:49.595Z  INFO 75437 --- [           main] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
+	allow.auto.create.topics = true
+	auto.commit.interval.ms = 5000
+	auto.include.jmx.reporter = true
+	auto.offset.reset = earliest
+	bootstrap.servers = [localhost:9092]
+	check.crcs = true
+	client.dns.lookup = use_all_dns_ips
+	client.id = consumer-order-processor-2
+	client.rack = 
+	connections.max.idle.ms = 540000
+	default.api.timeout.ms = 60000
+	enable.auto.commit = false
+	enable.metrics.push = true
+	exclude.internal.topics = true
+	fetch.max.bytes = 52428800
+	fetch.max.wait.ms = 500
+	fetch.min.bytes = 1
+	group.id = order-processor
+	group.instance.id = null
+	group.protocol = classic
+	group.remote.assignor = null
+	heartbeat.interval.ms = 3000
+	interceptor.classes = []
+	internal.leave.group.on.close = true
+	internal.throw.on.fetch.stable.offset.unsupported = false
+	isolation.level = read_uncommitted
+	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
+	max.partition.fetch.bytes = 1048576
+	max.poll.interval.ms = 300000
+	max.poll.records = 500
+	metadata.max.age.ms = 300000
+	metadata.recovery.strategy = none
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]
+	receive.buffer.bytes = 65536
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retry.backoff.max.ms = 1000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.login.retry.backoff.max.ms = 10000
+	sasl.login.retry.backoff.ms = 100
+	sasl.mechanism = GSSAPI
+	sasl.oauthbearer.clock.skew.seconds = 30
+	sasl.oauthbearer.expected.audience = null
+	sasl.oauthbearer.expected.issuer = null
+	sasl.oauthbearer.header.urlencode = false
+	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
+	sasl.oauthbearer.jwks.endpoint.url = null
+	sasl.oauthbearer.scope.claim.name = scope
+	sasl.oauthbearer.sub.claim.name = sub
+	sasl.oauthbearer.token.endpoint.url = null
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.certificate.chain = null
+	ssl.keystore.key = null
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.certificates = null
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	value.deserializer = class org.springframework.kafka.support.serializer.JsonDeserializer
+
+2025-11-05T13:03:49.595Z  INFO 75437 --- [           main] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2025-11-05T13:03:49.599Z  INFO 75437 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
+2025-11-05T13:03:49.599Z  INFO 75437 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
+2025-11-05T13:03:49.599Z  INFO 75437 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1762347829599
+2025-11-05T13:03:49.599Z  INFO 75437 --- [           main] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Subscribed to topic(s): orders
+2025-11-05T13:03:49.604Z  INFO 75437 --- [           main] c.e.k.KafkaExampleApplication            : Started KafkaExampleApplication in 1.228 seconds (process running for 1.369)
+2025-11-05T13:03:49.756Z  INFO 75437 --- [ntainer#0-0-C-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Cluster ID: 492a01fd-4fbb-451d-81bf-783c893e5ad7
+2025-11-05T13:03:49.756Z  INFO 75437 --- [ntainer#1-0-C-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Cluster ID: 492a01fd-4fbb-451d-81bf-783c893e5ad7
+2025-11-05T13:03:49.756Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
+2025-11-05T13:03:49.756Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
+2025-11-05T13:03:49.757Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] (Re-)joining group
+2025-11-05T13:03:49.757Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] (Re-)joining group
+2025-11-05T13:03:49.765Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Request joining group due to: need to re-join with the given member-id: consumer-dlq-monitor-1-6ba4c624-31b4-445b-b573-dc980257360a
+2025-11-05T13:03:49.765Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Request joining group due to: need to re-join with the given member-id: consumer-order-processor-2-8892120a-bbcb-4d66-ad3c-c9febefd0eb3
+2025-11-05T13:03:49.765Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] (Re-)joining group
+2025-11-05T13:03:49.765Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] (Re-)joining group
+2025-11-05T13:03:52.767Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Successfully joined group with generation Generation{generationId=3, memberId='consumer-dlq-monitor-1-6ba4c624-31b4-445b-b573-dc980257360a', protocol='range'}
+2025-11-05T13:03:52.767Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Successfully joined group with generation Generation{generationId=3, memberId='consumer-order-processor-2-8892120a-bbcb-4d66-ad3c-c9febefd0eb3', protocol='range'}
+2025-11-05T13:03:52.770Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Finished assignment for group at generation 3: {consumer-dlq-monitor-1-6ba4c624-31b4-445b-b573-dc980257360a=Assignment(partitions=[orders-dlq-0])}
+2025-11-05T13:03:52.770Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Finished assignment for group at generation 3: {consumer-order-processor-2-8892120a-bbcb-4d66-ad3c-c9febefd0eb3=Assignment(partitions=[orders-0])}
+2025-11-05T13:03:52.773Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Successfully synced group in generation Generation{generationId=3, memberId='consumer-order-processor-2-8892120a-bbcb-4d66-ad3c-c9febefd0eb3', protocol='range'}
+2025-11-05T13:03:52.773Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Successfully synced group in generation Generation{generationId=3, memberId='consumer-dlq-monitor-1-6ba4c624-31b4-445b-b573-dc980257360a', protocol='range'}
+2025-11-05T13:03:52.773Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Notifying assignor about the new Assignment(partitions=[orders-0])
+2025-11-05T13:03:52.773Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Notifying assignor about the new Assignment(partitions=[orders-dlq-0])
+2025-11-05T13:03:52.774Z  INFO 75437 --- [ntainer#0-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Adding newly assigned partitions: orders-dlq-0
+2025-11-05T13:03:52.774Z  INFO 75437 --- [ntainer#1-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Adding newly assigned partitions: orders-0
+2025-11-05T13:03:52.777Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Found no committed offset for partition orders-0
+2025-11-05T13:03:52.777Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Found no committed offset for partition orders-dlq-0
+2025-11-05T13:03:52.782Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Resetting offset for partition orders-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}.
+2025-11-05T13:03:52.782Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Resetting offset for partition orders-dlq-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}.
+2025-11-05T13:03:58.128Z  INFO 75437 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-05T13:03:58.128Z  INFO 75437 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2025-11-05T13:03:58.129Z  INFO 75437 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2025-11-05T13:04:12.558Z  INFO 75437 --- [nio-8080-exec-2] o.a.k.clients.producer.ProducerConfig    : ProducerConfig values: 
+	acks = -1
+	auto.include.jmx.reporter = true
+	batch.size = 16384
+	bootstrap.servers = [localhost:9092]
+	buffer.memory = 33554432
+	client.dns.lookup = use_all_dns_ips
+	client.id = producer-1
+	compression.gzip.level = -1
+	compression.lz4.level = 9
+	compression.type = none
+	compression.zstd.level = 3
+	connections.max.idle.ms = 540000
+	delivery.timeout.ms = 120000
+	enable.idempotence = true
+	enable.metrics.push = true
+	interceptor.classes = []
+	key.serializer = class org.apache.kafka.common.serialization.StringSerializer
+	linger.ms = 0
+	max.block.ms = 60000
+	max.in.flight.requests.per.connection = 5
+	max.request.size = 1048576
+	metadata.max.age.ms = 300000
+	metadata.max.idle.ms = 300000
+	metadata.recovery.strategy = none
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partitioner.adaptive.partitioning.enable = true
+	partitioner.availability.timeout.ms = 0
+	partitioner.class = null
+	partitioner.ignore.keys = false
+	receive.buffer.bytes = 32768
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.max.ms = 1000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.login.retry.backoff.max.ms = 10000
+	sasl.login.retry.backoff.ms = 100
+	sasl.mechanism = GSSAPI
+	sasl.oauthbearer.clock.skew.seconds = 30
+	sasl.oauthbearer.expected.audience = null
+	sasl.oauthbearer.expected.issuer = null
+	sasl.oauthbearer.header.urlencode = false
+	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
+	sasl.oauthbearer.jwks.endpoint.url = null
+	sasl.oauthbearer.scope.claim.name = scope
+	sasl.oauthbearer.sub.claim.name = sub
+	sasl.oauthbearer.token.endpoint.url = null
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.certificate.chain = null
+	ssl.keystore.key = null
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.certificates = null
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	transaction.timeout.ms = 60000
+	transactional.id = null
+	value.serializer = class org.springframework.kafka.support.serializer.JsonSerializer
+
+2025-11-05T13:04:12.558Z  INFO 75437 --- [nio-8080-exec-2] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2025-11-05T13:04:12.563Z  INFO 75437 --- [nio-8080-exec-2] o.a.k.clients.producer.KafkaProducer     : [Producer clientId=producer-1] Instantiated an idempotent producer.
+2025-11-05T13:04:12.570Z  INFO 75437 --- [nio-8080-exec-2] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
+2025-11-05T13:04:12.570Z  INFO 75437 --- [nio-8080-exec-2] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
+2025-11-05T13:04:12.570Z  INFO 75437 --- [nio-8080-exec-2] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1762347852570
+2025-11-05T13:04:12.573Z  INFO 75437 --- [ad | producer-1] org.apache.kafka.clients.Metadata        : [Producer clientId=producer-1] Cluster ID: 492a01fd-4fbb-451d-81bf-783c893e5ad7
+2025-11-05T13:04:12.573Z  INFO 75437 --- [ad | producer-1] o.a.k.c.p.internals.TransactionManager   : [Producer clientId=producer-1] ProducerId set to 1 with epoch 0
+2025-11-05T13:04:12.606Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:12.606Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:12.607Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:12.607Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:17.526Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:17.526Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:17.526Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:17.526Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:17.532Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:17.532Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:17.532Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:17.532Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:17.539Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:17.539Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:17.539Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:17.539Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:17.545Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:17.545Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:17.545Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:17.546Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:17.551Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:17.551Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:17.551Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:17.551Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:19.267Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:19.268Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-001
+2025-11-05T13:04:19.268Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: order amount cannot be null or negative: -100.0
+2025-11-05T13:04:19.268Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:19.268Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception IllegalArgumentException is non-retryable for topic: orders - sending directly to dlq
+2025-11-05T13:04:19.268Z DEBUG 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : sending to dlq topic: orders-dlq
+2025-11-05T13:04:19.268Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.clients.producer.ProducerConfig    : ProducerConfig values: 
+	acks = -1
+	auto.include.jmx.reporter = true
+	batch.size = 16384
+	bootstrap.servers = [localhost:9092]
+	buffer.memory = 33554432
+	client.dns.lookup = use_all_dns_ips
+	client.id = producer-2
+	compression.gzip.level = -1
+	compression.lz4.level = 9
+	compression.type = none
+	compression.zstd.level = 3
+	connections.max.idle.ms = 540000
+	delivery.timeout.ms = 120000
+	enable.idempotence = true
+	enable.metrics.push = true
+	interceptor.classes = []
+	key.serializer = class org.apache.kafka.common.serialization.StringSerializer
+	linger.ms = 0
+	max.block.ms = 60000
+	max.in.flight.requests.per.connection = 5
+	max.request.size = 1048576
+	metadata.max.age.ms = 300000
+	metadata.max.idle.ms = 300000
+	metadata.recovery.strategy = none
+	metric.reporters = []
+	metrics.num.samples = 2
+	metrics.recording.level = INFO
+	metrics.sample.window.ms = 30000
+	partitioner.adaptive.partitioning.enable = true
+	partitioner.availability.timeout.ms = 0
+	partitioner.class = null
+	partitioner.ignore.keys = false
+	receive.buffer.bytes = 32768
+	reconnect.backoff.max.ms = 1000
+	reconnect.backoff.ms = 50
+	request.timeout.ms = 30000
+	retries = 2147483647
+	retry.backoff.max.ms = 1000
+	retry.backoff.ms = 100
+	sasl.client.callback.handler.class = null
+	sasl.jaas.config = null
+	sasl.kerberos.kinit.cmd = /usr/bin/kinit
+	sasl.kerberos.min.time.before.relogin = 60000
+	sasl.kerberos.service.name = null
+	sasl.kerberos.ticket.renew.jitter = 0.05
+	sasl.kerberos.ticket.renew.window.factor = 0.8
+	sasl.login.callback.handler.class = null
+	sasl.login.class = null
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	sasl.login.refresh.buffer.seconds = 300
+	sasl.login.refresh.min.period.seconds = 60
+	sasl.login.refresh.window.factor = 0.8
+	sasl.login.refresh.window.jitter = 0.05
+	sasl.login.retry.backoff.max.ms = 10000
+	sasl.login.retry.backoff.ms = 100
+	sasl.mechanism = GSSAPI
+	sasl.oauthbearer.clock.skew.seconds = 30
+	sasl.oauthbearer.expected.audience = null
+	sasl.oauthbearer.expected.issuer = null
+	sasl.oauthbearer.header.urlencode = false
+	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
+	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
+	sasl.oauthbearer.jwks.endpoint.url = null
+	sasl.oauthbearer.scope.claim.name = scope
+	sasl.oauthbearer.sub.claim.name = sub
+	sasl.oauthbearer.token.endpoint.url = null
+	security.protocol = PLAINTEXT
+	security.providers = null
+	send.buffer.bytes = 131072
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	ssl.cipher.suites = null
+	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
+	ssl.endpoint.identification.algorithm = https
+	ssl.engine.factory.class = null
+	ssl.key.password = null
+	ssl.keymanager.algorithm = SunX509
+	ssl.keystore.certificate.chain = null
+	ssl.keystore.key = null
+	ssl.keystore.location = null
+	ssl.keystore.password = null
+	ssl.keystore.type = JKS
+	ssl.protocol = TLSv1.3
+	ssl.provider = null
+	ssl.secure.random.implementation = null
+	ssl.trustmanager.algorithm = PKIX
+	ssl.truststore.certificates = null
+	ssl.truststore.location = null
+	ssl.truststore.password = null
+	ssl.truststore.type = JKS
+	transaction.timeout.ms = 60000
+	transactional.id = null
+	value.serializer = class org.springframework.kafka.support.serializer.JsonSerializer
+
+2025-11-05T13:04:19.268Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2025-11-05T13:04:19.269Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.clients.producer.KafkaProducer     : [Producer clientId=producer-2] Instantiated an idempotent producer.
+2025-11-05T13:04:19.270Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
+2025-11-05T13:04:19.270Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
+2025-11-05T13:04:19.270Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1762347859270
+2025-11-05T13:04:19.273Z  INFO 75437 --- [ad | producer-2] org.apache.kafka.clients.Metadata        : [Producer clientId=producer-2] Cluster ID: 492a01fd-4fbb-451d-81bf-783c893e5ad7
+2025-11-05T13:04:19.273Z  INFO 75437 --- [ad | producer-2] o.a.k.c.p.internals.TransactionManager   : [Producer clientId=producer-2] ProducerId set to 2 with epoch 0
+2025-11-05T13:04:19.280Z  INFO 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : successfully sent to dlq topic: orders-dlq
+2025-11-05T13:04:19.280Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.Components.DLQRouter    : sent event to dlq after 1 attempts for topic: orders
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : === DLQ Message Received ===
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : key: null
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : partition: 0, offset: 0
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : exception: Exception
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : attempts: 1
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : original topic: orders
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : dlq topic: orders-dlq
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : first failure: 2025-11-05T13:04:19.268466786
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : last failure: 2025-11-05T13:04:19.268480447
+2025-11-05T13:04:19.289Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : event: OrderEvent(orderId=order-001, customerId=customer-123, amount=-100.0, paymentMethod=null, status=null)
+2025-11-05T13:04:19.290Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : ===========================
+2025-11-05T13:04:19.290Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : this message went directly to dlq (non-retryable exception)
+2025-11-05T13:04:21.276Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:21.276Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-002
+2025-11-05T13:04:21.276Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: customer id is required
+2025-11-05T13:04:21.276Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:21.276Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception ValidationException is non-retryable for topic: orders - sending directly to dlq
+2025-11-05T13:04:21.276Z DEBUG 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : sending to dlq topic: orders-dlq
+2025-11-05T13:04:21.278Z  INFO 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : successfully sent to dlq topic: orders-dlq
+2025-11-05T13:04:21.279Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.Components.DLQRouter    : sent event to dlq after 1 attempts for topic: orders
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : === DLQ Message Received ===
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : key: null
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : partition: 0, offset: 1
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : exception: Exception
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : attempts: 1
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : original topic: orders
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : dlq topic: orders-dlq
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : first failure: 2025-11-05T13:04:21.276811071
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : last failure: 2025-11-05T13:04:21.276817509
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : event: OrderEvent(orderId=order-002, customerId=null, amount=100.0, paymentMethod=null, status=null)
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : ===========================
+2025-11-05T13:04:21.283Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : this message went directly to dlq (non-retryable exception)
+2025-11-05T13:04:23.285Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:23.285Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-003
+2025-11-05T13:04:23.285Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: payment method is required
+2025-11-05T13:04:23.285Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:23.288Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.RetryScheduler.RetrySched      : scheduled retry for event: OrderEvent(orderId=order-003, customerId=customer-123, amount=100.0, paymentMethod=null, status=null) to topic: orders
+2025-11-05T13:04:23.288Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.K.A.Components.RetryOrchestrator     : scheduled retry attempt 1 for event in topic: orders
+2025-11-05T13:04:24.291Z  INFO 75437 --- [try-scheduler-1] n.d.Kafka.RetryScheduler.RetrySched      : retried event: OrderEvent(orderId=order-003, customerId=customer-123, amount=100.0, paymentMethod=null, status=null) to topic: orders
+2025-11-05T13:04:24.293Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:24.294Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-003
+2025-11-05T13:04:24.294Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: payment method is required
+2025-11-05T13:04:24.294Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:24.294Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.RetryScheduler.RetrySched      : scheduled retry for event: OrderEvent(orderId=order-003, customerId=customer-123, amount=100.0, paymentMethod=null, status=null) to topic: orders
+2025-11-05T13:04:24.294Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.K.A.Components.RetryOrchestrator     : scheduled retry attempt 2 for event in topic: orders
+2025-11-05T13:04:25.294Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:25.294Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-004
+2025-11-05T13:04:25.294Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: simulated processing failure
+2025-11-05T13:04:25.294Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:25.295Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.RetryScheduler.RetrySched      : scheduled retry for event: OrderEvent(orderId=order-004, customerId=customer-123, amount=100.0, paymentMethod=credit-card, status=FAIL) to topic: orders
+2025-11-05T13:04:25.295Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.K.A.Components.RetryOrchestrator     : scheduled retry attempt 1 for event in topic: orders
+2025-11-05T13:04:26.294Z  INFO 75437 --- [try-scheduler-1] n.d.Kafka.RetryScheduler.RetrySched      : retried event: OrderEvent(orderId=order-003, customerId=customer-123, amount=100.0, paymentMethod=null, status=null) to topic: orders
+2025-11-05T13:04:26.295Z  INFO 75437 --- [try-scheduler-2] n.d.Kafka.RetryScheduler.RetrySched      : retried event: OrderEvent(orderId=order-004, customerId=customer-123, amount=100.0, paymentMethod=credit-card, status=FAIL) to topic: orders
+2025-11-05T13:04:26.296Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:26.297Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-003
+2025-11-05T13:04:26.297Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: payment method is required
+2025-11-05T13:04:26.297Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:26.297Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : max attempts reached (3) for event in topic: orders - sending to dlq: orders-dlq
+2025-11-05T13:04:26.297Z DEBUG 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : sending to dlq topic: orders-dlq
+2025-11-05T13:04:26.298Z  INFO 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : successfully sent to dlq topic: orders-dlq
+2025-11-05T13:04:26.298Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.Components.DLQRouter    : sent event to dlq after 3 attempts for topic: orders
+2025-11-05T13:04:26.301Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-004
+2025-11-05T13:04:26.301Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: simulated processing failure
+2025-11-05T13:04:26.301Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : === DLQ Message Received ===
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : key: null
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : partition: 0, offset: 2
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : exception: Exception
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : attempts: 3
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : original topic: orders
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : dlq topic: orders-dlq
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : first failure: 2025-11-05T13:04:23.287187960
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : last failure: 2025-11-05T13:04:26.297181636
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : event: OrderEvent(orderId=order-003, customerId=customer-123, amount=100.0, paymentMethod=null, status=null)
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : ===========================
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : this message was retried 3 times before going to dlq
+2025-11-05T13:04:26.301Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.RetryScheduler.RetrySched      : scheduled retry for event: OrderEvent(orderId=order-004, customerId=customer-123, amount=100.0, paymentMethod=credit-card, status=FAIL) to topic: orders
+2025-11-05T13:04:26.302Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.K.A.Components.RetryOrchestrator     : scheduled retry attempt 2 for event in topic: orders
+2025-11-05T13:04:28.302Z  INFO 75437 --- [try-scheduler-3] n.d.Kafka.RetryScheduler.RetrySched      : retried event: OrderEvent(orderId=order-004, customerId=customer-123, amount=100.0, paymentMethod=credit-card, status=FAIL) to topic: orders
+2025-11-05T13:04:28.304Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:28.305Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-004
+2025-11-05T13:04:28.305Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : exception caught during processing for topic: orders: simulated processing failure
+2025-11-05T13:04:28.305Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : acknowledged message after exception for topic: orders
+2025-11-05T13:04:28.305Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : max attempts reached (3) for event in topic: orders - sending to dlq: orders-dlq
+2025-11-05T13:04:28.305Z DEBUG 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : sending to dlq topic: orders-dlq
+2025-11-05T13:04:28.306Z  INFO 75437 --- [ntainer#1-0-C-1] n.damero.Kafka.KafkaServices.KafkaDLQ    : successfully sent to dlq topic: orders-dlq
+2025-11-05T13:04:28.306Z  INFO 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.Components.DLQRouter    : sent event to dlq after 3 attempts for topic: orders
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : === DLQ Message Received ===
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : key: null
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : partition: 0, offset: 3
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : exception: Exception
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : attempts: 3
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : original topic: orders
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : dlq topic: orders-dlq
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : first failure: 2025-11-05T13:04:25.294818759
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : last failure: 2025-11-05T13:04:28.305228413
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : event: OrderEvent(orderId=order-004, customerId=customer-123, amount=100.0, paymentMethod=credit-card, status=FAIL)
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : ===========================
+2025-11-05T13:04:28.309Z  INFO 75437 --- [ntainer#0-0-C-1] c.e.kafkaexample.service.DLQMonitor      : this message was retried 3 times before going to dlq
+2025-11-05T13:04:55.516Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.516Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.516Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.516Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.521Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.522Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.522Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.522Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.528Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.529Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.529Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.529Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.534Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.534Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.534Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.534Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.539Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.539Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.539Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.539Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.545Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.545Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.545Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.545Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.550Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.550Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.550Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.550Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.556Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.556Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.556Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.556Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.563Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.563Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.563Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.563Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:04:55.568Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : aspect triggered for topic: orders
+2025-11-05T13:04:55.568Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : processing order: order-005
+2025-11-05T13:04:55.568Z  INFO 75437 --- [ntainer#1-0-C-1] c.e.k.service.OrderProcessingService     : order order-005 processed successfully
+2025-11-05T13:04:55.568Z DEBUG 75437 --- [ntainer#1-0-C-1] n.d.Kafka.Aspect.KafkaListenerAspect     : message processed successfully and acknowledged for topic: orders
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#0-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Revoke previously assigned partitions orders-dlq-0
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#1-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Revoke previously assigned partitions orders-0
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Member consumer-dlq-monitor-1-6ba4c624-31b4-445b-b573-dc980257360a sending LeaveGroup request to coordinator localhost:9092 (id: 2147483646 rack: null) due to the consumer unsubscribed from all topics
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Member consumer-order-processor-2-8892120a-bbcb-4d66-ad3c-c9febefd0eb3 sending LeaveGroup request to coordinator localhost:9092 (id: 2147483646 rack: null) due to the consumer unsubscribed from all topics
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Resetting generation and member id due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Resetting generation and member id due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Request joining group due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Request joining group due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Unsubscribed all topics or patterns and assigned partitions
+2025-11-05T13:05:13.040Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Unsubscribed all topics or patterns and assigned partitions
+2025-11-05T13:05:13.041Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Resetting generation and member id due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.041Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Resetting generation and member id due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.041Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-2, groupId=order-processor] Request joining group due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.041Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-monitor-1, groupId=dlq-monitor] Request joining group due to: consumer pro-actively leaving the group
+2025-11-05T13:05:13.105Z  INFO 75437 --- [ntainer#1-0-C-1] o.apache.kafka.common.metrics.Metrics    : Metrics scheduler closed
+2025-11-05T13:05:13.105Z  INFO 75437 --- [ntainer#1-0-C-1] o.apache.kafka.common.metrics.Metrics    : Closing reporter org.apache.kafka.common.metrics.JmxReporter
+2025-11-05T13:05:13.105Z  INFO 75437 --- [ntainer#1-0-C-1] o.apache.kafka.common.metrics.Metrics    : Closing reporter org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter
+2025-11-05T13:05:13.105Z  INFO 75437 --- [ntainer#1-0-C-1] o.apache.kafka.common.metrics.Metrics    : Metrics reporters closed
+2025-11-05T13:05:13.107Z  INFO 75437 --- [ntainer#1-0-C-1] o.a.kafka.common.utils.AppInfoParser     : App info kafka.consumer for consumer-order-processor-2 unregistered
+2025-11-05T13:05:13.409Z  INFO 75437 --- [ntainer#0-0-C-1] o.apache.kafka.common.metrics.Metrics    : Metrics scheduler closed
+2025-11-05T13:05:13.410Z  INFO 75437 --- [ntainer#0-0-C-1] o.apache.kafka.common.metrics.Metrics    : Closing reporter org.apache.kafka.common.metrics.JmxReporter
+2025-11-05T13:05:13.410Z  INFO 75437 --- [ntainer#0-0-C-1] o.apache.kafka.common.metrics.Metrics    : Closing reporter org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter
+2025-11-05T13:05:13.410Z  INFO 75437 --- [ntainer#0-0-C-1] o.apache.kafka.common.metrics.Metrics    : Metrics reporters closed
+2025-11-05T13:05:13.412Z  INFO 75437 --- [ntainer#0-0-C-1] o.a.kafka.common.utils.AppInfoParser     : App info kafka.consumer for consumer-dlq-monitor-1 unregistered
+2025-11-05T13:05:13.413Z  INFO 75437 --- [ionShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-05T13:05:13.416Z  INFO 75437 --- [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete

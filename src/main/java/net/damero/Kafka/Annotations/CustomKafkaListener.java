@@ -19,6 +19,8 @@ public @interface CustomKafkaListener {
     boolean retryable() default true;
     String retryableTopic() default "retryable-topic";
     Class<? extends Throwable>[] nonRetryableExceptions() default {};
+    int messagesPerWindow() default 0;// amount of messages to process per window
+    long messageWindow() default 0;//window duration in milliseconds
     Class<Void> kafkaTemplate() default void.class;
     Class<Void> consumerFactory() default void.class;
     Class<?> eventType() default Void.class;
