@@ -27,8 +27,8 @@ public class OrderProcessingService {
             IllegalArgumentException.class,
             ValidationException.class
         },
-        messagesPerWindow = 1,//testing purposes
-        messageWindow = 1//testing purposes
+        messagesPerWindow = 200,
+        messageWindow = 1000
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
