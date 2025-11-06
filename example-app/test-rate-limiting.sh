@@ -56,3 +56,5 @@ echo "  - Look for 'sleeping for X ms' messages"
 echo "  - With 1 message per 1ms limit, throttling should be very aggressive"
 echo ""
 
+#curl -X POST http://localhost:8080/api/test/order/non-retryable/illegal-argument
+

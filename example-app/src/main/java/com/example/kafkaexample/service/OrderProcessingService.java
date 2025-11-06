@@ -19,7 +19,7 @@ public class OrderProcessingService {
 
     @CustomKafkaListener(
         topic = "orders",
-        dlqTopic = "orders-dlq",
+        dlqTopic = "test-dlq",
         maxAttempts = 3,
         delay = 1000,
         delayMethod = DelayMethod.LINEAR,

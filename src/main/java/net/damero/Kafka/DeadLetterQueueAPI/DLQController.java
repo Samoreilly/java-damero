@@ -3,6 +3,7 @@ package net.damero.Kafka.DeadLetterQueueAPI;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
@@ -16,9 +17,9 @@ public class DLQController {
     }
 
     @GetMapping("/dlq")
-    public List<EventWrapper<?>> getDLQ(){
+    public List<EventWrapper<?>> getDLQ(@RequestParam(required = false, defaultValue = "test-dlq") String topic){
 
-        List<EventWrapper<?>> dlqEvents = readFromDLQConsumer.readFromDLQ("test-dlq");
+        List<EventWrapper<?>> dlqEvents = readFromDLQConsumer.readFromDLQ(topic);
 
         if(dlqEvents.isEmpty() || dlqEvents == null){
             EventWrapper<String> emptyWrapper = new EventWrapper<>();

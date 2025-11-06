@@ -11,6 +11,8 @@ import net.damero.Kafka.Aspect.Components.DLQRouter;
 import net.damero.Kafka.Aspect.Components.MetricsRecorder;
 import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
 import net.damero.Kafka.CustomObject.EventWrapper;
+import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
+import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
 import org.springframework.context.ApplicationContext;
 import net.damero.Kafka.Resilience.CircuitBreakerService;
@@ -70,6 +72,12 @@ public class CustomKafkaAutoConfiguration {
     public KafkaDLQ kafkaDLQ() {
         return new KafkaDLQ();
     }
+    @Bean
+    @ConditionalOnMissingBean
+    public ReadFromDLQConsumer readFromDLQConsumer(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
+                                                   ObjectMapper kafkaObjectMapper) {
+        return new ReadFromDLQConsumer(dlqConsumerFactory, kafkaObjectMapper);
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -81,6 +89,12 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean
     public CaffeineCache caffeineCache() {
         return new CaffeineCache();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DLQController.class)
+    public DLQController dlqController(ReadFromDLQConsumer readFromDLQConsumer) {
+        return new DLQController(readFromDLQConsumer);
     }
 
     @Bean

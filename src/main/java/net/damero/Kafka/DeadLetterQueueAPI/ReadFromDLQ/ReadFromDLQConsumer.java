@@ -42,21 +42,39 @@ public class ReadFromDLQConsumer{
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
             consumer.subscribe(List.of(topic));
 
+            // wait until we get partition
+            int assignmentAttempts = 0;
+            while (consumer.assignment().isEmpty() && assignmentAttempts < 10) {
+                consumer.poll(Duration.ofMillis(500));
+                assignmentAttempts++;
+            }
+            
+            // Seek to beginning if we have partitions
+            if (!consumer.assignment().isEmpty()) {
+                consumer.seekToBeginning(consumer.assignment());
+            }
+            
             boolean done = false;
-            while (!done) {
+            int emptyPolls = 0;
+            while (!done && emptyPolls < 3) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
                 if (records.isEmpty()) {
-                    done = true; // stop when no more messages
+                    emptyPolls++;
                 } else {
+                    emptyPolls = 0; // reset counter if we got messages
                     for (ConsumerRecord<String, String> record : records) {
-                        EventWrapper<?> event = kafkaObjectMapper.readValue(record.value(), EventWrapper.class);
-                        events.add(event);
+                        try {
+                            EventWrapper<?> event = kafkaObjectMapper.readValue(record.value(), EventWrapper.class);
+                            events.add(event);
+                        } catch (JsonProcessingException e) {
+                            logger.warn("Failed to deserialize message at offset {}: {}", record.offset(), e.getMessage());
+                        }
                     }
                 }
             }
             logger.info("Read from DLQ topic: {} and found {} events", topic, events.size());
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to read from DLQ topic: {} with Exception: {}", topic, e.getMessage());
+        } catch (Exception e) {
+            logger.error("Failed to read from DLQ topic: {} with Exception: {}", topic, e.getMessage(), e);
             throw new RuntimeException(e);
         }
         return events;

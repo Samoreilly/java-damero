@@ -7,13 +7,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 @Service
 public class DLQMonitor {
 
     private static final Logger logger = LoggerFactory.getLogger(DLQMonitor.class);
+    private final List<EventWrapper<?>> dlqMessages = Collections.synchronizedList(new ArrayList<>());
 
     @KafkaListener(
-        topics = "orders-dlq", 
+        topics = "test-dlq",
         groupId = "dlq-monitor", 
         containerFactory = "dlqKafkaListenerContainerFactory"
     )
@@ -51,6 +56,9 @@ public class DLQMonitor {
             logger.info("event: {}", wrapper.getEvent());
             logger.info("===========================");
             
+            // Store the message for the API endpoint
+            dlqMessages.add(wrapper);
+            
             // If attempts == 1, it was likely a non-retryable exception
             // If attempts == 3, it exhausted retries
             if (wrapper.getMetadata().getAttempts() == 1) {
@@ -62,6 +70,14 @@ public class DLQMonitor {
             logger.error("error processing dlq message at partition: {}, offset: {}", 
                 record.partition(), record.offset(), e);
         }
+    }
+    
+    public List<EventWrapper<?>> getDlqMessages() {
+        return new ArrayList<>(dlqMessages);
+    }
+    
+    public void clearDlqMessages() {
+        dlqMessages.clear();
     }
 }
 
