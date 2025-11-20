@@ -2,6 +2,7 @@ package net.damero.Kafka.Aspect;
 
 import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -36,6 +37,7 @@ public class KafkaListenerAspect {
     private final CircuitBreakerWrapper circuitBreakerWrapper;
     private final RetrySched retrySched;
     private final DLQExceptionRoutingManager dlqExceptionRoutingManager;
+    private final DuplicationManager duplicationManager;
 
     // Per-topic rate limiting state
     private static class RateLimitState {
@@ -52,7 +54,8 @@ public class KafkaListenerAspect {
                                MetricsRecorder metricsRecorder,
                                CircuitBreakerWrapper circuitBreakerWrapper,
                                RetrySched retrySched,
-                               DLQExceptionRoutingManager dlqExceptionRoutingManager) {
+                               DLQExceptionRoutingManager dlqExceptionRoutingManager,
+                               DuplicationManager duplicationManager) {
         this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
@@ -61,6 +64,7 @@ public class KafkaListenerAspect {
         this.circuitBreakerWrapper = circuitBreakerWrapper;
         this.retrySched = retrySched;
         this.dlqExceptionRoutingManager = dlqExceptionRoutingManager;
+        this.duplicationManager = duplicationManager;
     }
 
     /**
@@ -96,6 +100,7 @@ public class KafkaListenerAspect {
         
         Object event = EventUnwrapper.unwrapEvent(arg0);
 
+
         KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
 
         if (event == null) {
@@ -108,6 +113,17 @@ public class KafkaListenerAspect {
         
         Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
         String eventId = EventUnwrapper.extractEventId(originalEvent);
+
+        //duplicate message
+        if(customKafkaListener.deDuplication() && duplicationManager.isDuplicate(eventId)) {
+
+            logger.warn("duplicate message detected for eventId: {} - message was ignored", eventId);
+
+            if(acknowledgment != null) {
+                acknowledgment.acknowledge();//stops infinite delivery from producer
+            }
+            return null;
+        }
 
         // Check circuit breaker if enabled
         Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(customKafkaListener);

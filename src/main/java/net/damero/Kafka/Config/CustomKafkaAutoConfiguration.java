@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import net.damero.Kafka.Aspect.Components.*;
+import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
@@ -68,6 +69,7 @@ public class CustomKafkaAutoConfiguration {
     public KafkaDLQ kafkaDLQ() {
         return new KafkaDLQ();
     }
+
     @Bean
     @ConditionalOnMissingBean
     public ReadFromDLQConsumer readFromDLQConsumer(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
@@ -126,9 +128,10 @@ public class CustomKafkaAutoConfiguration {
                                                    MetricsRecorder metricsRecorder,
                                                    CircuitBreakerWrapper circuitBreakerWrapper,
                                                    RetrySched retrySched,
-                                                   DLQExceptionRoutingManager dlqExceptionRoutingManager) {
+                                                   DLQExceptionRoutingManager dlqExceptionRoutingManager,
+                                                   DuplicationManager duplicationManager) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate, 
-                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper, retrySched, dlqExceptionRoutingManager);
+                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper, retrySched, dlqExceptionRoutingManager, duplicationManager);
     }
 
     /*

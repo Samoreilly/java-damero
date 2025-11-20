@@ -41,6 +41,7 @@ public class DLQExceptionRoutingManager {
         DlqExceptionRoutes matchedRoute = findMatchingRoute(customKafkaListener, e);
 
         if(matchedRoute != null && matchedRoute.skipRetry()){
+
             String dlqTopic = matchedRoute.dlqExceptionTopic();
 
             logger.info("Exception {} matched DLQ route with skipRetry=true - sending to {} without retry",

@@ -20,6 +20,8 @@ public @interface CustomKafkaListener {
     double delay() default 0.0;
     DelayMethod delayMethod() default DelayMethod.EXPO;
 
+    int fibonacciLimit() default 15; //Fibonacci limit
+
     boolean retryable() default true;
     String retryableTopic() default "retryable-topic";
     Class<? extends Throwable>[] nonRetryableExceptions() default {};
@@ -30,14 +32,13 @@ public @interface CustomKafkaListener {
     Class<Void> kafkaTemplate() default void.class;
     Class<Void> consumerFactory() default void.class;
     Class<?> eventType() default Void.class;
-    
+
     // Circuit Breaker Configuration
     boolean enableCircuitBreaker() default false;
     int circuitBreakerFailureThreshold() default 50;  // Number of failures before opening (opening is bad)
     long circuitBreakerWindowDuration() default 60000;  // Time window in milliseconds (default 1 minute)
     long circuitBreakerWaitDuration() default 60000;  // Wait before half-open (default 1 minute)
 
-    //Fibonacci limit
-    int fibonacciLimit() default 15;
+    boolean deDuplication() default false;//when true, no duplicate messages will be sent to the topic
 }
 

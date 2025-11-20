@@ -262,12 +262,15 @@ class DLQExceptionRoutingManagerTest {
         verify(retryOrchestrator).clearAttempts(eventId);
     }
 
+
     @Test
     void testRouteToDLQAfterMaxAttempts_MultipleRoutes_FirstMatchWins() {
         // Given - multiple routes, first match should win
         RuntimeException exception = new RuntimeException("Error");
         String originalEvent = "test-event";
         String eventId = "event-123";
+
+        System.out.println();
 
         doReturn(RuntimeException.class).when(route1).exception();
         when(route1.dlqExceptionTopic()).thenReturn("first-dlq");
