@@ -389,17 +389,26 @@ public class KafkaListenerAspect {
         if (currentCount > messagesPerWindow) {
             //gets difference between the window time and time taken to process messages
             long sleepTime = messageWindowMs - elapsed;
-            
+
             if (sleepTime > 0) {
-                logger.debug("Topic: {}, Rate limit reached ({}/{} messages), sleeping for {} ms", 
+                logger.debug("Topic: {}, Rate limit reached ({}/{} messages), sleeping for {} ms",
                     topic, currentCount, messagesPerWindow, sleepTime);
-                
+
                 Thread.sleep(sleepTime);
-                
-                //reset window and message count
+
+                // Recapture current window start time (may have changed during sleep)
+                long currentWindowStart = state.windowStartTime.get();
                 long newWindowStart = System.currentTimeMillis();
-                state.windowStartTime.set(newWindowStart);
-                state.messageCounter.set(0);
+
+                // Atomic reset: only one thread wins, others see counter already reset
+                if(state.windowStartTime.compareAndSet(currentWindowStart, newWindowStart)){
+                    // This thread won the race - reset counter to 1 (for current message)
+                    state.messageCounter.set(1);
+                    logger.debug("Topic: {}, Window reset by this thread, counter set to 1", topic);
+                }
+                // else: Another thread already reset window. Our increment from line 386
+                // is now part of the new window, which is correct behavior.
+
             } else {
                 // window expired during check, reset it
                 // this handles the case where window expired between check and increment
