@@ -13,7 +13,7 @@ public class KafkaDLQ {
     //static method to call it avoid uneccessary injections
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper){
-
+        logger.debug("sending to dlq topic: {}", topic);
         try {
             logger.debug("sending to dlq topic: {}", topic);
             ((KafkaTemplate) kafkaTemplate).send(topic, eventWrapper);

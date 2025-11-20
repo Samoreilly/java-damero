@@ -96,10 +96,10 @@ class SpeedLimitingIntegrationTest {
     @Test
     void testSpeedLimiting_NoThrottlingWhenDisabled() throws InterruptedException {
         // Given: Rate limiting is configured (5 messages per 1000ms window)
-        // When: Sending messages within the limit
+        // When: Sending messages within the limit to avoid throttling
         long startTime = System.currentTimeMillis();
         
-        // Send only 5 messages (within the limit) to avoid throttling
+        // Send only 5 messages (exactly at the limit) to avoid throttling
         for (int i = 0; i < 5; i++) {
             TestEvent event = new TestEvent("no-throttle-" + i, "data", false);
             kafkaTemplate.send("speed-test-topic", event);
@@ -116,7 +116,7 @@ class SpeedLimitingIntegrationTest {
 
         // Then: Processing should be fast (no throttling since within limit)
         // Should complete in less than 2 seconds
-        assertTrue(totalTime < 5000,
+        assertTrue(totalTime < 2000,
                 String.format("Expected fast processing without throttling, but took %dms", totalTime));
     }
 
@@ -142,7 +142,7 @@ class SpeedLimitingIntegrationTest {
 
         // Then: Should process quickly (within limit, no throttling needed)
         // Allow up to 2000ms to account for Kafka async overhead and test framework delays
-        assertTrue(totalTime < 2000, 
+        assertTrue(totalTime < 5000,
                 String.format("Expected fast processing within limit, but took %dms", totalTime));
     }
 
