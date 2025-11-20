@@ -54,11 +54,11 @@ public class DuplicationManager {
     }
 
     /**
-     * Check if a message ID is a duplicate.
-     * If not seen before, the ID is cached for future checks.
+     * Check if a message ID has been seen before (is a duplicate).
+     * This method does NOT mark the ID as seen - use markAsSeen() after successful processing.
      *
      * @param id the message ID to check
-     * @return true if duplicate, false if first time seeing this ID
+     * @return true if duplicate (already seen), false if first time
      */
     public boolean isDuplicate(String id) {
         if (id == null || id.isEmpty()) {
@@ -79,8 +79,6 @@ public class DuplicationManager {
             return true;
         }
 
-        // mark as seen (value is irrelevant, we just want to see if the event is present)
-        bucketCache.put(id, PLACEHOLDER_OBJECT);
         return false;
     }
 
@@ -123,6 +121,12 @@ public class DuplicationManager {
         cache.forEach(Cache::invalidateAll);
         duplicateCount.set(0);
         totalChecks.set(0);
+    }
+    public void markAsSeen(String id){
+        int bucket = Math.floorMod(id.hashCode(), numBuckets);
+        Cache<String, Object> bucketCache = cache.get(bucket);
+
+        bucketCache.put(id, PLACEHOLDER_OBJECT);
     }
 
     /**

@@ -114,16 +114,6 @@ public class KafkaListenerAspect {
         Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
         String eventId = EventUnwrapper.extractEventId(originalEvent);
 
-        //duplicate message
-        if(customKafkaListener.deDuplication() && duplicationManager.isDuplicate(eventId)) {
-
-            logger.warn("duplicate message detected for eventId: {} - message was ignored", eventId);
-
-            if(acknowledgment != null) {
-                acknowledgment.acknowledge();//stops infinite delivery from producer
-            }
-            return null;
-        }
 
         // Check circuit breaker if enabled
         Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(customKafkaListener);
@@ -135,6 +125,16 @@ public class KafkaListenerAspect {
             
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
+            }
+            return null;
+        }
+
+        // Check for duplicate BEFORE processing
+        if (customKafkaListener.deDuplication() && duplicationManager.isDuplicate(eventId)) {
+            logger.warn("duplicate message detected for eventId: {} - message was ignored", eventId);
+
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge(); // stops infinite delivery from producer
             }
             return null;
         }
@@ -153,6 +153,11 @@ public class KafkaListenerAspect {
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
                 logger.debug("message processed successfully and acknowledged for topic: {}", customKafkaListener.topic());
+            }
+
+            // Mark as seen AFTER successful processing to prevent future duplicates
+            if (customKafkaListener.deDuplication()) {
+                duplicationManager.markAsSeen(eventId);
             }
 
             // clear attempts on success
