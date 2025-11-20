@@ -1,6 +1,7 @@
 package net.damero.Kafka.RetryScheduler;
 
 import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Aspect.Components.CaffeineCache;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.Aspect.Components.HeaderUtils;
 import net.damero.Kafka.CustomObject.EventMetadata;
@@ -12,6 +13,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,9 +22,43 @@ import org.slf4j.LoggerFactory;
 @Component
 public class RetrySched {
 
+    private static class FibonacciState {
+        private final long[] sequence;
+        private int nextIndex;
+        private final int maxIndex;
+
+        public FibonacciState(int limit) {
+            if (limit < 2) {
+                throw new IllegalArgumentException("Fibonacci limit must be at least 2");
+            }
+            this.sequence = new long[limit];
+            this.sequence[0] = 0;
+            this.sequence[1] = 1;
+            this.nextIndex = 2;
+            this.maxIndex = limit - 1;
+        }
+
+        public synchronized long getNext() {
+            // If we haven't filled the array yet, calculate next value
+            if (nextIndex <= maxIndex) {
+                sequence[nextIndex] = sequence[nextIndex - 1] + sequence[nextIndex - 2];
+                return sequence[nextIndex++];
+            }
+            // If at limit, return the last (max) value
+            return sequence[maxIndex];
+        }
+
+        public synchronized long getCurrent() {
+            int currentIndex = Math.max(0, nextIndex - 1);
+            return sequence[currentIndex];
+        }
+    }
+
     @Autowired
     private final TaskScheduler taskScheduler;
     private static final Logger logger = LoggerFactory.getLogger(RetrySched.class);
+
+    private final ConcurrentHashMap<Object, FibonacciState> fibonacciCache = new ConcurrentHashMap<>();
 
     public RetrySched(TaskScheduler taskScheduler) {
         this.taskScheduler = taskScheduler;
@@ -44,11 +81,13 @@ public class RetrySched {
         EventMetadata metadata = HeaderUtils.extractMetadataFromHeaders(headers);
         int currentAttempts = metadata != null ? metadata.getAttempts() : 0;
 
-        long delay = getBackOffDelay(customKafkaListener, customKafkaListener.delayMethod(), currentAttempts);
+        long delay = getBackOffDelay(customKafkaListener, originalEvent,
+                                     customKafkaListener.delayMethod(), currentAttempts);
 
         taskScheduler.schedule(() -> executeRetry(customKafkaListener, originalEvent, headers, kafkaTemplate),
                 Instant.now().plusMillis(delay)
         );
+
         logger.info("scheduled retry for event: {} to topic: {}", originalEvent.toString(), customKafkaListener.topic());
     }
 
@@ -74,7 +113,11 @@ public class RetrySched {
         }
     }
 
-    private long getBackOffDelay(CustomKafkaListener customKafkaListener, DelayMethod delayMethod, int attempts) {
+    private long getBackOffDelay(CustomKafkaListener customKafkaListener, Object object, DelayMethod delayMethod, int attempts) {
+        if(delayMethod == DelayMethod.FIBONACCI && object == null){
+            logger.warn("Object cannot be null for FIBONACCI delay method");
+            throw new IllegalArgumentException("Object cannot be null for FIBONACCI delay method");
+        }
 
         double base = customKafkaListener.delay();
 
@@ -88,11 +131,32 @@ public class RetrySched {
             }
 
             case LINEAR -> base * attempts;
+            case FIBONACCI -> getFibonacciDelay(customKafkaListener, object);
             case CUSTOM -> customKafkaListener.delay();
             case MAX -> base;
             default -> base;
         };
     }
+
+    private long getFibonacciDelay(CustomKafkaListener customKafkaListener, Object object){
+        // Get or create FibonacciState for this event
+        FibonacciState state = fibonacciCache.computeIfAbsent(object,
+            k -> new FibonacciState(customKafkaListener.fibonacciLimit()));
+
+        // Get next delay value
+        return state.getNext();
+    }
+
+    /**
+     * Clean up Fibonacci cache for a specific event.
+     * Call this when event processing completes successfully.
+     */
+    public void clearFibonacciState(Object event) {
+        if (event != null) {
+            fibonacciCache.remove(event);
+        }
+    }
+
     /**
      * Sends a message to a Kafka topic with headers.
      */

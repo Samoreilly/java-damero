@@ -4,6 +4,7 @@ package net.damero.Kafka.Config;
 public enum DelayMethod {
     EXPO(1),
     LINEAR(1),
+    FIBONACCI(10),//MAX DELAY
     CUSTOM(1),
     MAX(10);
 
