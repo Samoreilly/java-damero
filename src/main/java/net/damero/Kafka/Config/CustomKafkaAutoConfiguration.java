@@ -4,12 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
-import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
-import net.damero.Kafka.Aspect.Components.CaffeineCache;
-import net.damero.Kafka.Aspect.Components.DLQRouter;
-import net.damero.Kafka.Aspect.Components.MetricsRecorder;
-import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
@@ -105,6 +101,12 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public DLQExceptionRoutingManager dlqExceptionRoutingManager(DLQRouter dlqRouter, RetryOrchestrator retryOrchestrator){
+        return new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public MetricsRecorder metricsRecorder(@Nullable io.micrometer.core.instrument.MeterRegistry meterRegistry) {
         return new MetricsRecorder(meterRegistry);
     }
@@ -118,14 +120,15 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public KafkaListenerAspect kafkaListenerAspect(DLQRouter dlqRouter,
-                                                    ApplicationContext context,
-                                                    KafkaTemplate<?, ?> defaultKafkaTemplate,
-                                                    RetryOrchestrator retryOrchestrator,
-                                                    MetricsRecorder metricsRecorder,
-                                                    CircuitBreakerWrapper circuitBreakerWrapper,
-                                                   RetrySched retrySched) {
+                                                   ApplicationContext context,
+                                                   KafkaTemplate<?, ?> defaultKafkaTemplate,
+                                                   RetryOrchestrator retryOrchestrator,
+                                                   MetricsRecorder metricsRecorder,
+                                                   CircuitBreakerWrapper circuitBreakerWrapper,
+                                                   RetrySched retrySched,
+                                                   DLQExceptionRoutingManager dlqExceptionRoutingManager) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate, 
-                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper, retrySched);
+                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper, retrySched, dlqExceptionRoutingManager);
     }
 
     /*

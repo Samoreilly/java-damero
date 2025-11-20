@@ -1,11 +1,6 @@
 package net.damero.Kafka.Aspect;
 
-import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
-import net.damero.Kafka.Aspect.Components.DLQRouter;
-import net.damero.Kafka.Aspect.Components.EventUnwrapper;
-import net.damero.Kafka.Aspect.Components.HeaderUtils;
-import net.damero.Kafka.Aspect.Components.MetricsRecorder;
-import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
+import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -40,6 +35,7 @@ public class KafkaListenerAspect {
     private final MetricsRecorder metricsRecorder;
     private final CircuitBreakerWrapper circuitBreakerWrapper;
     private final RetrySched retrySched;
+    private final DLQExceptionRoutingManager dlqExceptionRoutingManager;
 
     // Per-topic rate limiting state
     private static class RateLimitState {
@@ -55,7 +51,8 @@ public class KafkaListenerAspect {
                                RetryOrchestrator retryOrchestrator,
                                MetricsRecorder metricsRecorder,
                                CircuitBreakerWrapper circuitBreakerWrapper,
-                               RetrySched retrySched) {
+                               RetrySched retrySched,
+                               DLQExceptionRoutingManager dlqExceptionRoutingManager) {
         this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
@@ -63,6 +60,7 @@ public class KafkaListenerAspect {
         this.metricsRecorder = metricsRecorder;
         this.circuitBreakerWrapper = circuitBreakerWrapper;
         this.retrySched = retrySched;
+        this.dlqExceptionRoutingManager = dlqExceptionRoutingManager;
     }
 
     /**
@@ -149,6 +147,7 @@ public class KafkaListenerAspect {
 
         } catch (Exception e) {
 
+
             if(!customKafkaListener.retryable()){
                 logger.info("retryable is false for topic: {} - sending directly to dlq", customKafkaListener.topic());
 
@@ -174,12 +173,29 @@ public class KafkaListenerAspect {
                 logger.debug("acknowledged message after exception for topic: {}", customKafkaListener.topic());
             }
 
-            // Check if exception is non-retryable, if true send to dlq
+            /*
+             * Check for conditional DLQ routing with skipRetry=true
+             * If match found and skipRetry=true, send to DLQ immediately without retry
+             */
+            if(customKafkaListener.dlqRoutes().length > 0){
+
+                boolean routedToDLQ = dlqExceptionRoutingManager.routeToDLQIfSkipRetry(
+                    customKafkaListener, kafkaTemplate, originalEvent, e, existingMetadata);
+
+                if(routedToDLQ) {
+                    // Message sent to conditional DLQ, stop processing
+                    metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
+                    return null;
+                }
+                // else: skipRetry=false or no matching route, continue with retry logic
+            }
+
             /*
              * USERS WILL PROVIDE IT IN THIS FORMAT
              *  nonRetryableExceptions = {IllegalArgumentException.class, ValidationException.class}
              *  This does not retry events with these exceptions
              */
+
             if (isNonRetryableException(e, customKafkaListener)) {
                 logger.info("exception {} is non-retryable for topic: {} - sending directly to dlq", 
                     e.getClass().getSimpleName(), customKafkaListener.topic());
@@ -204,19 +220,28 @@ public class KafkaListenerAspect {
             metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, processingStartTime);
 
             if (retryOrchestrator.hasReachedMaxAttempts(eventId, customKafkaListener.maxAttempts())) {
-                logger.info("max attempts reached ({}) for event in topic: {} - sending to dlq: {}", 
-                    currentAttempts, customKafkaListener.topic(), customKafkaListener.dlqTopic());
-                
-                dlqRouter.sendToDLQAfterMaxAttempts(
-                    kafkaTemplate,
-                    originalEvent,
-                    e,
-                    currentAttempts,
-                    existingMetadata,
-                    customKafkaListener
-                );
-                
-                retryOrchestrator.clearAttempts(eventId);
+                logger.info("max attempts reached ({}) for event in topic: {}",
+                    currentAttempts, customKafkaListener.topic());
+
+                // Check for conditional DLQ routing (skipRetry=false routes)
+                if(customKafkaListener.dlqRoutes().length > 0) {
+                    // This method handles routing to conditional DLQ or default DLQ as fallback
+                    // It also clears attempts internally
+                    dlqExceptionRoutingManager.routeToDLQAfterMaxAttempts(
+                        customKafkaListener, kafkaTemplate, originalEvent, e, eventId, currentAttempts, existingMetadata);
+                } else {
+                    // No conditional routing, send to default DLQ
+                    dlqRouter.sendToDLQAfterMaxAttempts(
+                        kafkaTemplate,
+                        originalEvent,
+                        e,
+                        currentAttempts,
+                        existingMetadata,
+                        customKafkaListener
+                    );
+                    retryOrchestrator.clearAttempts(eventId);
+                }
+
                 return null;
             }
 

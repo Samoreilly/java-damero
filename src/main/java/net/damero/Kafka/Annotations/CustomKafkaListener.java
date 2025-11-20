@@ -11,6 +11,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface CustomKafkaListener {
 
+
+
     String topic();
     String dlqTopic() default "";
     int maxAttempts() default 3;
@@ -21,6 +23,7 @@ public @interface CustomKafkaListener {
     boolean retryable() default true;
     String retryableTopic() default "retryable-topic";
     Class<? extends Throwable>[] nonRetryableExceptions() default {};
+    DlqExceptionRoutes[] dlqRoutes() default {};//where to send specific exceptions
 
     int messagesPerWindow() default 0;// amount of messages to process per window
     long messageWindow() default 0;//window duration in milliseconds
@@ -36,5 +39,5 @@ public @interface CustomKafkaListener {
 
     //Fibonacci limit
     int fibonacciLimit() default 15;
-
 }
+
