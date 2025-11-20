@@ -228,6 +228,8 @@ class CustomKafkaListenerIntegrationTest {
         @Autowired
         private EmbeddedKafkaBroker embeddedKafka;
 
+        @Autowired
+        private CustomKafkaAutoConfiguration customKafkaAutoConfiguration;
 
         @Bean
         public ProducerFactory<String, TestEvent> testEventProducerFactory(ObjectMapper kafkaObjectMapper) {

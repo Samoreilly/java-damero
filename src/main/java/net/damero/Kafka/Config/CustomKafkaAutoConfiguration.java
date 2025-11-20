@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
 import net.damero.Kafka.Aspect.Components.CircuitBreakerWrapper;
 import net.damero.Kafka.Aspect.Components.CaffeineCache;
@@ -35,7 +34,6 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.lang.Nullable;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
@@ -81,8 +79,6 @@ public class CustomKafkaAutoConfiguration {
         return new ReadFromDLQConsumer(dlqConsumerFactory, kafkaObjectMapper);
     }
 
-
-
     @Bean
     @ConditionalOnMissingBean
     public DLQRouter dlqRouter() {
@@ -126,9 +122,10 @@ public class CustomKafkaAutoConfiguration {
                                                     KafkaTemplate<?, ?> defaultKafkaTemplate,
                                                     RetryOrchestrator retryOrchestrator,
                                                     MetricsRecorder metricsRecorder,
-                                                    CircuitBreakerWrapper circuitBreakerWrapper) {
+                                                    CircuitBreakerWrapper circuitBreakerWrapper,
+                                                   RetrySched retrySched) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate, 
-                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper);
+                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper, retrySched);
     }
 
     /*

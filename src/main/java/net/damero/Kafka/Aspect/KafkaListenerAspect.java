@@ -6,8 +6,8 @@ import net.damero.Kafka.Aspect.Components.EventUnwrapper;
 import net.damero.Kafka.Aspect.Components.HeaderUtils;
 import net.damero.Kafka.Aspect.Components.MetricsRecorder;
 import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
-import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -40,6 +39,7 @@ public class KafkaListenerAspect {
     private final RetryOrchestrator retryOrchestrator;
     private final MetricsRecorder metricsRecorder;
     private final CircuitBreakerWrapper circuitBreakerWrapper;
+    private final RetrySched retrySched;
 
     // Per-topic rate limiting state
     private static class RateLimitState {
@@ -54,13 +54,15 @@ public class KafkaListenerAspect {
                                KafkaTemplate<?, ?> defaultKafkaTemplate,
                                RetryOrchestrator retryOrchestrator,
                                MetricsRecorder metricsRecorder,
-                               CircuitBreakerWrapper circuitBreakerWrapper) {
+                               CircuitBreakerWrapper circuitBreakerWrapper,
+                               RetrySched retrySched) {
         this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
         this.retryOrchestrator = retryOrchestrator;
         this.metricsRecorder = metricsRecorder;
         this.circuitBreakerWrapper = circuitBreakerWrapper;
+        this.retrySched = retrySched;
     }
 
     /**
@@ -80,7 +82,6 @@ public class KafkaListenerAspect {
         }
 
         logger.debug("aspect triggered for topic: {}", customKafkaListener.topic());
-        
         long processingStartTime = System.currentTimeMillis();
 
         Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
@@ -142,12 +143,30 @@ public class KafkaListenerAspect {
 
             // clear attempts on success
             retryOrchestrator.clearAttempts(eventId);
+            retrySched.clearFibonacciState(event);
 
             return result;
 
         } catch (Exception e) {
-            
-            logger.debug("exception caught during processing for topic: {}: {}", 
+
+            if(!customKafkaListener.retryable()){
+                logger.info("retryable is false for topic: {} - sending directly to dlq", customKafkaListener.topic());
+
+                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
+
+                dlqRouter.sendToDLQAfterMaxAttempts(
+                        kafkaTemplate,
+                        originalEvent,
+                        e,
+                        1,
+                        existingMetadata,
+                        customKafkaListener
+                );
+
+                return null;  //retryable is false - should not retry
+            }
+
+            logger.debug("exception caught during processing for topic: {}: {}",
                 customKafkaListener.topic(), e.getMessage());
             
             if (acknowledgment != null) {
@@ -159,6 +178,7 @@ public class KafkaListenerAspect {
             /*
              * USERS WILL PROVIDE IT IN THIS FORMAT
              *  nonRetryableExceptions = {IllegalArgumentException.class, ValidationException.class}
+             *  This does not retry events with these exceptions
              */
             if (isNonRetryableException(e, customKafkaListener)) {
                 logger.info("exception {} is non-retryable for topic: {} - sending directly to dlq", 
