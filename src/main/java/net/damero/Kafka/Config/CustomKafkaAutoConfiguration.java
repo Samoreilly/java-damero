@@ -115,6 +115,18 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public DeduplicationProperties deduplicationProperties() {
+        return new DeduplicationProperties();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DuplicationManager duplicationManager(DeduplicationProperties deduplicationProperties) {
+        return new DuplicationManager(deduplicationProperties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public CircuitBreakerWrapper circuitBreakerWrapper(@Nullable CircuitBreakerService circuitBreakerService) {
         return new CircuitBreakerWrapper(circuitBreakerService);
     }

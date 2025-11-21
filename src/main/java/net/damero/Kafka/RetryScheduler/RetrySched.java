@@ -41,6 +41,7 @@ public class RetrySched {
         public synchronized long getNext() {
             // If we haven't filled the array yet, calculate next value
             if (nextIndex <= maxIndex) {
+                //dp[i] = dp[i-1] + dp[i-2]
                 sequence[nextIndex] = sequence[nextIndex - 1] + sequence[nextIndex - 2];
                 return sequence[nextIndex++];
             }

@@ -22,11 +22,13 @@ public class OrderProcessingService {
         dlqTopic = "test-dlq",
         maxAttempts = 3,
         delay = 1000,
-        delayMethod = DelayMethod.LINEAR,
+        delayMethod = DelayMethod.FIBONACCI,
+        fibonacciLimit = 15,
         nonRetryableExceptions = {
             IllegalArgumentException.class,
             ValidationException.class
         },
+         deDuplication = true,
         messagesPerWindow = 200,
         messageWindow = 1000
     )

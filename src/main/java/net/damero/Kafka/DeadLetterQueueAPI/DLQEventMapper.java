@@ -1,0 +1,147 @@
+package net.damero.Kafka.DeadLetterQueueAPI;
+
+import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.CustomObject.EventWrapper;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Converts EventWrapper to user-friendly DLQEventSummary
+ */
+public class DLQEventMapper {
+    
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    
+    public static DLQEventSummary toSummary(EventWrapper<?> wrapper) {
+        if (wrapper == null) return null;
+        
+        EventMetadata metadata = wrapper.getMetadata();
+        if (metadata == null) return null;
+        
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime firstFailure = metadata.getFirstFailureDateTime();
+        LocalDateTime lastFailure = metadata.getLastFailureDateTime();
+        
+        // Calculate durations
+        Duration timeInDlq = lastFailure != null ? Duration.between(lastFailure, now) : null;
+        Duration failureDuration = (firstFailure != null && lastFailure != null) 
+            ? Duration.between(firstFailure, lastFailure) 
+            : null;
+        
+        // Build exception info
+        DLQEventSummary.ExceptionInfo firstEx = buildExceptionInfo(
+            metadata.getFirstFailureException(), 
+            firstFailure
+        );
+        
+        DLQEventSummary.ExceptionInfo lastEx = buildExceptionInfo(
+            metadata.getLastFailureException(), 
+            lastFailure
+        );
+        
+        boolean sameExceptionType = firstEx != null && lastEx != null 
+            && firstEx.getType().equals(lastEx.getType());
+        
+        // Determine status
+        String status = determineStatus(metadata);
+        
+        // Build retry config
+        DLQEventSummary.RetryConfig retryConfig = DLQEventSummary.RetryConfig.builder()
+            .delayMs(metadata.getDelayMs())
+            .delayMethod(metadata.getDelayMethod())
+            .maxAttempts(metadata.getMaxAttempts())
+            .build();
+        
+        // Get event ID if available
+        String eventId = extractEventId(wrapper.getEvent());
+        
+        return DLQEventSummary.builder()
+            .eventId(eventId)
+            .eventType(wrapper.getEvent() != null ? wrapper.getEvent().getClass().getSimpleName() : "Unknown")
+            .status(status)
+            .severity(DLQEventSummary.calculateSeverity(
+                metadata.getAttempts(), 
+                metadata.getMaxAttempts(), 
+                metadata.getLastFailureException()
+            ))
+            .firstFailureTime(firstFailure != null ? firstFailure.format(FORMATTER) : null)
+            .lastFailureTime(lastFailure != null ? lastFailure.format(FORMATTER) : null)
+            .timeInDlq(DLQEventSummary.formatDuration(timeInDlq))
+            .failureDuration(DLQEventSummary.formatDuration(failureDuration))
+            .totalAttempts(metadata.getAttempts())
+            .maxAttemptsConfigured(metadata.getMaxAttempts())
+            .maxAttemptsReached(metadata.getAttempts() >= metadata.getMaxAttempts())
+            .originalTopic(metadata.getOriginalTopic())
+            .dlqTopic(metadata.getDlqTopic())
+            .firstException(firstEx)
+            .lastException(lastEx)
+            .sameExceptionType(sameExceptionType)
+            .retryConfig(retryConfig)
+            .originalEvent(wrapper.getEvent())
+            .build();
+    }
+    
+    private static DLQEventSummary.ExceptionInfo buildExceptionInfo(Exception ex, LocalDateTime timestamp) {
+        if (ex == null) return null;
+        
+        return DLQEventSummary.ExceptionInfo.builder()
+            .type(ex.getClass().getSimpleName())
+            .message(ex.getMessage())
+            .rootCause(DLQEventSummary.getRootCause(ex))
+            .timestamp(timestamp != null ? timestamp.format(FORMATTER) : null)
+            .stackTracePreview(DLQEventSummary.getStackTracePreview(ex))
+            .build();
+    }
+    
+    private static String determineStatus(EventMetadata metadata) {
+        if (metadata.getAttempts() >= metadata.getMaxAttempts()) {
+            return "FAILED_MAX_RETRIES";
+        }
+        if (metadata.getAttempts() == 1) {
+            return "NON_RETRYABLE_EXCEPTION";
+        }
+        return "IN_DLQ";
+    }
+    
+    private static String extractEventId(Object event) {
+        if (event == null) return null;
+        
+        // Try to extract ID using reflection
+        try {
+            // Try common ID field names
+            String[] idFieldNames = {"id", "orderId", "eventId", "messageId", "transactionId"};
+            
+            for (String fieldName : idFieldNames) {
+                try {
+                    var field = event.getClass().getDeclaredField(fieldName);
+                    field.setAccessible(true);
+                    Object value = field.get(event);
+                    if (value != null) {
+                        return value.toString();
+                    }
+                } catch (NoSuchFieldException ignored) {
+                    // Try next field name
+                }
+            }
+            
+            // Try getId() method
+            try {
+                var method = event.getClass().getMethod("getId");
+                Object value = method.invoke(event);
+                if (value != null) {
+                    return value.toString();
+                }
+            } catch (NoSuchMethodException ignored) {
+                // No getId method
+            }
+            
+        } catch (Exception ignored) {
+            // Reflection failed, return null
+        }
+        
+        return null;
+    }
+}
+

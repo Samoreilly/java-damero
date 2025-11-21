@@ -1,6 +1,41 @@
 # Kafka Example Application
 
-This is a standalone Spring Boot application to test the `kafka-damero` library.
+This is a standalone Spring Boot application demonstrating how easy it is to use the `kafka-damero` library.
+
+## 🚀 Quick Start - Minimal Dependencies!
+
+**That's it!** The library brings in all its dependencies automatically. You only need:
+
+```xml
+<dependencies>
+    <!-- Your Spring Boot app basics -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework.kafka</groupId>
+        <artifactId>spring-kafka</artifactId>
+    </dependency>
+    
+    <!-- The kafka-damero library - brings everything it needs! -->
+    <dependency>
+        <groupId>java.damero</groupId>
+        <artifactId>kafka-damero</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+```
+
+**No need to manually add:**
+- ❌ Caffeine cache
+- ❌ Resilience4j circuit breaker  
+- ❌ Micrometer metrics
+- ❌ Jackson JSON libraries
+- ❌ AOP libraries
+
+The library handles all of that for you! 🎉
 
 ## Prerequisites
 
