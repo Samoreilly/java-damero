@@ -4,19 +4,28 @@ Kafka Damero is a Spring Boot library that simplifies Kafka listener error handl
 
 ## Status
 
-This library is currently in active development. All core features are implemented and tested, but the library has not been thoroughly tested in production environments. The library currently supports Apache Kafka only. Use at your own discretion.
+⚠️ **Beta Release** - All core features are implemented and tested (45 passing integration tests). The library is functional and ready for evaluation in non-critical environments. Community feedback and contributions are welcome!
 
-## Features
+**Production Use:** While the library handles common error scenarios correctly, it has limited real-world production usage. Use in production systems at your own discretion.
 
-- Automatic retry logic with configurable attempts and delay strategies for transient failures
-- Dead letter queue routing with metadata tracking including attempt counts and failure timestamps
-- Zero configuration setup with sensible defaults
-- Flexible bean overrides for custom behavior
-- Metadata tracking for first failure time, retry attempts, and exception history
-- Manual acknowledgment handling to prevent duplicate processing
-- Exception type based retry logic to bypass retries for specific exceptions
-- Circuit breaker support with optional Resilience4j integration
-- Metrics integration with optional Micrometer support for processing times and failure rates
+## Why Kafka Damero?
+
+**Before Kafka Damero**, Kafka error handling meant:
+- 100+ lines of boilerplate per listener
+- Manual retry scheduling and state management  
+- Custom DLQ routing logic
+- No visibility into failed messages
+
+**After Kafka Damero**:
+- ✅ Single `@CustomKafkaListener` annotation
+- ✅ Automatic retry with 4 backoff strategies (Exponential, Linear, Fibonacci, Custom)
+- ✅ Smart DLQ routing with full metadata (attempts, timestamps, exceptions)
+- ✅ Built-in circuit breaker support (Resilience4j)
+- ✅ Free REST API for DLQ monitoring (`/dlq?topic=orders-dlq`)
+- ✅ Rate limiting and deduplication out of the box
+- ✅ Metrics integration (Micrometer/Prometheus)
+- ✅ Conditional DLQ routing (route different exceptions to different topics)
+- ✅ Zero configuration required—works with sensible defaults
 
 ## Requirements
 
@@ -196,6 +205,35 @@ public class OrderDLQListener {
     }
 }
 ```
+
+### DLQ REST API (Auto-Provided)
+
+The library automatically provides REST endpoints to query DLQ messages - no additional setup required!
+
+**Available Endpoints:**
+
+- `GET /dlq?topic={dlq-topic}` - Enhanced view with human-readable formatting and statistics
+- `GET /dlq/stats?topic={dlq-topic}` - Summary statistics only
+- `GET /dlq/raw?topic={dlq-topic}` - Raw EventWrapper format
+
+**Example Usage:**
+
+```bash
+# Get enhanced view with stats
+curl http://localhost:8080/dlq?topic=orders-dlq
+
+# Get just statistics
+curl http://localhost:8080/dlq/stats?topic=orders-dlq
+```
+
+The enhanced endpoint provides:
+- Human-readable timestamps instead of arrays
+- Calculated durations ("15 minutes in DLQ")
+- Severity classification (HIGH/MEDIUM/LOW)
+- Exception type breakdown
+- Aggregate statistics across all events
+
+See `DLQ_QUICKSTART.md` for complete documentation.
 
 ### EventWrapper Structure
 

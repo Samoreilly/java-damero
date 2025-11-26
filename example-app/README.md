@@ -147,6 +147,48 @@ curl -X POST http://localhost:8080/api/test/order/custom \
 
 ## Monitoring DLQ
 
+### Option 1: REST API (Built-in, Zero Setup) ⭐
+
+The kafka-damero library **automatically provides** REST endpoints to query DLQ messages:
+
+```bash
+# Enhanced view with human-readable formatting
+curl http://localhost:8080/dlq?topic=orders-dlq
+
+# Just statistics
+curl http://localhost:8080/dlq/stats?topic=orders-dlq
+
+# Raw format
+curl http://localhost:8080/dlq/raw?topic=orders-dlq
+```
+
+**No setup required!** These endpoints are automatically available when you include the library.
+
+**Example Response:**
+```json
+{
+  "summary": {
+    "totalEvents": 3,
+    "highSeverityCount": 2,
+    "averageAttempts": 2.3,
+    "exceptionTypeBreakdown": {
+      "RuntimeException": 2,
+      "IllegalArgumentException": 1
+    }
+  },
+  "events": [...]
+}
+```
+
+### Option 2: DLQMonitor Listener (Optional, for Real-time Alerts)
+
+The example-app includes a `DLQMonitor` service that demonstrates how to create an **optional** real-time listener:
+
+**⚠️ This is NOT required!** It's just an example showing how to:
+- React to failures in real-time (e.g., send Slack alerts)
+- Log failures with custom formatting
+- Trigger automated workflows
+
 The `DLQMonitor` service automatically logs all messages that end up in the DLQ:
 
 ```

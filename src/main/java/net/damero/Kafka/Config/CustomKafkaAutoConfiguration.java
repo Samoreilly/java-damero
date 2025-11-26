@@ -10,6 +10,7 @@ import net.damero.Kafka.Aspect.KafkaListenerAspect;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
+import net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ.ReplayDLQ;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
 import org.springframework.context.ApplicationContext;
 import net.damero.Kafka.Resilience.CircuitBreakerService;
@@ -90,9 +91,17 @@ public class CustomKafkaAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public ReplayDLQ replayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
+                               KafkaTemplate<String, Object> kafkaTemplate,
+                               ObjectMapper kafkaObjectMapper) {
+        return new ReplayDLQ(dlqConsumerFactory, kafkaTemplate, kafkaObjectMapper);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(DLQController.class)
-    public DLQController dlqController(ReadFromDLQConsumer readFromDLQConsumer) {
-        return new DLQController(readFromDLQConsumer);
+    public DLQController dlqController(ReadFromDLQConsumer readFromDLQConsumer, ReplayDLQ replayDLQ) {
+        return new DLQController(readFromDLQConsumer, replayDLQ);
     }
 
     @Bean
@@ -400,3 +409,4 @@ public class CustomKafkaAutoConfiguration {
         return factory;
     }
 }
+

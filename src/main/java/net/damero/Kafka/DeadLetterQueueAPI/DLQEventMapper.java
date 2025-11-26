@@ -18,8 +18,19 @@ public class DLQEventMapper {
         if (wrapper == null) return null;
         
         EventMetadata metadata = wrapper.getMetadata();
-        if (metadata == null) return null;
-        
+
+        // If metadata is missing (tests send a bare wrapper), return a minimal summary
+        if (metadata == null) {
+            String eventId = extractEventId(wrapper.getEvent());
+            return DLQEventSummary.builder()
+                    .eventId(eventId)
+                    .eventType(wrapper.getEvent() != null ? wrapper.getEvent().getClass().getSimpleName() : "Unknown")
+                    .status("IN_DLQ")
+                    .severity(DLQEventSummary.calculateSeverity(1, 3, null))
+                    .originalEvent(wrapper.getEvent())
+                    .build();
+        }
+
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime firstFailure = metadata.getFirstFailureDateTime();
         LocalDateTime lastFailure = metadata.getLastFailureDateTime();
@@ -96,6 +107,7 @@ public class DLQEventMapper {
     }
     
     private static String determineStatus(EventMetadata metadata) {
+        if (metadata == null) return "IN_DLQ";
         if (metadata.getAttempts() >= metadata.getMaxAttempts()) {
             return "FAILED_MAX_RETRIES";
         }
@@ -144,4 +156,3 @@ public class DLQEventMapper {
         return null;
     }
 }
-

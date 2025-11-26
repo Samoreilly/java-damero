@@ -28,7 +28,7 @@ public class OrderProcessingService {
             IllegalArgumentException.class,
             ValidationException.class
         },
-         deDuplication = true,
+        deDuplication = true,
         messagesPerWindow = 200,
         messageWindow = 1000
     )
