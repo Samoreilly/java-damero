@@ -13,6 +13,17 @@ target/
 .springBeans
 .sts4-cache
 
+app.log
+add-test-messages.sh
+check-dlq-status.sh
+cleanup-dlq.sh
+emergency-stop.sh
+full-dlq-test.sh
+test-auto-delete.sh
+test-rate-limiting.sh
+
+
+
 application.properties
 
 ### IntelliJ IDEA ###

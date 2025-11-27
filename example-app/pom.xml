@@ -40,13 +40,49 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		
-		<!-- Kafka Damero Library - This brings in all required dependencies automatically! -->
+		<!-- Kafka Damero Library -->
 		<dependency>
 			<groupId>java.damero</groupId>
 			<artifactId>kafka-damero</artifactId>
 			<version>0.1.0-SNAPSHOT</version>
 		</dependency>
-		
+
+		<!-- Required runtime dependencies for kafka-damero library -->
+		<!-- These are marked as 'provided' in the library, so you need to include them -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-core</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-circuitbreaker</artifactId>
+			<version>2.1.0</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+			<version>3.1.8</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.reflections</groupId>
+			<artifactId>reflections</artifactId>
+			<version>0.10.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.17.0</version>
+		</dependency>
+
 		<!-- Lombok - only needed for your own code -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>

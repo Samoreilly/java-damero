@@ -123,8 +123,8 @@ class DLQReplayIntegrationTest {
         System.out.println("DEBUG: Current listener state - Topic filter: " + replayTestListener.topicToListenFor +
             ", Expected count: " + replayTestListener.latch.getCount());
 
-        // Then: Replay messages from DLQ
-        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-1");
+        // Then: Replay messages from DLQ (force from beginning for testing)
+        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-1", true);
 
         System.out.println("DEBUG: Replay completed - Success: " + result.getSuccessCount() +
             ", Failures: " + result.getFailureCount());
@@ -157,7 +157,7 @@ class DLQReplayIntegrationTest {
     @Test
     void testReplayMessages_HandlesEmptyDLQ() {
         // When: Replay from empty DLQ
-        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-2");
+        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-2", true);
 
         // Then: Should complete successfully with no messages
         assertNotNull(result, "Replay result should not be null");
@@ -215,8 +215,8 @@ class DLQReplayIntegrationTest {
         // Wait for messages to be fully committed
         Thread.sleep(2000);
 
-        // When: Replay messages
-        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-3");
+        // When: Replay messages (force from beginning for testing)
+        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-3", true);
 
         // Then: Should replay valid messages and track errors
         assertNotNull(result, "Replay result should not be null");
@@ -248,7 +248,7 @@ class DLQReplayIntegrationTest {
         // Wait for message to be fully committed
         Thread.sleep(2000);
 
-        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-4");
+        ReplayDLQ.ReplayResult result = replayDLQ.replayMessages("replay-dlq-topic-4", true);
 
         // Then: Should fail to replay message without original topic
         assertNotNull(result, "Replay result should not be null");
@@ -280,8 +280,8 @@ class DLQReplayIntegrationTest {
 
         System.out.println("DEBUG: About to call controller replay endpoint for replay-dlq-topic-5");
 
-        // When: Call controller endpoint
-        dlqController.replayDLQ("replay-dlq-topic-5");
+        // When: Call controller endpoint with forceReplay=true and skipValidation=false for testing
+        dlqController.replayDLQEndpoint("replay-dlq-topic-5", true, false);
 
         // Wait a bit for replay to complete
         Thread.sleep(1000);

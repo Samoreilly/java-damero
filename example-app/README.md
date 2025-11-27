@@ -1,260 +1,359 @@
-# Kafka Example Application
+# Example Application - DLQ Replay Testing
 
-This is a standalone Spring Boot application demonstrating how easy it is to use the `kafka-damero` library.
+## ⚠️ CRITICAL: Infinite Loop Happening Right Now?
 
-## 🚀 Quick Start - Minimal Dependencies!
+If you see logs like this repeating forever:
 
-**That's it!** The library brings in all its dependencies automatically. You only need:
-
-```xml
-<dependencies>
-    <!-- Your Spring Boot app basics -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter</artifactId>
-    </dependency>
-    
-    <dependency>
-        <groupId>org.springframework.kafka</groupId>
-        <artifactId>spring-kafka</artifactId>
-    </dependency>
-    
-    <!-- The kafka-damero library - brings everything it needs! -->
-    <dependency>
-        <groupId>java.damero</groupId>
-        <artifactId>kafka-damero</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
-    </dependency>
-</dependencies>
+```
+sending to dlq topic: test-dlq
+Polled 1 records from DLQ
+Committed offsets for batch
+processing order: order-001
+exception: order amount cannot be null or negative
+sending to dlq topic: test-dlq
 ```
 
-**No need to manually add:**
-- ❌ Caffeine cache
-- ❌ Resilience4j circuit breaker  
-- ❌ Micrometer metrics
-- ❌ Jackson JSON libraries
-- ❌ AOP libraries
+**You have a different problem!** The replay is working, but:
 
-The library handles all of that for you! 🎉
+1. Replay sends messages from DLQ → `orders` topic
+2. Orders consumer processes them → **FAILS** (bad data)
+3. Failed messages sent BACK to DLQ
+4. Replay picks them up again → **INFINITE CYCLE!**
 
-## Prerequisites
+### STOP IT NOW:
 
-1. **Java 21+**
-2. **Maven 3.6+**
-3. **Kafka running** (localhost:9092) or Docker:
+```bash
+# 1. STOP your Spring Boot application (Ctrl+C)
+# 2. Run the emergency stop script:
+./emergency-stop.sh
+# 3. Restart your application
+```
+
+**Then read "How to Avoid the Infinite Replay Cycle" below!**
+
+---
+
+## Current Situation
+
+If you just installed the fixed library and are seeing 40,000+ messages being replayed, this is EXPECTED behavior! Here's why:
+
+### What Happened
+
+1. **The Original Bug** created ~40,000 duplicate messages in your `test-dlq` topic
+2. Those messages are **real and stored on disk** in Kafka
+3. **The Fix** prevents infinite looping, but it will still replay all existing messages once
+4. You're seeing all 40,000+ messages being replayed (correctly, without looping)
+
+### What You Need to Do
+
+**Clean up the DLQ topic BEFORE testing:**
+
+```bash
+# Run the cleanup script
+./cleanup-dlq.sh
+```
+
+This will delete and recreate the `test-dlq` topic, giving you a fresh start.
+
+## Scripts Available
+
+### 1. `cleanup-dlq.sh` - Clean Up DLQ Topic
+
+Deletes and recreates the `test-dlq` topic to remove all duplicate messages.
+
+```bash
+./cleanup-dlq.sh
+```
+
+**Use this when:**
+- You've just installed the fix and want a clean slate
+- Your DLQ has accumulated too many duplicate messages
+- You want to test the replay functionality from scratch
+
+### 2. `check-dlq-status.sh` - Check DLQ Status
+
+Shows you how many messages are in the DLQ and consumer group offsets.
+
+```bash
+./check-dlq-status.sh
+```
+
+**Use this to:**
+- See how many messages are actually in the DLQ
+- Check if the replay consumer group has committed offsets
+- Verify cleanup was successful
+
+### 3. `run-and-test.sh` - Run Example Application
+
+Starts the example application.
+
+```bash
+./run-and-test.sh
+```
+
+## Testing the Fixed Replay Functionality
+
+### After Cleanup
+
+1. **Clean up first:**
    ```bash
-   docker run -d --name kafka -p 9092:9092 apache/kafka:latest
+   ./cleanup-dlq.sh
    ```
 
-## Setup
+2. **Start the application:**
+   ```bash
+   ./run-and-test.sh
+   ```
 
-### 1. Build the Library First
+3. **Trigger some failures** to get messages in the DLQ:
+   ```bash
+   # Send a message that will fail and go to DLQ
+   curl -X POST http://localhost:8080/your-endpoint-that-fails
+   ```
 
-From the root directory (`java-damero`):
+4. **Check DLQ status:**
+   ```bash
+   ./check-dlq-status.sh
+   ```
+
+5. **Replay messages (first time - will replay all):**
+   ```bash
+   curl -X POST http://localhost:8080/dlq/replay/test-dlq
+   ```
+
+6. **Replay again (should replay 0 messages - already processed):**
+   ```bash
+   curl -X POST http://localhost:8080/dlq/replay/test-dlq
+   ```
+   
+   You should see: `"Replay completed. Success: 0, Failures: 0"`
+
+7. **Force replay (will replay all again - creates duplicates!):**
+   ```bash
+   curl -X POST "http://localhost:8080/dlq/replay/test-dlq?forceReplay=true"
+   ```
+
+## Expected Behavior
+
+### ✅ Correct Behavior (After Fix)
+
+```
+First replay:
+  Replayed 8 messages successfully
+  
+Second replay (same endpoint call):
+  Replayed 0 messages successfully  ← Already processed!
+  
+Force replay:
+  Replayed 8 messages successfully  ← Reprocessed all (creates duplicates)
+```
+
+### ❌ Old Broken Behavior (Before Fix)
+
+```
+Every replay call:
+  Polled 1 records from DLQ
+  Committed offsets for batch
+  Polled 1 records from DLQ
+  ... (repeats thousands of times)
+  Replayed 10600 messages successfully  ← From only 8 messages!
+```
+
+## API Endpoints
+
+### GET /dlq?topic=test-dlq
+View all messages in the DLQ
 
 ```bash
-mvn clean install
+curl http://localhost:8080/dlq?topic=test-dlq
 ```
 
-This installs the `kafka-damero` library to your local Maven repository.
-
-### 2. Run the Example Application
-
-From the `example-app` directory:
+### POST /dlq/replay/{topic}
+Replay unprocessed messages (respects committed offsets, validates messages normally)
 
 ```bash
-cd example-app
-mvn spring-boot:run
+curl -X POST http://localhost:8080/dlq/replay/test-dlq
 ```
 
-The application will start on `http://localhost:8080`
+**Use this when:** You've fixed the underlying issue (code or data) and messages will now process successfully.
 
-## Testing Non-Retryable Exceptions
-
-### Test 1: IllegalArgumentException (Non-Retryable)
+### POST /dlq/replay/{topic}?forceReplay=true
+Force replay ALL messages from beginning (⚠️ creates duplicates!)
 
 ```bash
-curl -X POST http://localhost:8080/api/test/order/non-retryable/illegal-argument
+curl -X POST "http://localhost:8080/dlq/replay/test-dlq?forceReplay=true"
 ```
 
-**Expected Behavior:**
-- Order sent with negative amount
-- `IllegalArgumentException` thrown
-- Message goes directly to DLQ with `attempts = 1`
-- Check logs: `"exception IllegalArgumentException is non-retryable"`
+**Use this when:** You want to replay already-processed messages (testing only).
 
-### Test 2: ValidationException (Non-Retryable)
+### POST /dlq/replay/{topic}?skipValidation=true
+Replay messages and skip validation (⚠️ testing only!)
 
 ```bash
-curl -X POST http://localhost:8080/api/test/order/non-retryable/validation
+curl -X POST "http://localhost:8080/dlq/replay/test-dlq?skipValidation=true"
 ```
 
-**Expected Behavior:**
-- Order sent without customer ID
-- `ValidationException` thrown
-- Message goes directly to DLQ with `attempts = 1`
+**Use this when:** You want to test the replay functionality with invalid data without fixing it first.
 
-## Testing Retryable Exceptions
-
-### Test 3: PaymentException (Retryable)
+### POST /dlq/replay/{topic}?forceReplay=true&skipValidation=true
+Force replay from beginning AND skip validation (⚠️ testing only!)
 
 ```bash
-curl -X POST http://localhost:8080/api/test/order/retryable/payment
+curl -X POST "http://localhost:8080/dlq/replay/test-dlq?forceReplay=true&skipValidation=true"
 ```
 
-**Expected Behavior:**
-- Order sent without payment method
-- `PaymentException` thrown (not in nonRetryableExceptions)
-- Message retried 3 times
-- After 3 attempts, goes to DLQ with `attempts = 3`
-- Check logs for retry attempts
+**Use this when:** You want to reprocess all messages including already-replayed ones, skipping validation.
 
-### Test 4: RuntimeException (Retryable)
+## How to Test DLQ Replay (The Right Way!)
+
+You're absolutely right - if messages are in the DLQ because they failed validation, replaying them will just cause them to fail again! Here's how to properly test:
+
+### Solution 1: Use skipValidation Mode (For Testing Only!)
+
+The replay endpoint now supports a `skipValidation` parameter that adds a special header to replayed messages, telling your consumer to skip validation:
 
 ```bash
-curl -X POST http://localhost:8080/api/test/order/retryable/runtime
+# Replay messages and skip validation (for testing with bad data)
+curl -X POST "http://localhost:8080/dlq/replay/test-dlq?skipValidation=true"
 ```
 
-**Expected Behavior:**
-- Order sent with status "FAIL"
-- `RuntimeException` thrown
-- Message retried 3 times before going to DLQ
+When `skipValidation=true`:
+- ✅ Replayed messages get an `X-Replay-Mode` header
+- ✅ Your consumer sees this header and skips validation
+- ✅ Messages are "successfully processed" (logged but not validated)
+- ✅ No infinite loop!
 
-## Testing Success Case
+**⚠️ WARNING**: This is for testing/demo only! In production, you should fix the data or code before replaying.
 
-```bash
-curl -X POST http://localhost:8080/api/test/order/success
-```
+### Solution 2: Fix the Data Before Replaying (Production Approach)
 
-**Expected Behavior:**
-- Valid order processed successfully
-- No exceptions thrown
-- Message acknowledged
+1. **View DLQ messages:**
+   ```bash
+   curl http://localhost:8080/dlq?topic=test-dlq
+   ```
 
-## Testing Custom Order
+2. **Identify which ones can be fixed:**
+   - order-001: amount = -100 → Can you fix the order in your database?
+   - order-002: customerId = null → Can you look up the customer?
+   - order-003: paymentMethod = null → Can you contact the customer?
 
-```bash
-curl -X POST http://localhost:8080/api/test/order/custom \
-  -H "Content-Type: application/json" \
-  -d '{
-    "orderId": "order-999",
-    "customerId": "customer-123",
-    "amount": 150.0,
-    "paymentMethod": "paypal",
-    "status": "PENDING"
-  }'
-```
+3. **Fix the underlying data in your database**
 
-## Monitoring DLQ
+4. **Then replay:**
+   ```bash
+   curl -X POST http://localhost:8080/dlq/replay/test-dlq
+   ```
 
-### Option 1: REST API (Built-in, Zero Setup) ⭐
+### Solution 3: Fix Your Code First (If It's a Code Bug)
 
-The kafka-damero library **automatically provides** REST endpoints to query DLQ messages:
+If messages failed because of a bug in your processing logic:
 
-```bash
-# Enhanced view with human-readable formatting
-curl http://localhost:8080/dlq?topic=orders-dlq
+1. **Fix the bug** in `OrderProcessingService`
+2. **Rebuild and restart** the application
+3. **Replay messages:**
+   ```bash
+   curl -X POST http://localhost:8080/dlq/replay/test-dlq
+   ```
+   
+Now they'll process successfully!
 
-# Just statistics
-curl http://localhost:8080/dlq/stats?topic=orders-dlq
+### Solution 4: Don't Replay Unfixable Messages
 
-# Raw format
-curl http://localhost:8080/dlq/raw?topic=orders-dlq
-```
+Some messages are permanently invalid and should never be replayed:
+- Negative amounts (data corruption)
+- Missing required fields that can't be recovered
 
-**No setup required!** These endpoints are automatically available when you include the library.
+For these:
+1. **Archive them** (query the DLQ API and save to a file)
+2. **Clean up the DLQ:** `./cleanup-dlq.sh`
+3. **Move on** - don't try to replay them
 
-**Example Response:**
-```json
-{
-  "summary": {
-    "totalEvents": 3,
-    "highSeverityCount": 2,
-    "averageAttempts": 2.3,
-    "exceptionTypeBreakdown": {
-      "RuntimeException": 2,
-      "IllegalArgumentException": 1
-    }
-  },
-  "events": [...]
-}
-```
+## How to Avoid the Infinite Replay Cycle
 
-### Option 2: DLQMonitor Listener (Optional, for Real-time Alerts)
+### The Problem
 
-The example-app includes a `DLQMonitor` service that demonstrates how to create an **optional** real-time listener:
-
-**⚠️ This is NOT required!** It's just an example showing how to:
-- React to failures in real-time (e.g., send Slack alerts)
-- Log failures with custom formatting
-- Trigger automated workflows
-
-The `DLQMonitor` service automatically logs all messages that end up in the DLQ:
+When you replay messages from the DLQ, they go back to the original topic. If those messages **still fail processing**, they'll be sent back to the DLQ, and replay will pick them up again!
 
 ```
-=== DLQ Message Received ===
-exception: IllegalArgumentException
-attempts: 1
-original topic: orders
-dlq topic: orders-dlq
-...
-===========================
+DLQ → Replay → orders topic → Processing FAILS → DLQ → Replay → ... (INFINITE!)
 ```
 
-## Checking Kafka Topics
+### The Solution
 
-### List Topics
-```bash
-kafka-topics.sh --bootstrap-server localhost:9092 --list
-```
+**Option 1: Fix the Data Before Replaying**
 
-### Consume from Main Topic
-```bash
-kafka-console-consumer.sh --bootstrap-server localhost:9092 \
-  --topic orders \
-  --from-beginning
-```
+Don't replay messages with unfixable errors! Examples of unfixable errors:
+- ❌ `order-001`: amount = -100 (negative amount is always invalid)
+- ❌ `order-002`: customerId = null (required field missing)
+- ❌ `order-003`: paymentMethod = null (required field missing)
 
-### Consume from DLQ Topic
-```bash
-kafka-console-consumer.sh --bootstrap-server localhost:9092 \
-  --topic orders-dlq \
-  --from-beginning \
-  --property print.key=true \
-  --property print.value=true
-```
+**Only replay messages that can succeed!**
 
-## Configuration
+**Option 2: Fix Your Code First**
 
-The library is configured in `OrderProcessingService.java`:
+If messages are failing due to a bug in your code:
+1. Fix the bug in your application
+2. Restart the application  
+3. THEN call the replay endpoint
 
+**Option 3: Mark Errors as Non-Retryable**
+
+For data validation errors (like negative amounts), make sure they're configured as **non-retryable** so they don't get retried forever.
+
+In your code:
 ```java
 @CustomKafkaListener(
-    topic = "orders",
-    dlqTopic = "orders-dlq",
+    topics = "orders",
+    groupId = "orders-consumer",
     maxAttempts = 3,
-    delay = 1000,
-    delayMethod = DelayMethod.LINEAR,
     nonRetryableExceptions = {
-        IllegalArgumentException.class,
-        ValidationException.class
+        IllegalArgumentException.class,  // ✅ Don't retry validation errors
+        ValidationException.class         // ✅ Don't retry validation errors
     }
 )
 ```
 
-## Understanding the Results
+**Option 4: Manually Clean DLQ (Remove Bad Messages)**
 
-- **attempts = 1**: Exception was non-retryable, went directly to DLQ
-- **attempts = 3**: Exception was retryable, exhausted retries before going to DLQ
-- **No DLQ message**: Order processed successfully
+If you have specific bad messages in the DLQ that should never be replayed:
+1. Use `GET /dlq?topic=test-dlq` to view them
+2. Identify the unfixable ones
+3. Clean up the DLQ: `./cleanup-dlq.sh`
+4. Only send valid test data
 
 ## Troubleshooting
 
-1. **Kafka not running**: Make sure Kafka is running on localhost:9092
-2. **Library not found**: Run `mvn install` from the root directory first
-3. **Topics not created**: Kafka will auto-create topics, or create them manually:
-   ```bash
-   kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders
-   kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders-dlq
-   ```
+### Problem: Infinite loop - messages keep going DLQ → orders → DLQ
+
+**Cause:** Your test messages have unfixable errors (negative amounts, null required fields, etc.)
+
+**Solution:** 
+1. STOP your application (Ctrl+C)
+2. Run `./emergency-stop.sh`
+3. Fix your test data or code
+4. Restart and test with valid messages
+
+### Problem: Still seeing 40,000+ messages being replayed
+
+**Solution:** You haven't cleaned up the DLQ yet. Run `./cleanup-dlq.sh`
+
+### Problem: Replay returns 0 messages but I know there are messages in DLQ
+
+**Reason:** The replay consumer group has already processed those messages.
+
+**Solution:** Either:
+- Use `forceReplay=true` to replay anyway
+- OR delete the consumer group: `kafka-consumer-groups --bootstrap-server localhost:9092 --delete --group dlq-replay-test-dlq`
+
+### Problem: How do I know if the fix is working?
+
+**Test:**
+1. Clean up DLQ: `./cleanup-dlq.sh`
+2. Add a few test messages to DLQ
+3. Call replay: `curl -X POST http://localhost:8080/dlq/replay/test-dlq`
+4. Call replay AGAIN: `curl -X POST http://localhost:8080/dlq/replay/test-dlq`
+
+**Expected:** Second call should replay 0 messages (already processed)
+
+**If broken:** Second call would replay messages again (infinite loop)
 

@@ -42,6 +42,16 @@ public class OrderProcessingService {
             return;
         }
         
+        // Check if this is a replayed message (for testing/demo purposes)
+        boolean isReplay = record.headers().lastHeader("X-Replay-Mode") != null;
+
+        if (isReplay) {
+            logger.warn("⚠️ REPLAY MODE: Skipping validation for order: {} (this is for testing only!)", order.getOrderId());
+            logger.info("order {} processed successfully (validation skipped in replay mode)", order.getOrderId());
+            ack.acknowledge();
+            return;
+        }
+
         logger.info("processing order: {}", order.getOrderId());
 
         // Validation checks - these exceptions are non-retryable

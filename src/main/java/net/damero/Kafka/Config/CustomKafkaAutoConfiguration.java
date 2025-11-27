@@ -94,8 +94,9 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean
     public ReplayDLQ replayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
                                KafkaTemplate<String, Object> kafkaTemplate,
-                               ObjectMapper kafkaObjectMapper) {
-        return new ReplayDLQ(dlqConsumerFactory, kafkaTemplate, kafkaObjectMapper);
+                               ObjectMapper kafkaObjectMapper,
+                               KafkaAdmin kafkaAdmin) {
+        return new ReplayDLQ(dlqConsumerFactory, kafkaTemplate, kafkaObjectMapper, kafkaAdmin);
     }
 
     @Bean

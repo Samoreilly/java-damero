@@ -36,12 +36,20 @@ public class DLQController {
     }
 
     /**
-     * Get enhanced DLQ events with metadata.
-     * Endpoint: GET /dlq?topic=test-dlq
+     * Replay DLQ messages back to the original topic.
+     * Endpoint: POST /dlq/replay/{topic}?forceReplay=true&skipValidation=true
+     *
+     * @param topic the DLQ topic to replay from
+     * @param forceReplay if true, replays all messages from beginning; if false (default), only replays unprocessed messages
+     * @param skipValidation if true, adds X-Replay-Mode header to skip validation (for testing with invalid data)
      */
     @PostMapping("/dlq/replay/{topic}")
-    public void replayDLQ(@PathVariable String topic) {
-        replayDLQ.replayMessages(topic);
+    public ReplayResponse replayDLQEndpoint(
+            @PathVariable("topic") String topic,
+            @RequestParam(required = false, defaultValue = "false") boolean forceReplay,
+            @RequestParam(required = false, defaultValue = "false") boolean skipValidation) {
+        replayDLQ.replayMessages(topic, forceReplay, skipValidation);
+        return new ReplayResponse("Replay initiated for topic: " + topic, topic, LocalDateTime.now().format(FORMATTER));
     }
 
     @GetMapping("/dlq")
