@@ -1,29 +1,32 @@
 package net.damero.Kafka.Aspect.Components;
 
+import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
 /**
  * Component responsible for orchestrating retry logic and attempt tracking.
  */
+@Component
 public class RetryOrchestrator {
     
     private static final Logger logger = LoggerFactory.getLogger(RetryOrchestrator.class);
     
     private final RetrySched retrySched;
+    private final PluggableRedisCache cache;
 
-    private final CaffeineCache eventAttempts;
-
-    public RetryOrchestrator(RetrySched retrySched, CaffeineCache caffeineCache) {
+    public RetryOrchestrator(RetrySched retrySched, PluggableRedisCache cache) {
         this.retrySched = retrySched;
-        this.eventAttempts = caffeineCache;
+        this.cache = cache;
     }
 
     /**
@@ -33,8 +36,8 @@ public class RetryOrchestrator {
      * @return the new attempt count
      */
     public int incrementAttempts(String eventId) {
-        int currentAttempts = eventAttempts.getOrDefault(eventId, 0) + 1;
-        eventAttempts.put(eventId, currentAttempts);
+        int currentAttempts = cache.getOrDefault(eventId, 0) + 1;
+        cache.put(eventId, currentAttempts);
         return currentAttempts;
     }
 
@@ -45,7 +48,7 @@ public class RetryOrchestrator {
      * @return the current attempt count
      */
     public int getAttemptCount(String eventId) {
-        return eventAttempts.getOrDefault(eventId, 0);
+        return cache.getOrDefault(eventId, 0);
     }
 
     /**
@@ -55,7 +58,7 @@ public class RetryOrchestrator {
      */
     public void clearAttempts(String eventId) {
         if (eventId != null) {
-            eventAttempts.remove(eventId);
+            cache.remove(eventId);
         }
     }
 

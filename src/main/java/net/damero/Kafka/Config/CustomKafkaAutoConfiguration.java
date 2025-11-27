@@ -12,6 +12,10 @@ import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ.ReplayDLQ;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationContext;
 import net.damero.Kafka.Resilience.CircuitBreakerService;
 import net.damero.Kafka.RetryScheduler.RetrySched;
@@ -22,14 +26,17 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.lang.Nullable;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -64,6 +71,8 @@ public class CustomKafkaAutoConfiguration {
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
+
+
 
     @Bean
     @ConditionalOnMissingBean
@@ -105,10 +114,54 @@ public class CustomKafkaAutoConfiguration {
         return new DLQController(readFromDLQConsumer, replayDLQ);
     }
 
+    private static final Logger logger = LoggerFactory.getLogger(CustomKafkaAutoConfiguration.class);
+
+    /**
+     * Creates a Redis-backed cache when Redis is available and properly configured.
+     * This bean is created when:
+     * 1. RedisConnectionFactory class is on the classpath
+     * 2. A RedisConnectionFactory bean exists in the context
+     * 3. A RedisTemplate bean exists in the context
+     */
+    @Bean
+    @ConditionalOnClass(RedisConnectionFactory.class)
+    @ConditionalOnBean({RedisConnectionFactory.class, RedisTemplate.class})
+    public PluggableRedisCache redisBackedCache(RedisTemplate<String, Object> redisTemplate) {
+        try {
+            // This will throw an exception if Redis is not reachable
+            redisTemplate.getConnectionFactory().getConnection().ping();
+            logger.info("Redis connection successful - using Redis for distributed cache");
+            return new PluggableRedisCache(redisTemplate);
+        } catch (Exception e) {
+            logger.warn("Redis is configured but not reachable: {}. Falling back to Caffeine cache.",
+                    e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * This is used when:
+     * 1. Redis is not on the classpath, OR
+     * 2. Redis beans are not configured, OR
+     * 3. Redis connection test failed
+     *
+     * if redisBackedCache bean is not created.
+     * Fall back to Caffeine cache.
+     */
+    @Bean
+    @ConditionalOnMissingBean(PluggableRedisCache.class)
+    public PluggableRedisCache caffeineBackedCache(CaffeineCache caffeineCache) {
+        logger.warn("Redis not available - using Caffeine in-memory cache. " +
+                "This is NOT recommended for multi-instance deployments. " +
+                "Please configure Redis for production use.");
+        return new PluggableRedisCache(caffeineCache);
+    }
+
+
     @Bean
     @ConditionalOnMissingBean
-    public RetryOrchestrator retryOrchestrator(RetrySched retrySched, CaffeineCache caffeineCache) {
-        return new RetryOrchestrator(retrySched, caffeineCache);
+    public RetryOrchestrator retryOrchestrator(RetrySched retrySched, PluggableRedisCache pluggableRedisCache) {
+        return new RetryOrchestrator(retrySched, pluggableRedisCache);
     }
 
     @Bean
