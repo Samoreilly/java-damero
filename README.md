@@ -38,27 +38,14 @@ Add the library to your project:
 </dependency>
 ```
 
-Required dependencies (these are marked as provided in the library, so you must include them):
+The library automatically includes these dependencies:
 
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-aop</artifactId>
-</dependency>
-<dependency>
-    <groupId>io.micrometer</groupId>
-    <artifactId>micrometer-core</artifactId>
-</dependency>
-<dependency>
-    <groupId>io.github.resilience4j</groupId>
-    <artifactId>resilience4j-circuitbreaker</artifactId>
-    <version>2.1.0</version>
-</dependency>
-<dependency>
-    <groupId>com.github.ben-manes.caffeine</groupId>
-    <artifactId>caffeine</artifactId>
-</dependency>
-```
+- spring-boot-starter-aop
+- micrometer-core
+- resilience4j-circuitbreaker
+- caffeine
+- reflections
+- commons-io
 
 Optional: Add Redis for distributed caching across multiple instances:
 
