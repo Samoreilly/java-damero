@@ -33,8 +33,15 @@ public class PluggableRedisCache {
 
     public void put(String key, Object value) {
         if (redisTemplate != null) {
-            logger.debug("Storing in Redis - key: {}, value type: {}", cacheKeyPrefix + key, value.getClass().getSimpleName());
-            redisTemplate.opsForValue().set(cacheKeyPrefix + key, value);
+            try {
+                logger.debug("Storing in Redis - key: {}, value type: {}", cacheKeyPrefix + key, value.getClass().getSimpleName());
+                redisTemplate.opsForValue().set(cacheKeyPrefix + key, value);
+            } catch (Exception e) {
+                logger.error("Failed to store key '{}' in Redis: {}. Cache operation skipped.",
+                    key, e.getMessage());
+                // Gracefully degrade - don't cache if Redis is down
+                // This prevents application crashes but may lead to duplicate processing
+            }
         } else if (caffeineCache != null && value instanceof Integer) {
             caffeineCache.put(key, (Integer) value);
         }
@@ -50,7 +57,13 @@ public class PluggableRedisCache {
      */
     public void put(String key, Object value, Duration ttl) {
         if (redisTemplate != null) {
-            redisTemplate.opsForValue().set(cacheKeyPrefix + key, value, ttl);
+            try {
+                redisTemplate.opsForValue().set(cacheKeyPrefix + key, value, ttl);
+            } catch (Exception e) {
+                logger.error("Failed to store key '{}' in Redis with TTL: {}. Cache operation skipped.",
+                    key, e.getMessage());
+                // Gracefully degrade - don't cache if Redis is down
+            }
         } else if (caffeineCache != null && value instanceof Integer) {
             // Caffeine cache has TTL configured at construction time, so we just put
             caffeineCache.put(key, (Integer) value);
@@ -59,7 +72,15 @@ public class PluggableRedisCache {
 
     public boolean contains(String key) {
         if (redisTemplate != null) {
-            return Boolean.TRUE.equals(redisTemplate.hasKey(cacheKeyPrefix + key));
+            try {
+                return Boolean.TRUE.equals(redisTemplate.hasKey(cacheKeyPrefix + key));
+            } catch (Exception e) {
+                logger.error("Failed to check key '{}' in Redis: {}. Returning false.",
+                    key, e.getMessage());
+                // Return false to indicate key not found when Redis is unavailable
+                // This may cause duplicate processing but prevents crashes
+                return false;
+            }
         } else if (caffeineCache != null) {
             return caffeineCache.get(key) != null;
         }
@@ -68,7 +89,15 @@ public class PluggableRedisCache {
 
     public Object get(String key) {
         if (redisTemplate != null) {
-            return redisTemplate.opsForValue().get(cacheKeyPrefix + key);
+            try {
+                return redisTemplate.opsForValue().get(cacheKeyPrefix + key);
+            } catch (Exception e) {
+                logger.error("Failed to retrieve key '{}' from Redis: {}. Returning null.",
+                    key, e.getMessage());
+                // Return null when Redis is unavailable
+                // Caller will handle missing cache entry appropriately
+                return null;
+            }
         } else if (caffeineCache != null) {
             return caffeineCache.get(key);
         }
@@ -85,7 +114,13 @@ public class PluggableRedisCache {
 
     public void remove(String key) {
         if (redisTemplate != null) {
-            redisTemplate.delete(cacheKeyPrefix + key);
+            try {
+                redisTemplate.delete(cacheKeyPrefix + key);
+            } catch (Exception e) {
+                logger.error("Failed to remove key '{}' from Redis: {}. Remove operation skipped.",
+                    key, e.getMessage());
+                // Gracefully degrade - don't fail if Redis is down
+            }
         } else if (caffeineCache != null) {
             caffeineCache.remove(key);
         }
