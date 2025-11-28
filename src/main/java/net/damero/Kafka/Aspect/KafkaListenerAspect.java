@@ -100,7 +100,6 @@ public class KafkaListenerAspect {
         
         Object event = EventUnwrapper.unwrapEvent(arg0);
 
-
         KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
 
         if (event == null) {

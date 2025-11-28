@@ -1,30 +1,39 @@
 package net.damero.Kafka.Config;
 
 import net.damero.Kafka.Aspect.Components.CaffeineCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 
 import java.time.Duration;
 
 public class PluggableRedisCache {
 
+    private static final Logger logger = LoggerFactory.getLogger(PluggableRedisCache.class);
+
     private final RedisTemplate<String, Object> redisTemplate;
     private final CaffeineCache caffeineCache;
     private final String cacheKeyPrefix = "internal_cache:";
 
-    // Constructor for Redis-backed cache
+    // Redis constructor
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate) {
         this.redisTemplate = redisTemplate;
+        if (redisTemplate != null) {
+            logger.info("=== PluggableRedisCache initialized with Redis backend ===");
+        }
         this.caffeineCache = null;
     }
 
-    // Constructor for Caffeine-backed cache (fallback)
+    // overloaded constructor for Caffeine in memory cache
     public PluggableRedisCache(CaffeineCache caffeineCache) {
         this.redisTemplate = null;
         this.caffeineCache = caffeineCache;
+        logger.info("=== PluggableRedisCache initialized with Caffeine backend ===");
     }
 
     public void put(String key, Object value) {
         if (redisTemplate != null) {
+            logger.debug("Storing in Redis - key: {}, value type: {}", cacheKeyPrefix + key, value.getClass().getSimpleName());
             redisTemplate.opsForValue().set(cacheKeyPrefix + key, value);
         } else if (caffeineCache != null && value instanceof Integer) {
             caffeineCache.put(key, (Integer) value);

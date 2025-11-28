@@ -1,3 +1,34 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper (file:/usr/share/maven/lib/guava.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-------------------< [0;36mcom.example:kafka-example-app[0;1m >--------------------[m
+[[1;34mINFO[m] [1mBuilding Kafka Example Application 1.0.0[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m>>> [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[0;1m > [0;1mtest-compile[m @ [36mkafka-example-app[0;1m >>>[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:resources[m [1m(default-resources)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Copying 1 resource from src/main/resources to target/classes
+[[1;34mINFO[m] Copying 0 resource from src/main/resources to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:compile[m [1m(default-compile)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged source code[m.
+[[1;34mINFO[m] Compiling 7 source files with javac [debug parameters release 21] to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:testResources[m [1m(default-testResources)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] skip non existing resourceDirectory /home/sam-o-reilly/Downloads/java-damero/example-app/src/test/resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:testCompile[m [1m(default-testCompile)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged dependency[m.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m<<< [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[0;1m < [0;1mtest-compile[m @ [36mkafka-example-app[0;1m <<<[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Attaching agents: []
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -8,18 +39,27 @@
 
  :: Spring Boot ::                (v3.5.7)
 
-2025-11-27T18:55:06.225Z  INFO 83046 --- [           main] c.e.k.KafkaExampleApplication            : Starting KafkaExampleApplication v1.0.0 using Java 25.0.1 with PID 83046 (/home/sam-o-reilly/Downloads/java-damero/example-app/target/kafka-example-app-1.0.0.jar started by sam-o-reilly in /home/sam-o-reilly/Downloads/java-damero/example-app)
-2025-11-27T18:55:06.227Z DEBUG 83046 --- [           main] c.e.k.KafkaExampleApplication            : Running with Spring Boot v3.5.7, Spring v6.2.12
-2025-11-27T18:55:06.228Z  INFO 83046 --- [           main] c.e.k.KafkaExampleApplication            : No active profile set, falling back to 1 default profile: "default"
-2025-11-27T18:55:06.949Z  INFO 83046 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
-2025-11-27T18:55:06.956Z  INFO 83046 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2025-11-27T18:55:06.956Z  INFO 83046 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.48]
-2025-11-27T18:55:06.970Z  INFO 83046 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2025-11-27T18:55:06.971Z  INFO 83046 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 673 ms
-2025-11-27T18:55:07.337Z  INFO 83046 --- [           main] n.d.K.A.D.DuplicationManager             : Initializing DuplicationManager with 1000 buckets, 10 HOURS window, 50000 max entries per bucket
-2025-11-27T18:55:07.343Z  INFO 83046 --- [           main] n.d.K.A.D.DuplicationManager             : DuplicationManager initialized. Total capacity: 50000000 entries
-2025-11-27T18:55:07.462Z  INFO 83046 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
-2025-11-27T18:55:07.488Z  INFO 83046 --- [           main] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
+2025-11-28T22:02:07.476Z  INFO 48582 --- [           main] c.e.k.KafkaExampleApplication            : Starting KafkaExampleApplication using Java 25.0.1 with PID 48582 (/home/sam-o-reilly/Downloads/java-damero/example-app/target/classes started by sam-o-reilly in /home/sam-o-reilly/Downloads/java-damero/example-app)
+2025-11-28T22:02:07.477Z DEBUG 48582 --- [           main] c.e.k.KafkaExampleApplication            : Running with Spring Boot v3.5.7, Spring v6.2.12
+2025-11-28T22:02:07.477Z  INFO 48582 --- [           main] c.e.k.KafkaExampleApplication            : No active profile set, falling back to 1 default profile: "default"
+2025-11-28T22:02:07.749Z  INFO 48582 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-28T22:02:07.750Z  INFO 48582 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-28T22:02:07.762Z  INFO 48582 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 5 ms. Found 0 Redis repository interfaces.
+2025-11-28T22:02:07.993Z  INFO 48582 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2025-11-28T22:02:08.000Z  INFO 48582 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-11-28T22:02:08.000Z  INFO 48582 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.48]
+2025-11-28T22:02:08.021Z  INFO 48582 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-11-28T22:02:08.021Z  INFO 48582 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 519 ms
+2025-11-28T22:02:08.323Z  WARN 48582 --- [           main] n.d.K.C.CustomKafkaAutoConfiguration     : Redis not available - using Caffeine in-memory cache. This is NOT recommended for multi-instance deployments. Please configure Redis for production use.
+2025-11-28T22:02:08.323Z  INFO 48582 --- [           main] n.d.Kafka.Config.PluggableRedisCache     : === PluggableRedisCache initialized with Caffeine backend ===
+2025-11-28T22:02:08.329Z  INFO 48582 --- [           main] n.d.K.A.D.DuplicationManager             : Initializing DuplicationManager with 10 HOURS window (TTL: PT10H)
+2025-11-28T22:02:08.330Z  INFO 48582 --- [           main] n.d.K.A.D.DuplicationManager             : DuplicationManager initialized. Max capacity: 50000000 entries
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::allocateMemory has been called by io.netty.util.internal.PlatformDependent0$2 (file:/home/sam-o-reilly/.m2/repository/io/netty/netty-common/4.1.128.Final/netty-common-4.1.128.Final.jar)
+WARNING: Please consider reporting this to the maintainers of class io.netty.util.internal.PlatformDependent0$2
+WARNING: sun.misc.Unsafe::allocateMemory will be removed in a future release
+2025-11-28T22:02:08.563Z  INFO 48582 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2025-11-28T22:02:08.578Z  INFO 48582 --- [           main] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
 	allow.auto.create.topics = true
 	auto.commit.interval.ms = 5000
 	auto.include.jmx.reporter = true
@@ -119,153 +159,20 @@
 	ssl.truststore.type = JKS
 	value.deserializer = class org.springframework.kafka.support.serializer.JsonDeserializer
 
-2025-11-27T18:55:07.515Z  INFO 83046 --- [           main] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
-2025-11-27T18:55:07.614Z  INFO 83046 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
-2025-11-27T18:55:07.614Z  INFO 83046 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
-2025-11-27T18:55:07.614Z  INFO 83046 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1764269707614
-2025-11-27T18:55:07.616Z  INFO 83046 --- [           main] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Subscribed to topic(s): orders
-2025-11-27T18:55:07.627Z  INFO 83046 --- [           main] c.e.k.KafkaExampleApplication            : Started KafkaExampleApplication in 1.638 seconds (process running for 1.87)
-2025-11-27T18:55:07.790Z  INFO 83046 --- [ntainer#0-0-C-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Cluster ID: bddb43d0-b435-46c0-a199-bfbd0bf943d7
-2025-11-27T18:55:07.790Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
-2025-11-27T18:55:07.792Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] (Re-)joining group
-2025-11-27T18:55:07.799Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Request joining group due to: need to re-join with the given member-id: consumer-order-processor-1-2c8c6a32-2624-49a4-a381-4259917150e3
-2025-11-27T18:55:07.799Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] (Re-)joining group
-2025-11-27T18:55:10.801Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Successfully joined group with generation Generation{generationId=9, memberId='consumer-order-processor-1-2c8c6a32-2624-49a4-a381-4259917150e3', protocol='range'}
-2025-11-27T18:55:10.805Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Finished assignment for group at generation 9: {consumer-order-processor-1-2c8c6a32-2624-49a4-a381-4259917150e3=Assignment(partitions=[orders-0])}
-2025-11-27T18:55:10.807Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Successfully synced group in generation Generation{generationId=9, memberId='consumer-order-processor-1-2c8c6a32-2624-49a4-a381-4259917150e3', protocol='range'}
-2025-11-27T18:55:10.807Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Notifying assignor about the new Assignment(partitions=[orders-0])
-2025-11-27T18:55:10.808Z  INFO 83046 --- [ntainer#0-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Adding newly assigned partitions: orders-0
-2025-11-27T18:55:10.811Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Found no committed offset for partition orders-0
-2025-11-27T18:55:10.816Z  INFO 83046 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Resetting offset for partition orders-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}.
-2025-11-27T18:55:15.785Z  INFO 83046 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2025-11-27T18:55:15.785Z  INFO 83046 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2025-11-27T18:55:15.785Z  INFO 83046 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
-2025-11-27T18:55:15.804Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.clients.consumer.ConsumerConfig    : ConsumerConfig values: 
-	allow.auto.create.topics = true
-	auto.commit.interval.ms = 5000
-	auto.include.jmx.reporter = true
-	auto.offset.reset = earliest
-	bootstrap.servers = [localhost:9092]
-	check.crcs = true
-	client.dns.lookup = use_all_dns_ips
-	client.id = consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2
-	client.rack = 
-	connections.max.idle.ms = 540000
-	default.api.timeout.ms = 60000
-	enable.auto.commit = false
-	enable.metrics.push = true
-	exclude.internal.topics = true
-	fetch.max.bytes = 52428800
-	fetch.max.wait.ms = 500
-	fetch.min.bytes = 1
-	group.id = dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955
-	group.instance.id = null
-	group.protocol = classic
-	group.remote.assignor = null
-	heartbeat.interval.ms = 3000
-	interceptor.classes = []
-	internal.leave.group.on.close = true
-	internal.throw.on.fetch.stable.offset.unsupported = false
-	isolation.level = read_uncommitted
-	key.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
-	max.partition.fetch.bytes = 1048576
-	max.poll.interval.ms = 300000
-	max.poll.records = 500
-	metadata.max.age.ms = 300000
-	metadata.recovery.strategy = none
-	metric.reporters = []
-	metrics.num.samples = 2
-	metrics.recording.level = INFO
-	metrics.sample.window.ms = 30000
-	partition.assignment.strategy = [class org.apache.kafka.clients.consumer.RangeAssignor, class org.apache.kafka.clients.consumer.CooperativeStickyAssignor]
-	receive.buffer.bytes = 65536
-	reconnect.backoff.max.ms = 1000
-	reconnect.backoff.ms = 50
-	request.timeout.ms = 30000
-	retry.backoff.max.ms = 1000
-	retry.backoff.ms = 100
-	sasl.client.callback.handler.class = null
-	sasl.jaas.config = null
-	sasl.kerberos.kinit.cmd = /usr/bin/kinit
-	sasl.kerberos.min.time.before.relogin = 60000
-	sasl.kerberos.service.name = null
-	sasl.kerberos.ticket.renew.jitter = 0.05
-	sasl.kerberos.ticket.renew.window.factor = 0.8
-	sasl.login.callback.handler.class = null
-	sasl.login.class = null
-	sasl.login.connect.timeout.ms = null
-	sasl.login.read.timeout.ms = null
-	sasl.login.refresh.buffer.seconds = 300
-	sasl.login.refresh.min.period.seconds = 60
-	sasl.login.refresh.window.factor = 0.8
-	sasl.login.refresh.window.jitter = 0.05
-	sasl.login.retry.backoff.max.ms = 10000
-	sasl.login.retry.backoff.ms = 100
-	sasl.mechanism = GSSAPI
-	sasl.oauthbearer.clock.skew.seconds = 30
-	sasl.oauthbearer.expected.audience = null
-	sasl.oauthbearer.expected.issuer = null
-	sasl.oauthbearer.header.urlencode = false
-	sasl.oauthbearer.jwks.endpoint.refresh.ms = 3600000
-	sasl.oauthbearer.jwks.endpoint.retry.backoff.max.ms = 10000
-	sasl.oauthbearer.jwks.endpoint.retry.backoff.ms = 100
-	sasl.oauthbearer.jwks.endpoint.url = null
-	sasl.oauthbearer.scope.claim.name = scope
-	sasl.oauthbearer.sub.claim.name = sub
-	sasl.oauthbearer.token.endpoint.url = null
-	security.protocol = PLAINTEXT
-	security.providers = null
-	send.buffer.bytes = 131072
-	session.timeout.ms = 45000
-	socket.connection.setup.timeout.max.ms = 30000
-	socket.connection.setup.timeout.ms = 10000
-	ssl.cipher.suites = null
-	ssl.enabled.protocols = [TLSv1.2, TLSv1.3]
-	ssl.endpoint.identification.algorithm = https
-	ssl.engine.factory.class = null
-	ssl.key.password = null
-	ssl.keymanager.algorithm = SunX509
-	ssl.keystore.certificate.chain = null
-	ssl.keystore.key = null
-	ssl.keystore.location = null
-	ssl.keystore.password = null
-	ssl.keystore.type = JKS
-	ssl.protocol = TLSv1.3
-	ssl.provider = null
-	ssl.secure.random.implementation = null
-	ssl.trustmanager.algorithm = PKIX
-	ssl.truststore.certificates = null
-	ssl.truststore.location = null
-	ssl.truststore.password = null
-	ssl.truststore.type = JKS
-	value.deserializer = class org.apache.kafka.common.serialization.StringDeserializer
-
-2025-11-27T18:55:15.804Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
-2025-11-27T18:55:15.808Z  INFO 83046 --- [nio-8080-exec-1] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
-2025-11-27T18:55:15.808Z  INFO 83046 --- [nio-8080-exec-1] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
-2025-11-27T18:55:15.808Z  INFO 83046 --- [nio-8080-exec-1] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1764269715808
-2025-11-27T18:55:15.808Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Subscribed to topic(s): test-dlq
-2025-11-27T18:55:15.811Z  INFO 83046 --- [nio-8080-exec-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Cluster ID: bddb43d0-b435-46c0-a199-bfbd0bf943d7
-2025-11-27T18:55:15.811Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
-2025-11-27T18:55:15.811Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] (Re-)joining group
-2025-11-27T18:55:15.814Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Request joining group due to: need to re-join with the given member-id: consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2-86dba118-8702-4285-8752-4ce75b8fffd4
-2025-11-27T18:55:15.814Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] (Re-)joining group
-2025-11-27T18:55:18.815Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Successfully joined group with generation Generation{generationId=1, memberId='consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2-86dba118-8702-4285-8752-4ce75b8fffd4', protocol='range'}
-2025-11-27T18:55:18.815Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Finished assignment for group at generation 1: {consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2-86dba118-8702-4285-8752-4ce75b8fffd4=Assignment(partitions=[test-dlq-0])}
-2025-11-27T18:55:18.817Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Successfully synced group in generation Generation{generationId=1, memberId='consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2-86dba118-8702-4285-8752-4ce75b8fffd4', protocol='range'}
-2025-11-27T18:55:18.817Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Notifying assignor about the new Assignment(partitions=[test-dlq-0])
-2025-11-27T18:55:18.817Z  INFO 83046 --- [nio-8080-exec-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Adding newly assigned partitions: test-dlq-0
-2025-11-27T18:55:18.817Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Found no committed offset for partition test-dlq-0
-2025-11-27T18:55:18.823Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Resetting offset for partition test-dlq-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}.
-2025-11-27T18:55:19.811Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Seeking to earliest offset of partition test-dlq-0
-2025-11-27T18:55:19.828Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.SubscriptionState    : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Resetting offset for partition test-dlq-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}.
-2025-11-27T18:55:22.812Z  INFO 83046 --- [nio-8080-exec-1] n.d.K.D.ReadFromDLQ.ReadFromDLQConsumer  : Read 0 messages from DLQ topic: test-dlq
-2025-11-27T18:55:22.813Z  INFO 83046 --- [nio-8080-exec-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Revoke previously assigned partitions test-dlq-0
-2025-11-27T18:55:22.814Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Member consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2-86dba118-8702-4285-8752-4ce75b8fffd4 sending LeaveGroup request to coordinator localhost:9092 (id: 2147483646 rack: null) due to the consumer is being closed
-2025-11-27T18:55:22.814Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Resetting generation and member id due to: consumer pro-actively leaving the group
-2025-11-27T18:55:22.814Z  INFO 83046 --- [nio-8080-exec-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2, groupId=dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955] Request joining group due to: consumer pro-actively leaving the group
-2025-11-27T18:55:22.837Z  INFO 83046 --- [nio-8080-exec-1] o.apache.kafka.common.metrics.Metrics    : Metrics scheduler closed
-2025-11-27T18:55:22.837Z  INFO 83046 --- [nio-8080-exec-1] o.apache.kafka.common.metrics.Metrics    : Closing reporter org.apache.kafka.common.metrics.JmxReporter
-2025-11-27T18:55:22.837Z  INFO 83046 --- [nio-8080-exec-1] o.apache.kafka.common.metrics.Metrics    : Closing reporter org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter
-2025-11-27T18:55:22.837Z  INFO 83046 --- [nio-8080-exec-1] o.apache.kafka.common.metrics.Metrics    : Metrics reporters closed
-2025-11-27T18:55:22.839Z  INFO 83046 --- [nio-8080-exec-1] o.a.kafka.common.utils.AppInfoParser     : App info kafka.consumer for consumer-dlq-reader-675598b4-4f4e-4f05-a0c3-9e963d5d0955-2 unregistered
+2025-11-28T22:02:08.598Z  INFO 48582 --- [           main] o.a.k.c.t.i.KafkaMetricsCollector        : initializing Kafka metrics collector
+2025-11-28T22:02:08.671Z  INFO 48582 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka version: 3.9.1
+2025-11-28T22:02:08.671Z  INFO 48582 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka commitId: f745dfdcee2b9851
+2025-11-28T22:02:08.671Z  INFO 48582 --- [           main] o.a.kafka.common.utils.AppInfoParser     : Kafka startTimeMs: 1764367328670
+2025-11-28T22:02:08.672Z  INFO 48582 --- [           main] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Subscribed to topic(s): orders
+2025-11-28T22:02:08.680Z  INFO 48582 --- [           main] c.e.k.KafkaExampleApplication            : Started KafkaExampleApplication in 1.389 seconds (process running for 1.52)
+2025-11-28T22:02:08.827Z  INFO 48582 --- [ntainer#0-0-C-1] org.apache.kafka.clients.Metadata        : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Cluster ID: 975de39f-b609-4e88-86d5-1c25a2f5d74d
+2025-11-28T22:02:08.827Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Discovered group coordinator localhost:9092 (id: 2147483646 rack: null)
+2025-11-28T22:02:08.828Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] (Re-)joining group
+2025-11-28T22:02:08.835Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Request joining group due to: need to re-join with the given member-id: consumer-order-processor-1-95bcbbc1-bc05-467b-8e58-48ed44d83769
+2025-11-28T22:02:08.835Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] (Re-)joining group
+2025-11-28T22:02:11.837Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Successfully joined group with generation Generation{generationId=9, memberId='consumer-order-processor-1-95bcbbc1-bc05-467b-8e58-48ed44d83769', protocol='range'}
+2025-11-28T22:02:11.841Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Finished assignment for group at generation 9: {consumer-order-processor-1-95bcbbc1-bc05-467b-8e58-48ed44d83769=Assignment(partitions=[orders-0])}
+2025-11-28T22:02:11.844Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Successfully synced group in generation Generation{generationId=9, memberId='consumer-order-processor-1-95bcbbc1-bc05-467b-8e58-48ed44d83769', protocol='range'}
+2025-11-28T22:02:11.844Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerCoordinator  : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Notifying assignor about the new Assignment(partitions=[orders-0])
+2025-11-28T22:02:11.845Z  INFO 48582 --- [ntainer#0-0-C-1] k.c.c.i.ConsumerRebalanceListenerInvoker : [Consumer clientId=consumer-order-processor-1, groupId=order-processor] Adding newly assigned partitions: orders-0
+2025-11-28T22:02:11.849Z  INFO 48582 --- [ntainer#0-0-C-1] o.a.k.c.c.internals.ConsumerUtils        : Setting offset for partition orders-0 to the committed offset FetchPosition{offset=36, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:9092 (id: 1 rack: null)], epoch=0}}

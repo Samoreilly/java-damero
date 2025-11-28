@@ -15,7 +15,6 @@ import net.damero.Kafka.KafkaServices.KafkaDLQ;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationContext;
 import net.damero.Kafka.Resilience.CircuitBreakerService;
 import net.damero.Kafka.RetryScheduler.RetrySched;
@@ -25,17 +24,16 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.redis.cache.RedisCacheConfiguration;
-import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.lang.Nullable;
@@ -60,6 +58,7 @@ import java.util.Map;
  */
 @AutoConfiguration
 @AutoConfigureBefore(JacksonAutoConfiguration.class)
+@AutoConfigureAfter(RedisAutoConfiguration.class)
 @EnableAspectJAutoProxy
 @ConditionalOnProperty(
         prefix = "custom.kafka.auto-config",
@@ -71,8 +70,6 @@ public class CustomKafkaAutoConfiguration {
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
-
-
 
     @Bean
     @ConditionalOnMissingBean
@@ -117,42 +114,89 @@ public class CustomKafkaAutoConfiguration {
     private static final Logger logger = LoggerFactory.getLogger(CustomKafkaAutoConfiguration.class);
 
     /**
+     * Creates a RedisTemplate bean specifically for kafka-damero library's distributed cache.
+     * This bean is automatically created when the user adds spring-boot-starter-data-redis dependency.
+     * Spring Boot's auto-configuration will create a RedisConnectionFactory bean, which we use here.
+     */
+    @Bean(name = "kafkaDameroRedisTemplate")
+    @ConditionalOnClass(name = "org.springframework.data.redis.connection.RedisConnectionFactory")
+    @ConditionalOnBean(RedisConnectionFactory.class)
+    public RedisTemplate<String, Object> kafkaDameroRedisTemplate(RedisConnectionFactory connectionFactory) {
+        logger.info("Creating RedisTemplate for kafka-damero library - Redis dependency detected");
+
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        // Configure serializers
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+
+        // Create ObjectMapper with proper configuration for Redis serialization
+        com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.activateDefaultTyping(
+            BasicPolymorphicTypeValidator.builder()
+                .allowIfBaseType(Object.class)
+                .build(),
+            com.fasterxml.jackson.databind.ObjectMapper.DefaultTyping.NON_FINAL
+        );
+
+        GenericJackson2JsonRedisSerializer jsonSerializer =
+            new GenericJackson2JsonRedisSerializer(objectMapper);
+
+        // Set serializers for different types
+        template.setKeySerializer(stringSerializer);
+        template.setValueSerializer(jsonSerializer);
+        template.setHashKeySerializer(stringSerializer);
+        template.setHashValueSerializer(jsonSerializer);
+
+        template.afterPropertiesSet();
+
+        logger.info("RedisTemplate successfully configured for kafka-damero distributed cache");
+
+        return template;
+    }
+
+    /**
      * Creates a Redis-backed cache when Redis is available and properly configured.
-     * This bean is created when:
-     * 1. RedisConnectionFactory class is on the classpath
-     * 2. A RedisConnectionFactory bean exists in the context
-     * 3. A RedisTemplate bean exists in the context
+     * This provides distributed caching across multiple application instances.
+     *
+     * This bean depends on kafkaDameroRedisTemplate, which will only exist if:
+     * 1. spring-boot-starter-data-redis is on the classpath
+     * 2. Spring Boot created a RedisConnectionFactory bean
+     * 3. Redis is configured in application.properties
      */
     @Bean
-    @ConditionalOnClass(RedisConnectionFactory.class)
-    @ConditionalOnBean({RedisConnectionFactory.class, RedisTemplate.class})
-    public PluggableRedisCache redisBackedCache(RedisTemplate<String, Object> redisTemplate) {
+    @ConditionalOnBean(name = "kafkaDameroRedisTemplate")
+    @ConditionalOnMissingBean(PluggableRedisCache.class)
+    public PluggableRedisCache redisBackedCache(RedisTemplate<String, Object> kafkaDameroRedisTemplate) {
         try {
-            // This will throw an exception if Redis is not reachable
-            redisTemplate.getConnectionFactory().getConnection().ping();
-            logger.info("Redis connection successful - using Redis for distributed cache");
-            return new PluggableRedisCache(redisTemplate);
+            // Test Redis connection
+            kafkaDameroRedisTemplate.getConnectionFactory().getConnection().ping();
+            logger.info("==> Redis connection successful - PluggableRedisCache using Redis backend for distributed cache");
+            return new PluggableRedisCache(kafkaDameroRedisTemplate);
         } catch (Exception e) {
-            logger.warn("Redis is configured but not reachable: {}. Falling back to Caffeine cache.",
+            logger.warn("Redis is configured but not reachable: {}. Will fall back to Caffeine cache.",
                     e.getMessage());
+            // Return null so the Caffeine fallback bean will be created
             return null;
         }
     }
+
     /**
-     * This is used when:
+     * Fallback to Caffeine cache when:
      * 1. Redis is not on the classpath, OR
-     * 2. Redis beans are not configured, OR
-     * 3. Redis connection test failed
+     * 2. RedisConnectionFactory bean doesn't exist, OR
+     * 3. Redis connection test failed, OR
+     * 4. No PluggableRedisCache bean was created above
      *
-     * if redisBackedCache bean is not created.
-     * Fall back to Caffeine cache.
+     * Note: Caffeine is in-memory only and NOT suitable for multi-instance deployments.
      */
     @Bean
     @ConditionalOnMissingBean(PluggableRedisCache.class)
     public PluggableRedisCache caffeineBackedCache(CaffeineCache caffeineCache) {
-        logger.warn("Redis not available - using Caffeine in-memory cache. " +
+        logger.warn("==> Redis not available - PluggableRedisCache using Caffeine in-memory cache. " +
                 "This is NOT recommended for multi-instance deployments. " +
-                "Please configure Redis for production use.");
+                "Add spring-boot-starter-data-redis dependency and configure Redis for production use.");
         return new PluggableRedisCache(caffeineCache);
     }
 
