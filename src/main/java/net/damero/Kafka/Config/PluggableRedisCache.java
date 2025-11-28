@@ -3,6 +3,8 @@ package net.damero.Kafka.Config;
 import net.damero.Kafka.Aspect.Components.CaffeineCache;
 import org.springframework.data.redis.core.RedisTemplate;
 
+import java.time.Duration;
+
 public class PluggableRedisCache {
 
     private final RedisTemplate<String, Object> redisTemplate;
@@ -21,13 +23,38 @@ public class PluggableRedisCache {
         this.caffeineCache = caffeineCache;
     }
 
-
     public void put(String key, Object value) {
         if (redisTemplate != null) {
             redisTemplate.opsForValue().set(cacheKeyPrefix + key, value);
         } else if (caffeineCache != null && value instanceof Integer) {
             caffeineCache.put(key, (Integer) value);
         }
+    }
+
+    /**
+     * Put a value in the cache with a time-to-live (TTL).
+     * After the TTL expires, the entry will be automatically removed.
+     *
+     * @param key the cache key
+     * @param value the value to cache
+     * @param ttl the time-to-live duration
+     */
+    public void put(String key, Object value, Duration ttl) {
+        if (redisTemplate != null) {
+            redisTemplate.opsForValue().set(cacheKeyPrefix + key, value, ttl);
+        } else if (caffeineCache != null && value instanceof Integer) {
+            // Caffeine cache has TTL configured at construction time, so we just put
+            caffeineCache.put(key, (Integer) value);
+        }
+    }
+
+    public boolean contains(String key) {
+        if (redisTemplate != null) {
+            return Boolean.TRUE.equals(redisTemplate.hasKey(cacheKeyPrefix + key));
+        } else if (caffeineCache != null) {
+            return caffeineCache.get(key) != null;
+        }
+        return false;
     }
 
     public Object get(String key) {

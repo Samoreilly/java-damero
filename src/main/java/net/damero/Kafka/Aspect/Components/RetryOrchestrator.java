@@ -5,7 +5,6 @@ import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +47,7 @@ public class RetryOrchestrator {
      * @return the current attempt count
      */
     public int getAttemptCount(String eventId) {
-        return cache.getOrDefault(eventId, 0);
+        return cache.getOrDefault(eventId, 1);
     }
 
     /**

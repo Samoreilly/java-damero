@@ -138,7 +138,6 @@ public class CustomKafkaAutoConfiguration {
             return null;
         }
     }
-
     /**
      * This is used when:
      * 1. Redis is not on the classpath, OR
@@ -184,8 +183,8 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DuplicationManager duplicationManager(DeduplicationProperties deduplicationProperties) {
-        return new DuplicationManager(deduplicationProperties);
+    public DuplicationManager duplicationManager(DeduplicationProperties deduplicationProperties, PluggableRedisCache pluggableRedisCache) {
+        return new DuplicationManager(deduplicationProperties, pluggableRedisCache);
     }
 
     @Bean
