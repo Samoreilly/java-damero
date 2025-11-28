@@ -10,9 +10,12 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Manages message deduplication using a bucket-based caching strategy.
- * The idea is to use bucket-based keys for faster lookups using hashes.
- * Benefits from cache locality and distributed coordination when using Redis.
+ * Manages message deduplication using TTL-based caching.
+ * Uses a simple key-value strategy that works efficiently with both Redis and Caffeine.
+ * Redis handles distributed coordination and efficient lookups internally.
+ * 
+ * Note: The bucket strategy was removed as it only benefits Caffeine's in-memory cache,
+ * not Redis which handles key distribution and lookups efficiently internally.
  */
 @Component
 public class DuplicationManager {
@@ -21,7 +24,6 @@ public class DuplicationManager {
     private static final String DEDUP_PREFIX = "dedup:";
     private static final Integer SEEN_MARKER = 1;
 
-    private final int numBuckets;
     private final PluggableRedisCache cache;
     private final DeduplicationProperties properties;
     private final Duration ttl;
@@ -33,27 +35,24 @@ public class DuplicationManager {
     public DuplicationManager(DeduplicationProperties properties, PluggableRedisCache cache) {
         this.cache = cache;
         this.properties = properties;
-        this.numBuckets = properties.getNumBuckets();
         
         // Calculate TTL from window duration and unit
         this.ttl = Duration.ofMillis(properties.getWindowUnit().toMillis(properties.getWindowDuration()));
 
-        logger.info("Initializing DuplicationManager with {} buckets, {} {} window (TTL: {}), {} max entries per bucket",
-                numBuckets,
+        logger.info("Initializing DuplicationManager with {} {} window (TTL: {})",
                 properties.getWindowDuration(),
                 properties.getWindowUnit(),
-                ttl,
-                properties.getMaxEntriesPerBucket());
+                ttl);
 
-        logger.info("DuplicationManager initialized. Total capacity: {} entries", properties.getTotalCapacity());
+        logger.info("DuplicationManager initialized. Max capacity: {} entries", properties.getTotalCapacity());
     }
 
     /**
-     * Generate a bucket-based cache key for the given message ID.
+     * Generate a cache key for the given message ID.
+     * Simple prefix-based key for efficient Redis lookups.
      */
-    private String getBucketKey(String id) {
-        int bucket = Math.floorMod(id.hashCode(), numBuckets);
-        return DEDUP_PREFIX + bucket + ":" + id;
+    private String getKey(String id) {
+        return DEDUP_PREFIX + id;
     }
 
     /**
@@ -70,8 +69,8 @@ public class DuplicationManager {
         }
 
         totalChecks.incrementAndGet();
-        String bucketKey = getBucketKey(id);
-        boolean isDupe = cache.contains(bucketKey);
+        String key = getKey(id);
+        boolean isDupe = cache.contains(key);
         
         if (isDupe) {
             duplicateCount.incrementAndGet();
@@ -93,8 +92,8 @@ public class DuplicationManager {
             return;
         }
         
-        String bucketKey = getBucketKey(id);
-        cache.put(bucketKey, SEEN_MARKER, ttl);
+        String key = getKey(id);
+        cache.put(key, SEEN_MARKER, ttl);
         logger.debug("Marked message ID as seen with TTL {}: {}", ttl, id);
     }
 
