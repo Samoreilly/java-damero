@@ -38,7 +38,7 @@ Add the library to your project:
 </dependency>
 ```
 
-Add required runtime dependencies:
+Required dependencies (these are marked as provided in the library, so you must include them):
 
 ```xml
 <dependency>
