@@ -157,10 +157,22 @@ public class CustomKafkaAutoConfiguration {
     }
 
     /**
-     * Creates a Redis-backed cache when Redis is available and properly configured.
-     * This provides distributed caching across multiple application instances.
+     * Creates RedisHealthCheck when Redis is configured.
+     * Monitors Redis health every 20 seconds and automatically switches between Redis and Caffeine.
+     */
+    @Bean
+    @ConditionalOnBean(name = "kafkaDameroRedisTemplate")
+    @ConditionalOnMissingBean(RedisHealthCheck.class)
+    public RedisHealthCheck redisHealthCheck(RedisTemplate<String, Object> kafkaDameroRedisTemplate,
+                                             CaffeineCache caffeineCache) {
+        return new RedisHealthCheck(kafkaDameroRedisTemplate, caffeineCache);
+    }
+
+    /**
+     * Creates a PluggableRedisCache with both Redis and Caffeine backends and health monitoring.
+     * This provides distributed caching across multiple application instances with automatic failover.
      *
-     * This bean depends on kafkaDameroRedisTemplate, which will only exist if:
+     * This bean depends on kafkaDameroRedisTemplate and RedisHealthCheck, which will only exist if:
      * 1. spring-boot-starter-data-redis is on the classpath
      * 2. Spring Boot created a RedisConnectionFactory bean
      * 3. Redis is configured in application.properties
@@ -168,26 +180,19 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnBean(name = "kafkaDameroRedisTemplate")
     @ConditionalOnMissingBean(PluggableRedisCache.class)
-    public PluggableRedisCache redisBackedCache(RedisTemplate<String, Object> kafkaDameroRedisTemplate) {
-        try {
-            // Test Redis connection
-            kafkaDameroRedisTemplate.getConnectionFactory().getConnection().ping();
-            logger.info("==> Redis connection successful - PluggableRedisCache using Redis backend for distributed cache");
-            return new PluggableRedisCache(kafkaDameroRedisTemplate);
-        } catch (Exception e) {
-            logger.warn("Redis is configured but not reachable: {}. Will fall back to Caffeine cache.",
-                    e.getMessage());
-            // Return null so the Caffeine fallback bean will be created
-            return null;
-        }
+    public PluggableRedisCache redisBackedCacheWithHealthCheck(RedisTemplate<String, Object> kafkaDameroRedisTemplate,
+                                                               CaffeineCache caffeineCache,
+                                                               RedisHealthCheck redisHealthCheck) {
+        logger.info("==> PluggableRedisCache configured with automatic Redis health monitoring and failover");
+        // Create cache with both backends and health check reference
+        return new PluggableRedisCache(kafkaDameroRedisTemplate, caffeineCache, redisHealthCheck);
     }
 
     /**
      * Fallback to Caffeine cache when:
      * 1. Redis is not on the classpath, OR
      * 2. RedisConnectionFactory bean doesn't exist, OR
-     * 3. Redis connection test failed, OR
-     * 4. No PluggableRedisCache bean was created above
+     * 3. No PluggableRedisCache bean was created above
      *
      * Note: Caffeine is in-memory only and NOT suitable for multi-instance deployments.
      */

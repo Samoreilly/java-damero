@@ -8,14 +8,13 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
 /**
  * Component responsible for orchestrating retry logic and attempt tracking.
+ * Supports automatic failover between Redis and Caffeine via PluggableRedisCache.
  */
-@Component
 public class RetryOrchestrator {
     
     private static final Logger logger = LoggerFactory.getLogger(RetryOrchestrator.class);

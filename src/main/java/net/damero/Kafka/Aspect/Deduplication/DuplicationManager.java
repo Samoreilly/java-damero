@@ -4,7 +4,6 @@ import net.damero.Kafka.Config.DeduplicationProperties;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
@@ -13,11 +12,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * Manages message deduplication using TTL-based caching.
  * Uses a simple key-value strategy that works efficiently with both Redis and Caffeine.
  * Redis handles distributed coordination and efficient lookups internally.
- * 
+ * Supports automatic failover between Redis and Caffeine via PluggableRedisCache.
+ *
  * Note: The bucket strategy was removed as it only benefits Caffeine's in-memory cache,
  * not Redis which handles key distribution and lookups efficiently internally.
  */
-@Component
 public class DuplicationManager {
 
     private static final Logger logger = LoggerFactory.getLogger(DuplicationManager.class);
@@ -47,6 +46,7 @@ public class DuplicationManager {
         logger.info("DuplicationManager initialized. Max capacity: {} entries", properties.getTotalCapacity());
     }
 
+
     /**
      * Generate a cache key for the given message ID.
      * Simple prefix-based key for efficient Redis lookups.
@@ -71,7 +71,7 @@ public class DuplicationManager {
         totalChecks.incrementAndGet();
         String key = getKey(id);
         boolean isDupe = cache.contains(key);
-        
+
         if (isDupe) {
             duplicateCount.incrementAndGet();
             logger.debug("Duplicate detected for message ID: {}", id);
