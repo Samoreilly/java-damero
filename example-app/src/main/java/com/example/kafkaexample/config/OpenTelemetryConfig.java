@@ -63,7 +63,7 @@ public class OpenTelemetryConfig {
     @Value("${otel.exporter.otlp.endpoint:http://localhost:4317}")
     private String otlpEndpoint;
 
-    @Value("${otel.service.name:unknown-service}")
+    @Value("${otel.service.name:damero-service}")
     private String serviceName;
 
     @Value("${otel.service.version:1.0.0}")

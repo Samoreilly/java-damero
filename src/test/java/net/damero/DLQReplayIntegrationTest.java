@@ -29,7 +29,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
-import org.springframework.stereotype.Component;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.time.LocalDateTime;
@@ -62,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.*;
     "replay-source-topic-6",
     "replay-dlq-topic-6"
 })
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class DLQReplayIntegrationTest {
 
     @Autowired
@@ -379,28 +380,27 @@ class DLQReplayIntegrationTest {
 
     // ==================== Test Listener ====================
 
-    @Component
     static class ReplayTestListener {
         private final CopyOnWriteArrayList<TestEvent> receivedEvents = new CopyOnWriteArrayList<>();
         private volatile CountDownLatch latch = new CountDownLatch(0);
         private volatile String topicToListenFor = null;
 
-        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-1", groupId = "replay-test-listener-1")
+        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-1", groupId = "replay-test-listener-1-#{T(java.util.UUID).randomUUID().toString()}")
         public void listenTopic1(TestEvent event) {
             handleEvent(event, "replay-source-topic-1");
         }
 
-        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-2", groupId = "replay-test-listener-2")
+        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-2", groupId = "replay-test-listener-2-#{T(java.util.UUID).randomUUID().toString()}")
         public void listenTopic2(TestEvent event) {
             handleEvent(event, "replay-source-topic-2");
         }
 
-        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-3", groupId = "replay-test-listener-3")
+        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-3", groupId = "replay-test-listener-3-#{T(java.util.UUID).randomUUID().toString()}")
         public void listenTopic3(TestEvent event) {
             handleEvent(event, "replay-source-topic-3");
         }
 
-        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-4", groupId = "replay-test-listener-4")
+        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-4", groupId = "replay-test-listener-4-#{T(java.util.UUID).randomUUID().toString()}")
         public void listenTopic4(TestEvent event) {
             handleEvent(event, "replay-source-topic-4");
         }
@@ -410,7 +410,7 @@ class DLQReplayIntegrationTest {
             handleEvent(event, "replay-source-topic-5");
         }
 
-        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-6", groupId = "replay-test-listener-6")
+        @org.springframework.kafka.annotation.KafkaListener(topics = "replay-source-topic-6", groupId = "replay-test-listener-6-#{T(java.util.UUID).randomUUID().toString()}")
         public void listenTopic6(TestEvent event) {
             handleEvent(event, "replay-source-topic-6");
         }
