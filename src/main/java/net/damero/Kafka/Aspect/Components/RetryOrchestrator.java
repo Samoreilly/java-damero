@@ -33,14 +33,13 @@ public class RetryOrchestrator {
 
     /**
      * Increments the attempt count for an event and returns the new count.
-     * 
+     * Uses atomic increment to prevent race conditions in high-throughput scenarios.
+     *
      * @param eventId the event ID
      * @return the new attempt count
      */
     public int incrementAttempts(String eventId) {
-        int currentAttempts = cache.getOrDefault(eventId, 0) + 1;
-        cache.put(eventId, currentAttempts);
-        return currentAttempts;
+        return cache.incrementAndGet(eventId);
     }
 
     /**

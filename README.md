@@ -693,3 +693,665 @@ Areas for contribution:
 ## License
 
 See LICENSE file for details.
+## migrating from spring retry
+
+if you are currently using spring retry with kafka listeners, here is how to migrate to damero.
+
+### what damero adds over spring retry
+
+spring retry is great for basic retry logic, but it was not built specifically for kafka:
+
+**spring retry limitations:**
+- no built-in dlq support for kafka
+- no retry metadata in kafka headers
+- no conditional dlq routing by exception type
+- no circuit breaker integration
+- no deduplication support
+- no distributed tracing for kafka flows
+- no dlq replay api
+
+**damero advantages:**
+- kafka-specific retry with header propagation
+- automatic dlq routing with full context
+- conditional dlq routing per exception type
+- built-in circuit breaker for kafka listeners
+- message deduplication across instances
+- opentelemetry tracing for kafka flows
+- rest api to query and replay dlq messages
+
+### migration steps
+
+#### step 1: replace spring retry annotation
+
+**before (spring retry):**
+```java
+@retryable(
+    value = {timeoutexception.class},
+    maxattempts = 3,
+    backoff = @backoff(delay = 1000, multiplier = 2)
+)
+@kafkalistener(topics = "orders")
+public void processorder(order order) {
+    // processing logic
+}
+
+@recover
+public void recoverorder(timeoutexception e, order order) {
+    // send to dlq manually
+    dlqtemplate.send("orders-dlq", order);
+}
+```
+
+**after (damero):**
+```java
+@customkafkalistener(
+    topic = "orders",
+    dlqtopic = "orders-dlq",
+    maxattempts = 3,
+    delay = 1000,
+    delaymethod = delaymethod.expo
+)
+@kafkalistener(topics = "orders")
+public void processorder(consumerrecord<string, order> record, acknowledgment ack) {
+    order order = record.value();
+    // processing logic
+    ack.acknowledge();
+}
+```
+
+no need for @recover method. damero handles dlq routing automatically.
+
+#### step 2: add manual acknowledgment
+
+spring retry works with auto-commit. damero requires manual acknowledgment for reliability:
+
+```properties
+# add to application.properties
+spring.kafka.listener.ack-mode=manual
+```
+
+update your listener signature:
+```java
+public void processorder(consumerrecord<string, order> record, acknowledgment ack) {
+    // process
+    ack.acknowledge();
+}
+```
+
+#### step 3: configure retry behavior
+
+**spring retry backoff mapping:**
+
+| spring retry | damero equivalent |
+|-------------|-------------------|
+| @backoff(delay = 1000, multiplier = 2) | delay = 1000, delaymethod = delaymethod.expo |
+| @backoff(delay = 1000, multiplier = 1) | delay = 1000, delaymethod = delaymethod.linear |
+| @backoff(delay = 1000) | delay = 1000, delaymethod = delaymethod.max |
+
+**spring retry exception handling:**
+
+```java
+// spring retry
+@retryable(
+    value = {timeoutexception.class},
+    noretryfor = {validationexception.class}
+)
+```
+
+becomes:
+
+```java
+// damero
+@customkafkalistener(
+    topic = "orders",
+    nonretryableexceptions = {validationexception.class}
+)
+```
+
+#### step 4: handle conditional dlq routing
+
+if you were manually routing different exceptions to different topics:
+
+**before:**
+```java
+@recover
+public void recover(validationexception e, order order) {
+    dlqtemplate.send("orders-validation-dlq", order);
+}
+
+@recover
+public void recover(timeoutexception e, order order) {
+    dlqtemplate.send("orders-timeout-dlq", order);
+}
+```
+
+**after:**
+```java
+@customkafkalistener(
+    topic = "orders",
+    dlqroutes = {
+        @dlqexceptionroutes(
+            exception = validationexception.class,
+            dlqexceptiontopic = "orders-validation-dlq",
+            skipretry = true
+        ),
+        @dlqexceptionroutes(
+            exception = timeoutexception.class,
+            dlqexceptiontopic = "orders-timeout-dlq",
+            skipretry = false
+        )
+    }
+)
+```
+
+#### step 5: remove spring retry dependencies
+
+remove from pom.xml:
+```xml
+<!-- remove these -->
+<dependency>
+    <groupid>org.springframework.retry</groupid>
+    <artifactid>spring-retry</artifactid>
+</dependency>
+<dependency>
+    <groupid>org.springframework</groupid>
+    <artifactid>spring-aspects</artifactid>
+</dependency>
+```
+
+remove from configuration:
+```java
+// remove @enableretry from your config class
+@enableretry  // remove this
+@configuration
+public class kafkaconfig {
+    // ...
+}
+```
+
+#### step 6: add damero dependency
+
+```xml
+<dependency>
+    <groupid>java.damero</groupid>
+    <artifactid>kafka-damero</artifactid>
+    <version>0.1.0-snapshot</version>
+</dependency>
+```
+
+### migration checklist
+
+- [ ] replace @retryable with @customkafkalistener
+- [ ] remove @recover methods
+- [ ] enable manual acknowledgment mode
+- [ ] update listener signatures to include acknowledgment
+- [ ] map backoff strategies to delay methods
+- [ ] configure nonretryableexceptions if needed
+- [ ] set up conditional dlq routing if needed
+- [ ] remove spring retry dependencies
+- [ ] remove @enableretry annotation
+- [ ] test with low-volume traffic first
+- [ ] monitor dlq topics for correct routing
+- [ ] verify retry counts in kafka headers
+- [ ] check that max attempts are respected
+
+### common migration issues
+
+**issue: messages not being retried**
+
+check that:
+- manual ack mode is enabled: `spring.kafka.listener.ack-mode=manual`
+- your listener has acknowledgment parameter
+- you call `ack.acknowledge()` after processing
+
+**issue: messages going to dlq immediately**
+
+check:
+- `retryable = true` in @customkafkalistener (default is true)
+- exception is not in nonretryableexceptions list
+- maxattempts is greater than 1
+
+**issue: different retry behavior than spring retry**
+
+spring retry backoff formula: `delay * multiplier^attempt`
+damero expo formula: `delay * 2^attempt` (max 5 seconds)
+
+if you need custom backoff, use `delaymethod = delaymethod.custom` and set fixed delay.
+
+### side-by-side comparison
+
+| feature | spring retry | damero |
+|---------|-------------|---------|
+| basic retry | @retryable | @customkafkalistener |
+| max attempts | maxattempts | maxattempts |
+| backoff | @backoff | delay + delaymethod |
+| dlq support | manual @recover | automatic |
+| dlq metadata | none | full retry history |
+| exception routing | manual | conditional dlqroutes |
+| circuit breaker | separate config | built-in |
+| deduplication | manual | built-in |
+| tracing | manual | built-in opentelemetry |
+| metrics | manual | automatic micrometer |
+| redis support | no | yes (distributed cache) |
+| dlq replay | no | rest api |
+
+### when to migrate
+
+**good time to migrate:**
+- starting a new kafka-based service
+- need conditional dlq routing
+- need circuit breaker for kafka
+- need message deduplication
+- need distributed tracing for kafka flows
+- need dlq replay functionality
+- have multi-instance deployment needing redis
+
+**maybe wait:**
+- happy with current spring retry setup
+- don't need advanced features
+- concerned about library maturity
+- need guaranteed long-term support
+
+### getting help
+
+if you run into issues during migration:
+- check the troubleshooting section below
+- review the example-app in the repository
+- open an issue on github with your configuration
+- include logs showing the problem
+
+---
+
+## troubleshooting
+
+### redis and cache issues
+
+#### redis connection failed on startup
+
+**symptom:**
+```
+failed to connect to redis at localhost:6379
+```
+
+**solution:**
+
+option 1: start redis
+```bash
+docker run -d -p 6379:6379 redis:latest
+```
+
+option 2: use caffeine-only mode (single instance deployments)
+- remove `spring-boot-starter-data-redis` dependency
+- library automatically falls back to caffeine
+
+#### cacheUnavailableException during runtime
+
+**symptom:**
+```
+cacheunavailableexception: redis is unavailable and strict mode is enabled
+```
+
+**cause:** redis became unavailable and strict mode is preventing silent degradation.
+
+**solution:**
+
+option 1: fix redis (recommended for production)
+```bash
+# check redis status
+docker ps | grep redis
+
+# check redis logs
+docker logs redis
+
+# restart redis
+docker restart redis
+```
+
+option 2: disable strict mode (not recommended for production)
+```properties
+# in application.properties
+damero.cache.strict-mode=false
+```
+
+**warning:** disabling strict mode in multi-instance deployments can cause:
+- duplicate message processing
+- incorrect retry counts
+- inconsistent circuit breaker states
+
+#### retry counts seem wrong
+
+**symptom:** messages retry more times than maxattempts setting.
+
+**cause:** if using multiple instances without redis, each instance tracks retries separately.
+
+**solution:**
+- use redis for distributed retry tracking
+- or deploy single instance only
+- verify `damero.cache.strict-mode=true` to catch redis failures
+
+### retry and dlq issues
+
+#### messages retry infinitely
+
+**symptom:** messages never reach max attempts and keep retrying.
+
+**causes and solutions:**
+
+**cause 1: manual ack not configured**
+```properties
+# add to application.properties
+spring.kafka.listener.ack-mode=manual
+```
+
+**cause 2: acknowledgment parameter missing**
+```java
+// wrong
+public void process(order order) { }
+
+// correct
+public void process(consumerrecord<string, order> record, acknowledgment ack) {
+    // process
+    ack.acknowledge();
+}
+```
+
+**cause 3: acknowledgment not called**
+```java
+public void process(consumerrecord<string, order> record, acknowledgment ack) {
+    // process
+    ack.acknowledge();  // must call this
+}
+```
+
+#### messages go to dlq immediately
+
+**symptom:** messages skip retries and go straight to dlq.
+
+**causes:**
+
+**cause 1: retryable is false**
+```java
+@customkafkalistener(
+    topic = "orders",
+    retryable = false  // this skips retries
+)
+```
+
+**cause 2: exception is nonretryable**
+```java
+@customkafkalistener(
+    topic = "orders",
+    nonretryableexceptions = {illegalargumentexception.class}
+)
+```
+
+**cause 3: conditional dlq with skipretry**
+```java
+@dlqexceptionroutes(
+    exception = validationexception.class,
+    skipretry = true  // skips retries for this exception
+)
+```
+
+#### cannot deserialize dlq messages
+
+**symptom:**
+```
+cannot deserialize value of type order from eventwrapper
+```
+
+**solution:** use dlq-specific container factory
+
+```java
+@kafkalistener(
+    topics = "orders-dlq",
+    groupid = "dlq-processor",
+    containerfactory = "dlqkafkalistenercontainerfactory"  // use this
+)
+public void processdlq(eventwrapper<order> wrapper) {
+    order originalorder = wrapper.getevent();
+    eventmetadata metadata = wrapper.getmetadata();
+    // process dlq message
+}
+```
+
+#### dlq messages missing metadata
+
+**symptom:** metadata is null in eventwrapper.
+
+**cause:** messages were sent to dlq before damero was installed.
+
+**solution:** damero only adds metadata to messages it processes. old dlq messages won't have metadata.
+
+### circuit breaker issues
+
+#### circuit breaker not opening
+
+**symptom:** circuit breaker stays closed despite many failures.
+
+**check configuration:**
+```java
+@customkafkalistener(
+    topic = "orders",
+    enablecircuitbreaker = true,  // must be true
+    circuitbreakerfailurethreshold = 50,  // number of failures
+    circuitbreakerwindowduration = 60000,  // window in ms
+    circuitbreakerwaitduration = 60000  // wait before half-open
+)
+```
+
+**verify resilience4j dependency:**
+```xml
+<!-- should be included automatically but verify -->
+<dependency>
+    <groupid>io.github.resilience4j</groupid>
+    <artifactid>resilience4j-circuitbreaker</artifactid>
+</dependency>
+```
+
+#### messages go to dlq when circuit opens
+
+**symptom:** when circuit breaker opens, all messages go to dlq.
+
+**explanation:** this is expected behavior. when circuit breaker opens, the service is unhealthy, so messages are routed to dlq instead of being retried.
+
+**to change behavior:** disable circuit breaker or increase failure threshold.
+
+### deduplication issues
+
+#### duplicate messages still processed
+
+**symptom:** seeing duplicate messages even with deduplication enabled.
+
+**check configuration:**
+```java
+@customkafkalistener(
+    topic = "orders",
+    deduplication = true  // must be true
+)
+```
+
+**check redis connectivity:**
+- deduplication requires redis in multi-instance setups
+- verify redis is running and accessible
+- check `damero.cache.strict-mode=true` catches redis failures
+
+**check message has unique id:**
+- deduplication uses message key or content hash
+- ensure messages have consistent keys
+
+**check deduplication window:**
+```properties
+# extend window if duplicates are far apart
+custom.kafka.deduplication.window-duration=24
+custom.kafka.deduplication.window-unit=hours
+```
+
+#### memory usage high with deduplication
+
+**symptom:** application memory grows over time.
+
+**cause:** deduplication cache is too large.
+
+**solution:** tune cache settings
+```properties
+# reduce cache size
+custom.kafka.deduplication.max-entries-per-bucket=10000
+
+# reduce window
+custom.kafka.deduplication.window-duration=6
+custom.kafka.deduplication.window-unit=hours
+```
+
+### tracing issues
+
+#### no traces appearing in jaeger
+
+**check tracing is enabled:**
+```java
+@customkafkalistener(
+    topic = "orders",
+    opentelemetry = true  // must be true
+)
+```
+
+**check opentelemetryconfig exists:**
+```java
+@configuration
+public class opentelemetryconfig {
+    @bean
+    public opentelemetry opentelemetry() {
+        // configuration
+    }
+}
+```
+
+**check jaeger is running:**
+```bash
+docker ps | grep jaeger
+# if not running:
+docker run -d --name jaeger -e collector_otlp_enabled=true \
+  -p 16686:16686 -p 4317:4317 jaegertracing/all-in-one:latest
+```
+
+**check endpoint configuration:**
+```properties
+otel.tracing.enabled=true
+otel.exporter.otlp.endpoint=http://localhost:4317
+```
+
+#### traces incomplete or missing spans
+
+**check for exceptions:** exceptions during tracing are logged but don't crash the app.
+
+**check sampling:**
+```properties
+# ensure you are not sampling out traces
+otel.traces.sampler.ratio=1.0  # 100% for development
+```
+
+### performance issues
+
+#### high latency after adding library
+
+**check rate limiting:**
+```java
+@customkafkalistener(
+    topic = "orders",
+    messagesperwindow = 100,  // might be too restrictive
+    messagewindow = 60000
+)
+```
+
+**check circuit breaker:**
+- circuit breaker adds overhead for state tracking
+- disable if not needed
+
+**check deduplication:**
+- adds cache lookup overhead
+- disable if not needed
+
+#### redis connection pool exhausted
+
+**symptom:**
+```
+could not get a resource from the pool
+```
+
+**solution:** increase redis connection pool
+```properties
+spring.data.redis.lettuce.pool.max-active=20
+spring.data.redis.lettuce.pool.max-idle=10
+spring.data.redis.lettuce.pool.min-idle=5
+```
+
+### auto-configuration issues
+
+#### custom beans not working
+
+**symptom:** your custom bean is ignored.
+
+**cause:** damero creates beans with @conditionalonmissingbean.
+
+**solution:** create your bean before damero's auto-configuration runs:
+```java
+@configuration
+public class myconfig {
+    @bean
+    @primary  // mark as primary
+    public dlqrouter mycustomdlqrouter() {
+        return new mycustomdlqrouter();
+    }
+}
+```
+
+#### auto-configuration disabled
+
+**symptom:** library features not working.
+
+**check configuration:**
+```properties
+# ensure this is not false
+custom.kafka.auto-config.enabled=true
+```
+
+#### bean creation errors on startup
+
+**symptom:**
+```
+error creating bean with name 'kafkalisteneraspect'
+```
+
+**solution:** ensure component scanning includes damero packages:
+```java
+@springbootapplication
+@componentscan(basepages = {
+    "com.yourpackage",
+    "net.damero"  // add this if needed
+})
+public class application {
+}
+```
+
+### getting help
+
+if you cannot resolve an issue:
+
+1. **check logs** - set logging level to debug:
+```properties
+logging.level.net.damero.kafka=debug
+```
+
+2. **check example-app** - the example-app folder has a working configuration you can reference
+
+3. **create minimal reproduction** - try to reproduce with minimal code
+
+4. **open github issue** with:
+   - your @customkafkalistener configuration
+   - relevant application.properties
+   - error logs and stack traces
+   - damero version
+   - spring boot version
+
+---
+

@@ -190,10 +190,17 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean(PluggableRedisCache.class)
     public PluggableRedisCache redisBackedCacheWithHealthCheck(RedisTemplate<String, Object> kafkaDameroRedisTemplate,
                                                                CaffeineCache caffeineCache,
-                                                               RedisHealthCheck redisHealthCheck) {
-        logger.info("==> PluggableRedisCache configured with automatic Redis health monitoring and failover");
-        // Create cache with both backends and health check reference
-        return new PluggableRedisCache(kafkaDameroRedisTemplate, caffeineCache, redisHealthCheck);
+                                                               RedisHealthCheck redisHealthCheck,
+                                                               @Value("${damero.cache.strict-mode:true}") boolean strictMode) {
+        if (strictMode) {
+            logger.info("==> PluggableRedisCache configured with Redis + Caffeine failover (STRICT MODE ENABLED)");
+            logger.info("==> Redis failures will throw exceptions to prevent split-brain scenarios");
+        } else {
+            logger.warn("==> PluggableRedisCache configured with Redis + Caffeine failover (STRICT MODE DISABLED)");
+            logger.warn("==> WARNING: Redis failures will silently degrade - may cause data inconsistency!");
+        }
+        // Create cache with both backends, health check, and strict mode setting
+        return new PluggableRedisCache(kafkaDameroRedisTemplate, caffeineCache, redisHealthCheck, strictMode);
     }
 
     /**
