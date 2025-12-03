@@ -112,6 +112,7 @@ public class PluggableRedisCache {
             try {
                 logger.debug("Storing in Redis - key: {}, value type: {}", cacheKeyPrefix + key, value.getClass().getSimpleName());
                 redisTemplate.opsForValue().set(cacheKeyPrefix + key, value);
+
             } catch (Exception e) {
                 logger.error("Failed to store key '{}' in Redis: {}", key, e.getMessage());
                 // notify health check of failure for immediate failover
@@ -277,6 +278,7 @@ public class PluggableRedisCache {
     public int incrementAndGet(String key) {
         if (shouldUseRedis() && redisTemplate != null) {
             try {
+                logger.debug("Incrementing key in Redis: {}", cacheKeyPrefix + key);
                 Long newValue = redisTemplate.opsForValue().increment(cacheKeyPrefix + key);
                 if (newValue == null) {
                     throw new IllegalStateException("Redis INCR returned null for key: " + key);
@@ -322,4 +324,152 @@ public class PluggableRedisCache {
             super(message, cause);
         }
     }
+
+    // ==================== rate limiting ====================
+
+    private static final String RATE_LIMIT_PREFIX = "ratelimit:";
+    private static final String COUNTER_FIELD = "count";
+    private static final String WINDOW_START_FIELD = "windowStart";
+
+    /**
+     * increment the rate limit counter for a topic and return the new count
+     * uses redis HINCRBY for the counter field, falls back to caffeine
+     *
+     * @param topic the topic name
+     * @return the new counter value after increment
+     */
+    public long incrementRateLimitCounter(String topic) {
+        String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
+
+        if (shouldUseRedis() && redisTemplate != null) {
+            try {
+                Long count = redisTemplate.opsForHash().increment(key, COUNTER_FIELD, 1);
+                return count != null ? count : 1;
+            } catch (Exception e) {
+                logger.error("Failed to increment rate limit counter for '{}': {}", topic, e.getMessage());
+                if (healthCheck != null) {
+                    healthCheck.markRedisUnavailable();
+                }
+                if (strictMode) {
+                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
+                }
+            }
+        }
+        // caffeine fallback
+        if (caffeineCache != null) {
+            String counterKey = RATE_LIMIT_PREFIX + topic + ":count";
+            Integer current = caffeineCache.get(counterKey);
+            int newValue = (current == null ? 0 : current) + 1;
+            caffeineCache.put(counterKey, newValue);
+            return newValue;
+        }
+        return 1;
+    }
+
+    /**
+     * get the current window start time for a topic
+     *
+     * @param topic the topic name
+     * @return the window start time in milliseconds, or 0 if not set
+     */
+    public long getRateLimitWindowStart(String topic) {
+        String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
+
+        if (shouldUseRedis() && redisTemplate != null) {
+            try {
+                Object value = redisTemplate.opsForHash().get(key, WINDOW_START_FIELD);
+                if (value instanceof Number) {
+                    return ((Number) value).longValue();
+                }
+                if (value instanceof String) {
+                    return Long.parseLong((String) value);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to get rate limit window start for '{}': {}", topic, e.getMessage());
+                if (healthCheck != null) {
+                    healthCheck.markRedisUnavailable();
+                }
+                if (strictMode) {
+                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
+                }
+            }
+        }
+        // caffeine fallback - store as int (seconds) to fit in Integer
+        if (caffeineCache != null) {
+            String windowKey = RATE_LIMIT_PREFIX + topic + ":window";
+            Integer value = caffeineCache.get(windowKey);
+            return value != null ? value * 1000L : 0;
+        }
+        return 0;
+    }
+
+    /**
+     * reset the rate limit window for a topic (sets counter to 1 and updates window start time)
+     *
+     * @param topic the topic name
+     * @param windowStartTime the new window start time in milliseconds
+     */
+    public void resetRateLimitWindow(String topic, long windowStartTime) {
+        String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
+
+        if (shouldUseRedis() && redisTemplate != null) {
+            try {
+                redisTemplate.opsForHash().put(key, COUNTER_FIELD, 1);
+                redisTemplate.opsForHash().put(key, WINDOW_START_FIELD, windowStartTime);
+                return;
+            } catch (Exception e) {
+                logger.error("Failed to reset rate limit window for '{}': {}", topic, e.getMessage());
+                if (healthCheck != null) {
+                    healthCheck.markRedisUnavailable();
+                }
+                if (strictMode) {
+                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
+                }
+            }
+        }
+        // caffeine fallback
+        if (caffeineCache != null) {
+            String counterKey = RATE_LIMIT_PREFIX + topic + ":count";
+            String windowKey = RATE_LIMIT_PREFIX + topic + ":window";
+            caffeineCache.put(counterKey, 1);
+            caffeineCache.put(windowKey, (int) (windowStartTime / 1000));
+        }
+    }
+
+    /**
+     * get the current rate limit counter for a topic
+     *
+     * @param topic the topic name
+     * @return the current counter value, or 0 if not set
+     */
+//    public long getRateLimitCounter(String topic) {
+//        String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
+//
+//        if (shouldUseRedis() && redisTemplate != null) {
+//            try {
+//                Object value = redisTemplate.opsForHash().get(key, COUNTER_FIELD);
+//                if (value instanceof Number) {
+//                    return ((Number) value).longValue();
+//                }
+//                if (value instanceof String) {
+//                    return Long.parseLong((String) value);
+//                }
+//            } catch (Exception e) {
+//                logger.error("Failed to get rate limit counter for '{}': {}", topic, e.getMessage());
+//                if (healthCheck != null) {
+//                    healthCheck.markRedisUnavailable();
+//                }
+//                if (strictMode) {
+//                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
+//                }
+//            }
+//        }
+//        // caffeine fallback
+//        if (caffeineCache != null) {
+//            String counterKey = RATE_LIMIT_PREFIX + topic + ":count";
+//            Integer value = caffeineCache.get(counterKey);
+//            return value != null ? value : 0;
+//        }
+//        return 0;
+//    }
 }

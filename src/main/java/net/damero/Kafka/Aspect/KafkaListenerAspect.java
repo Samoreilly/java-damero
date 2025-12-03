@@ -6,6 +6,7 @@ import io.opentelemetry.context.Scope;
 import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
+import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import net.damero.Kafka.Tracing.TracingService;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -19,9 +20,6 @@ import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Aspect that intercepts @CustomKafkaListener annotated methods to provide
@@ -43,14 +41,7 @@ public class KafkaListenerAspect {
     private final DLQExceptionRoutingManager dlqExceptionRoutingManager;
     private final DuplicationManager duplicationManager;
     private final TracingService tracingService;
-
-    // Per-topic rate limiting state
-    private static class RateLimitState {
-        final AtomicInteger messageCounter = new AtomicInteger(0);
-        final AtomicLong windowStartTime = new AtomicLong(System.currentTimeMillis());
-    }
-    
-    private final ConcurrentHashMap<String, RateLimitState> rateLimitStates = new ConcurrentHashMap<>();
+    private final PluggableRedisCache cache;
 
     public KafkaListenerAspect(DLQRouter dlqRouter,
                                ApplicationContext context,
@@ -61,7 +52,8 @@ public class KafkaListenerAspect {
                                RetrySched retrySched,
                                DLQExceptionRoutingManager dlqExceptionRoutingManager,
                                DuplicationManager duplicationManager,
-                               TracingService tracingService) {
+                               TracingService tracingService,
+                               PluggableRedisCache cache) {
         this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
@@ -72,15 +64,9 @@ public class KafkaListenerAspect {
         this.dlqExceptionRoutingManager = dlqExceptionRoutingManager;
         this.duplicationManager = duplicationManager;
         this.tracingService = tracingService;
+        this.cache = cache;
     }
 
-    /**
-        PLAN TO FIX SENDING DIFFERENT OBJECTS
-        ON RECEIVING AN EVENT, ATTACH HEADERS IF THE EVENT HAS NOT BEEN RETRIED OTHERWISE
-        ATTACH HEADERS TO THE OBJECT AND SEND IT BACK
-        PROS OF THIS METHOD: USER RECEIVED SEND OBJECT THEY SENT,
-        JUST WITH SOME EXTRAS HEADERS FOR METADATA TO TRACK LAST FAILURE, FIRST FAILURE, ATTEMPTS etc
-     */
 
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
@@ -455,79 +441,57 @@ public class KafkaListenerAspect {
 
     /**
      * Handles rate limiting per topic using a fixed window algorithm.
+     * Uses PluggableRedisCache for distributed rate limiting state.
      * Each topic has its own independent rate limiting state.
-     * Multiple threads can safely access the same topic's rate limit state.
-     * 
-     * Thread-safety guarantees:
-     * - ConcurrentHashMap ensures thread-safe access to the map
-     * - AtomicInteger and AtomicLong provide atomic operations
-     * - compareAndSet ensures atomic window resets
-     * 
+     *
      * @param customKafkaListener the listener configuration
      * @param enableTracing whether to create trace spans for rate limiting
      * @throws InterruptedException if thread is interrupted during sleep
      */
     private void handleRateLimiting(CustomKafkaListener customKafkaListener, boolean enableTracing) throws InterruptedException {
+
         String topic = customKafkaListener.topic();
         int messagesPerWindow = customKafkaListener.messagesPerWindow();
         long messageWindowMs = customKafkaListener.messageWindow();
-        
-        //new window for each topic,
-        //
-        RateLimitState state = rateLimitStates.computeIfAbsent(topic, 
-            k -> new RateLimitState());
-        
+
         long now = System.currentTimeMillis();
-        long windowStart = state.windowStartTime.get();
-        long elapsed = now - windowStart;
-        
-        // checks if window has expired
-        if (elapsed >= messageWindowMs) {
-            // creates new window
-            if (state.windowStartTime.compareAndSet(windowStart, now)) {
-                // reset variables for new window
-                state.messageCounter.set(0);
-                state.messageCounter.incrementAndGet();
-                return;
-            }
-            // another thread reset window, recalculate elapsed
-            elapsed = now - state.windowStartTime.get();
+        long windowStart = cache.getRateLimitWindowStart(topic);
+
+        // if no window exists, initialize it
+        if (windowStart == 0) {
+            cache.resetRateLimitWindow(topic, now);
+            cache.incrementRateLimitCounter(topic);
+            return;
         }
-        
-        /*
-         * MESSSAGE COUNT logic
-         */
-        int currentCount = state.messageCounter.incrementAndGet();
-        //if more messages than allowed
+
+        long elapsed = now - windowStart;
+
+        // check if window has expired
+        if (elapsed >= messageWindowMs) {
+            cache.resetRateLimitWindow(topic, now);
+            return;
+        }
+
+        // increment counter
+        long currentCount = cache.incrementRateLimitCounter(topic);
+
+        // if more messages than allowed
         if (currentCount > messagesPerWindow) {
-            //gets difference between the window time and time taken to process messages
             long sleepTime = messageWindowMs - elapsed;
 
             if (sleepTime > 0) {
                 logger.debug("Topic: {}, Rate limit reached ({}/{} messages), sleeping for {} ms",
                     topic, currentCount, messagesPerWindow, sleepTime);
 
-                // Create rate limit span if tracing is enabled
                 Span rateLimitSpan = null;
                 if (enableTracing) {
-                    rateLimitSpan = tracingService.startRateLimitSpan(topic, currentCount, messagesPerWindow, sleepTime);
+                    rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, sleepTime);
                 }
 
                 try {
                     Thread.sleep(sleepTime);
-
-                    // Recapture current window start time (may have changed during sleep)
-                    long currentWindowStart = state.windowStartTime.get();
-                    long newWindowStart = System.currentTimeMillis();
-
-                    // Atomic reset: only one thread wins, others see counter already reset
-                    if(state.windowStartTime.compareAndSet(currentWindowStart, newWindowStart)){
-                        // This thread won the race - reset counter to 1 (for current message)
-                        state.messageCounter.set(1);
-                        logger.debug("Topic: {}, Window reset by this thread, counter set to 1", topic);
-                    }
-                    // else: Another thread already reset window. Our increment from line 386
-                    // is now part of the new window, which is correct behavior.
+                    // reset window after sleep
+                    cache.resetRateLimitWindow(topic, System.currentTimeMillis());
 
                     if (enableTracing && rateLimitSpan != null) {
                         tracingService.setSuccess(rateLimitSpan);
@@ -542,17 +506,12 @@ public class KafkaListenerAspect {
                         tracingService.endSpan(rateLimitSpan);
                     }
                 }
-
             } else {
                 // window expired during check, reset it
-                // this handles the case where window expired between check and increment
-                long newWindowStart = System.currentTimeMillis();
-                state.windowStartTime.set(newWindowStart);
-                state.messageCounter.set(1); // current message is the first in new window
+                cache.resetRateLimitWindow(topic, System.currentTimeMillis());
             }
         } else if (enableTracing) {
-            // Not throttled, but create a span to track it anyway
-            Span rateLimitSpan = tracingService.startRateLimitSpan(topic, currentCount, messagesPerWindow, 0);
+            Span rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, 0);
             tracingService.setSuccess(rateLimitSpan);
             tracingService.endSpan(rateLimitSpan);
         }

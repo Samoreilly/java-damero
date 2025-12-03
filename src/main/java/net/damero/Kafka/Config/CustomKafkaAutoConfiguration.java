@@ -272,11 +272,12 @@ public class CustomKafkaAutoConfiguration {
                                                    RetrySched retrySched,
                                                    DLQExceptionRoutingManager dlqExceptionRoutingManager,
                                                    DuplicationManager duplicationManager,
-                                                   TracingService tracingService) {
+                                                   TracingService tracingService,
+                                                   PluggableRedisCache pluggableRedisCache) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate,
                                        retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
                                        retrySched, dlqExceptionRoutingManager, duplicationManager,
-                                       tracingService);
+                                       tracingService, pluggableRedisCache);
     }
 
     /*
