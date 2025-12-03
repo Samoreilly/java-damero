@@ -2,7 +2,9 @@ package net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.api.trace.Span;
 import net.damero.Kafka.CustomObject.EventWrapper;
+import net.damero.Kafka.Tracing.TracingService;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -36,15 +38,18 @@ public class ReplayDLQ {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper kafkaObjectMapper;
     private final KafkaAdmin kafkaAdmin;
+    private final TracingService tracingService;
 
     public ReplayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
                      KafkaTemplate<String, Object> kafkaTemplate,
                      ObjectMapper kafkaObjectMapper,
-                     KafkaAdmin kafkaAdmin) {
+                     KafkaAdmin kafkaAdmin,
+                     TracingService tracingService) {
         this.dlqConsumerFactory = dlqConsumerFactory;
         this.kafkaTemplate = kafkaTemplate;
         this.kafkaObjectMapper = kafkaObjectMapper;
         this.kafkaAdmin = kafkaAdmin;
+        this.tracingService = tracingService;
     }
 
     /**
@@ -85,20 +90,25 @@ public class ReplayDLQ {
             throw new IllegalArgumentException("DLQ topic cannot be null or empty");
         }
 
-        log.info("Starting replay from DLQ topic: {} (forceFromBeginning={}, skipValidation={})",
-                 dlqTopic, forceFromBeginning, skipValidation);
+        Span replaySpan = tracingService.startReplaySpan(dlqTopic);
+        replaySpan.setAttribute("damero.replay.force_from_beginning", forceFromBeginning);
+        replaySpan.setAttribute("damero.replay.skip_validation", skipValidation);
 
-        Map<String, Object> consumerProps = createConsumerProperties(dlqTopic);
+        try {
+            log.info("Starting replay from DLQ topic: {} (forceFromBeginning={}, skipValidation={})",
+                     dlqTopic, forceFromBeginning, skipValidation);
 
-        int successCount = 0;
-        int failureCount = 0;
-        Map<String, Integer> errorsPerTopic = new HashMap<>();
+            Map<String, Object> consumerProps = createConsumerProperties(dlqTopic);
 
-        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
-            consumer.subscribe(List.of(dlqTopic));
+            int successCount = 0;
+            int failureCount = 0;
+            Map<String, Integer> errorsPerTopic = new HashMap<>();
 
-            // Wait for partition assignment
-            if (!waitForPartitionAssignment(consumer, dlqTopic)) {
+            try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
+                consumer.subscribe(List.of(dlqTopic));
+
+                // Wait for partition assignment
+                if (!waitForPartitionAssignment(consumer, dlqTopic)) {
                 throw new RuntimeException("Failed to assign partitions for topic: " + dlqTopic);
             }
 
@@ -222,12 +232,24 @@ public class ReplayDLQ {
 
         } catch (Exception e) {
             log.error("Error during DLQ replay: {}", e.getMessage(), e);
+            tracingService.recordException(replaySpan, e);
             throw new RuntimeException("DLQ replay failed", e);
         }
 
         ReplayResult result = new ReplayResult(successCount, failureCount, errorsPerTopic);
+        replaySpan.setAttribute("damero.replay.success_count", successCount);
+        replaySpan.setAttribute("damero.replay.failure_count", failureCount);
+        replaySpan.setAttribute("damero.replay.total_count", successCount + failureCount);
+
+        if (failureCount == 0) {
+            tracingService.setSuccess(replaySpan);
+        }
+
         log.info("Replay completed. Success: {}, Failures: {}", successCount, failureCount);
         return result;
+        } finally {
+            tracingService.endSpan(replaySpan);
+        }
     }
 
     private Map<String, Object> createConsumerProperties(String dlqTopic) {

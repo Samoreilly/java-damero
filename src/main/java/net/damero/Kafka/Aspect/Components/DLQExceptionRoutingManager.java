@@ -1,9 +1,11 @@
 package net.damero.Kafka.Aspect.Components;
 
 
+import io.opentelemetry.api.trace.Span;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Annotations.DlqExceptionRoutes;
 import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.Tracing.TracingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -19,11 +21,15 @@ public class DLQExceptionRoutingManager {
 
     private final DLQRouter dlqRouter;
     private final RetryOrchestrator retryOrchestrator;
+    private final TracingService tracingService;
 
 
-    public DLQExceptionRoutingManager(DLQRouter dlqRouter, RetryOrchestrator retryOrchestrator){
+    public DLQExceptionRoutingManager(DLQRouter dlqRouter,
+                                      RetryOrchestrator retryOrchestrator,
+                                      TracingService tracingService){
         this.dlqRouter = dlqRouter;
         this.retryOrchestrator = retryOrchestrator;
+        this.tracingService = tracingService;
     }
 
     /**
@@ -47,17 +53,46 @@ public class DLQExceptionRoutingManager {
             logger.info("Exception {} matched DLQ route with skipRetry=true - sending to {} without retry",
                 e.getClass().getSimpleName(), dlqTopic);
 
-            dlqRouter.sendToDLQAfterMaxAttempts(
-                    kafkaTemplate,
-                    originalEvent,
-                    e,
-                    1,  // First attempt, no retries
-                    existingMetadata,
+            Span routingSpan = null;
+            if (customKafkaListener.openTelemetry()) {
+                String eventId = EventUnwrapper.extractEventId(originalEvent);
+                routingSpan = tracingService.startDLQSpan(
+                    customKafkaListener.topic(),
                     dlqTopic,
-                    customKafkaListener
-            );
+                    eventId,
+                    1,
+                    "conditional_routing_skip_retry"
+                );
+                routingSpan.setAttribute("damero.exception.type", e.getClass().getSimpleName());
+                routingSpan.setAttribute("damero.dlq.skip_retry", true);
+            }
 
-            return true;  // Message handled, stop processing
+            try {
+                dlqRouter.sendToDLQAfterMaxAttempts(
+                        kafkaTemplate,
+                        originalEvent,
+                        e,
+                        1,  // First attempt, no retries
+                        existingMetadata,
+                        dlqTopic,
+                        customKafkaListener
+                );
+
+                if (customKafkaListener.openTelemetry()) {
+                    tracingService.setSuccess(routingSpan);
+                }
+
+                return true;  // Message handled, stop processing
+            } catch (Exception routingException) {
+                if (customKafkaListener.openTelemetry()) {
+                    tracingService.recordException(routingSpan, routingException);
+                }
+                throw routingException;
+            } finally {
+                if (customKafkaListener.openTelemetry()) {
+                    tracingService.endSpan(routingSpan);
+                }
+            }
         }
 
         return false;  // Should continue with retry logic
@@ -77,10 +112,12 @@ public class DLQExceptionRoutingManager {
 
         DlqExceptionRoutes matchedRoute = findMatchingRoute(customKafkaListener, e);
         String targetDlq;
+        boolean isConditionalRoute = false;
 
         if(matchedRoute != null && !matchedRoute.skipRetry()){
             // Send to conditional DLQ for exceptions that were retried
             targetDlq = matchedRoute.dlqExceptionTopic();
+            isConditionalRoute = true;
             logger.info("Routing to conditional DLQ '{}' after {} attempts", targetDlq, currentAttempts);
         } else {
             // Fallback to default DLQ
@@ -88,17 +125,45 @@ public class DLQExceptionRoutingManager {
             logger.info("Routing to default DLQ '{}' after {} attempts", targetDlq, currentAttempts);
         }
 
-        dlqRouter.sendToDLQAfterMaxAttempts(
-                kafkaTemplate,
-                originalEvent,
-                e,
-                currentAttempts,
-                existingMetadata,
+        Span routingSpan = null;
+        if (customKafkaListener.openTelemetry()) {
+            routingSpan = tracingService.startDLQSpan(
+                customKafkaListener.topic(),
                 targetDlq,
-                customKafkaListener
-        );
+                eventId,
+                currentAttempts,
+                isConditionalRoute ? "conditional_routing_after_retry" : "default_routing"
+            );
+            routingSpan.setAttribute("damero.exception.type", e.getClass().getSimpleName());
+            routingSpan.setAttribute("damero.dlq.conditional_route", isConditionalRoute);
+        }
 
-        retryOrchestrator.clearAttempts(eventId);
+        try {
+            dlqRouter.sendToDLQAfterMaxAttempts(
+                    kafkaTemplate,
+                    originalEvent,
+                    e,
+                    currentAttempts,
+                    existingMetadata,
+                    targetDlq,
+                    customKafkaListener
+            );
+
+            retryOrchestrator.clearAttempts(eventId);
+
+            if (customKafkaListener.openTelemetry()) {
+                tracingService.setSuccess(routingSpan);
+            }
+        } catch (Exception routingException) {
+            if (customKafkaListener.openTelemetry()) {
+                tracingService.recordException(routingSpan, routingException);
+            }
+            throw routingException;
+        } finally {
+            if (customKafkaListener.openTelemetry()) {
+                tracingService.endSpan(routingSpan);
+            }
+        }
     }
 
     /**

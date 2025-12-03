@@ -8,16 +8,17 @@ Beta release. All core features are implemented and tested. The library is funct
 
 ## Features
 
-- Automatic retry logic with configurable backoff strategies (exponential, linear, Fibonacci, custom)
-- Dead letter queue routing with complete metadata (attempts, timestamps, exceptions)
-- Circuit breaker integration using Resilience4j
-- Rate limiting to control message processing throughput
-- Message deduplication to prevent duplicate processing
-- Conditional DLQ routing to send different exceptions to different topics
-- REST API for querying and replaying DLQ messages
-- Distributed cache support using Redis for multi-instance deployments
-- Metrics tracking with Micrometer
-- Auto-configuration with sensible defaults
+- automatic retry logic with configurable backoff strategies (exponential, linear, fibonacci, custom)
+- dead letter queue routing with complete metadata (attempts, timestamps, exceptions)
+- distributed tracing with opentelemetry for full visibility into message processing
+- circuit breaker integration using resilience4j
+- rate limiting to control message processing throughput
+- message deduplication to prevent duplicate processing
+- conditional dlq routing to send different exceptions to different topics
+- rest api for querying and replaying dlq messages
+- distributed cache support using redis for multi-instance deployments
+- metrics tracking with micrometer
+- auto-configuration with sensible defaults
 
 ## Requirements
 
@@ -28,17 +29,17 @@ Beta release. All core features are implemented and tested. The library is funct
 
 ## Installation
 
-Add the library to your project:
+add the library to your project:
 
 ```xml
 <dependency>
-    <groupId>java.damero</groupId>
-    <artifactId>kafka-damero</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <groupid>java.damero</groupid>
+    <artifactid>kafka-damero</artifactid>
+    <version>0.1.0-snapshot</version>
 </dependency>
 ```
 
-The library automatically includes these dependencies:
+the library automatically includes these dependencies:
 
 - spring-boot-starter-aop
 - micrometer-core
@@ -47,16 +48,34 @@ The library automatically includes these dependencies:
 - reflections
 - commons-io
 
-Optional: Add Redis for distributed caching across multiple instances:
+optional: add redis for distributed caching across multiple instances:
 
 ```xml
 <dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-redis</artifactId>
+    <groupid>org.springframework.boot</groupid>
+    <artifactid>spring-boot-starter-data-redis</artifactid>
 </dependency>
 ```
 
-Configure Kafka in your application.properties:
+optional: add opentelemetry for distributed tracing (recommended):
+
+```xml
+<dependency>
+    <groupid>io.opentelemetry</groupid>
+    <artifactid>opentelemetry-sdk</artifactid>
+    <version>1.33.0</version>
+</dependency>
+
+<dependency>
+    <groupid>io.opentelemetry</groupid>
+    <artifactid>opentelemetry-exporter-otlp</artifactid>
+    <version>1.33.0</version>
+</dependency>
+```
+
+note: the example-app folder includes a fully configured working example with tracing already set up. copy the opentelemetryconfig class from there to get started quickly.
+
+configure kafka in your application.properties:
 
 ```properties
 spring.kafka.bootstrap-servers=localhost:9092
@@ -74,33 +93,34 @@ spring.data.redis.port=6379
 Create a listener with the @CustomKafkaListener annotation:
 
 ```java
-@Service
-public class OrderListener {
+@service
+public class orderlistener {
     
-    @CustomKafkaListener(
+    @customkafkalistener(
         topic = "orders",
-        dlqTopic = "orders-dlq",
-        maxAttempts = 3,
+        dlqtopic = "orders-dlq",
+        maxattempts = 3,
         delay = 1000,
-        delayMethod = DelayMethod.EXPO
+        delaymethod = delaymethod.expo,
+        opentelemetry = true  // optional: enable distributed tracing
     )
-    @KafkaListener(
+    @kafkalistener(
         topics = "orders",
-        groupId = "order-processor",
-        containerFactory = "kafkaListenerContainerFactory"
+        groupid = "order-processor",
+        containerfactory = "kafkalistenercontainerfactory"
     )
-    public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
-        OrderEvent order = (OrderEvent) record.value();
+    public void processorder(consumerrecord<string, object> record, acknowledgment ack) {
+        orderevent order = (orderevent) record.value();
         
-        // Process the order
-        processPayment(order);
+        // process the order
+        processpayment(order);
         
         ack.acknowledge();
     }
 }
 ```
 
-The library handles retries, DLQ routing, and acknowledgment automatically.
+the library handles retries, dlq routing, and acknowledgment automatically. if you enable tracing (opentelemetry = true), you also get full visibility into message processing with zero additional code.
 
 ## Configuration
 
@@ -122,9 +142,10 @@ The @CustomKafkaListener annotation supports these parameters:
 | circuitBreakerFailureThreshold | int | 50 | Failures before opening circuit |
 | circuitBreakerWindowDuration | long | 60000 | Failure tracking window in ms |
 | circuitBreakerWaitDuration | long | 60000 | Wait time before half-open in ms |
-| messagesPerWindow | int | 0 | Rate limit: messages per window (0 = disabled) |
-| messageWindow | long | 0 | Rate limit: window duration in ms |
-| deDuplication | boolean | false | Enable message deduplication |
+| messagesPerWindow | int | 0 | rate limit: messages per window (0 = disabled) |
+| messageWindow | long | 0 | rate limit: window duration in ms |
+| deDuplication | boolean | false | enable message deduplication |
+| openTelemetry | boolean | false | enable distributed tracing |
 
 ### Delay Methods
 
@@ -331,6 +352,245 @@ Protect downstream services:
 
 When the circuit opens, messages go directly to DLQ without retries.
 
+### Distributed Tracing with OpenTelemetry
+
+the library has built-in distributed tracing that lets you see exactly what happens to each message. this includes retries, dlq routing, circuit breaker events, deduplication checks, and rate limiting. the best part is that the library handles all the tracing automatically. you just need to add a simple configuration class.
+
+#### why use tracing
+
+tracing gives you complete visibility into your kafka message processing:
+
+- see the full journey of each message from consumption to success or dlq
+- track how many times a message was retried and why
+- identify slow operations and bottlenecks
+- correlate errors across multiple services
+- monitor circuit breaker behavior and deduplication effectiveness
+- debug production issues faster with detailed context
+
+#### how easy is it to setup
+
+the library does all the hard work for you. you only need to:
+
+1. add opentelemetry dependencies to your pom.xml
+2. create one simple configuration class (opentelemetryconfig)
+3. enable tracing in your listener annotation
+
+that is it. the library automatically creates spans for all operations and propagates trace context through kafka headers.
+
+#### step 1: add dependencies
+
+add these to your pom.xml:
+
+```xml
+<dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-sdk</artifactId>
+    <version>1.33.0</version>
+</dependency>
+
+<dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-exporter-otlp</artifactId>
+    <version>1.33.0</version>
+</dependency>
+
+<dependency>
+    <groupId>io.opentelemetry.semconv</groupId>
+    <artifactId>opentelemetry-semconv</artifactId>
+    <version>1.23.1-alpha</version>
+</dependency>
+```
+
+#### step 2: create opentelemetryconfig class
+
+create this simple configuration class. the library will automatically use it:
+
+```java
+@Configuration
+@ConditionalOnProperty(
+    name = "otel.tracing.enabled",
+    havingValue = "true",
+    matchIfMissing = false
+)
+public class OpenTelemetryConfig {
+
+    @value("${otel.exporter.otlp.endpoint:http://localhost:4317}")
+    private string otlpendpoint;
+
+    @value("${otel.service.name:my-service}")
+    private string servicename;
+
+    @bean
+    public OpenTelemetry openTelemetry() {
+        resource resource = resource.getDefault()
+            .merge(resource.create(attributes.of(
+                resourceattributes.service_name, servicename,
+                resourceattributes.service_version, "1.0.0"
+            )));
+
+        otlpgrpcspanexporter spanexporter = otlpgrpcspanexporter.builder()
+            .setendpoint(otlpendpoint)
+            .build();
+
+        sdktracerprovider sdktracerprovider = sdktracerprovider.builder()
+            .addspanprocessor(batchspanprocessor.builder(spanexporter).build())
+            .setresource(resource)
+            .build();
+
+        return OpenTelemetrysdk.builder()
+            .settracerprovider(sdktracerprovider)
+            .setpropagators(contextpropagators.create(
+                w3ctracecontextpropagator.getinstance()
+            ))
+            .buildandregisterglobal();
+    }
+}
+```
+
+#### step 3: configure in application.properties
+
+```properties
+# enable tracing
+otel.tracing.enabled=true
+
+# your service name in traces
+otel.service.name=my-kafka-service
+
+# where to send traces (jaeger, tempo, cloud provider, etc)
+otel.exporter.otlp.endpoint=http://localhost:4317
+```
+
+#### step 4: enable in your listener
+
+```java
+@customkafkalistener(
+    topic = "orders",
+    dlqtopic = "orders-dlq",
+    maxattempts = 3,
+    opentelemetry = true  // just add this
+)
+@kafkalistener(topics = "orders")
+public void processorder(ConsumerRecord<String, Order> record) {
+    // your code
+}
+```
+
+#### step 5: start a tracing backend and view traces
+
+for local development, start jaeger:
+
+```bash
+docker run -d --name jaeger -e collector_otlp_enabled=true \
+  -p 16686:16686 -p 4317:4317 jaegertracing/all-in-one:latest
+```
+
+then view traces at http://localhost:16686
+
+#### what gets traced automatically
+
+the library automatically creates trace spans for:
+
+- message processing (with success or failure status)
+- retry scheduling and execution (with attempt numbers and delays)
+- dlq routing (with reason and exception details)
+- circuit breaker state changes (open, closed, half-open)
+- deduplication checks (duplicate detected or first-time message)
+- rate limiting operations (throttled or not)
+- conditional dlq routing (which route was matched)
+
+each span includes rich attributes like topic name, event id, retry attempt number, exception type, and more.
+
+#### works with any tracing backend
+
+because the library uses otlp (opentelemetry protocol), it works with any compatible backend:
+
+- jaeger (local development)
+- grafana tempo
+- aws x-ray
+- google cloud trace
+- azure monitor
+- datadog
+- new relic
+- honeycomb
+- lightstep
+
+you only need to change the endpoint in application.properties. the library code stays the same.
+
+#### production configuration
+
+for production, add sampling to reduce overhead:
+
+```java
+@value("${otel.traces.sampler.ratio:0.01}")  // sample 1% of traces
+private double samplerratio;
+
+sdktracerprovider sdkTracerProvider = sdkTracerProvider.builder()
+    .setsampler(sampler.traceidratiobased(samplerratio))  // add this
+    .addspanprocessor(...)
+    .build();
+```
+
+```properties
+# sample only 1% of traces in production
+otel.traces.sampler.ratio=0.01
+
+# sample 10% in staging
+otel.traces.sampler.ratio=0.1
+
+# sample 100% in development
+otel.traces.sampler.ratio=1.0
+```
+
+#### example trace flow
+
+when you send a message that fails and retries, you will see:
+
+```
+trace: a1b2c3d4e5f6...
+
+damero.kafka.process [450ms] failed
+  - messaging.destination: orders
+  - damero.event_id: order-123
+  - damero.outcome: retry_scheduled
+  - damero.exception.type: timeoutexception
+
+  damero.rate_limit [0ms] success
+    - damero.rate_limit.throttled: false
+
+  damero.deduplication.check [2ms] success
+    - damero.deduplication.is_duplicate: false
+
+  damero.retry [5ms] success
+    - damero.retry.attempt: 1
+    - damero.retry.delay_ms: 1000
+
+(after retry delay...)
+
+damero.kafka.process [350ms] failed
+  - damero.retry.attempt: 2
+  
+  damero.retry [5ms] success
+    - damero.retry.attempt: 2
+
+(after retry delay...)
+
+damero.kafka.process [400ms] failed
+  - damero.retry.attempt: 3
+  
+  damero.dlq.route [25ms] success
+    - damero.dlq.reason: max_attempts_reached
+    - damero.dlq.attempts: 3
+```
+
+all spans share the same trace id so you can see the complete story.
+
+#### see more
+
+for detailed setup instructions and backend examples, see:
+- viewing_traces.md - complete guide with all backends
+- tracing_implementation.md - technical details
+- backend_compatibility.md - examples for jaeger, tempo, aws, gcp, azure, etc.
+
 ### Metrics
 
 The library automatically records metrics if Micrometer is available:
@@ -377,13 +637,32 @@ These go directly to DLQ for manual review.
 Always use manual acknowledgment mode:
 
 ```java
-public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
-    // Process message
+public void processorder(consumerrecord<string, object> record, acknowledgment ack) {
+    // process message
     ack.acknowledge();
 }
 ```
 
-The library handles acknowledgment timing to prevent duplicate processing.
+the library handles acknowledgment timing to prevent duplicate processing.
+
+### Distributed Tracing
+
+enable tracing in development to understand message flow:
+
+```java
+@Customkafkalistener(
+    topic = "orders",
+    opentelemetry = true  // see exactly what happens to each message
+)
+```
+
+in production, use sampling to reduce overhead:
+
+```properties
+otel.traces.sampler.ratio=0.01  # trace 1% of messages
+```
+
+tracing helps you debug issues faster by showing the complete journey of failed messages including all retry attempts and the final outcome.
 
 ## Troubleshooting
 

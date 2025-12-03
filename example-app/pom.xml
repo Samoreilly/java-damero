@@ -50,6 +50,31 @@
 			<version>0.1.0-SNAPSHOT</version>
 		</dependency>
 
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+
+		<!-- OpenTelemetry SDK for configuring and exporting traces -->
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-sdk</artifactId>
+			<version>1.33.0</version>
+		</dependency>
+
+		<!-- OTLP Exporter - sends traces to Jaeger, Tempo, or cloud providers -->
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-exporter-otlp</artifactId>
+			<version>1.33.0</version>
+		</dependency>
+
+		<!-- Semantic conventions for standard attribute names -->
+		<dependency>
+			<groupId>io.opentelemetry.semconv</groupId>
+			<artifactId>opentelemetry-semconv</artifactId>
+			<version>1.23.1-alpha</version>
+		</dependency>
 
 		<!-- Lombok - only needed for your own code -->
 		<dependency>

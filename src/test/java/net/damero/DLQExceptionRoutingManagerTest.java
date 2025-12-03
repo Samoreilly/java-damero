@@ -7,6 +7,7 @@ import net.damero.Kafka.Aspect.Components.DLQRouter;
 import net.damero.Kafka.Aspect.Components.RetryOrchestrator;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventMetadata;
+import net.damero.Kafka.Tracing.TracingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,9 +44,11 @@ class DLQExceptionRoutingManagerTest {
 
     private DLQExceptionRoutingManager manager;
 
+    private TracingService tracingService;
+
     @BeforeEach
     void setUp() {
-        manager = new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator);
+        manager = new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator, tracingService);
 
         // Setup common listener mocks
         lenient().when(customKafkaListener.topic()).thenReturn("test-topic");

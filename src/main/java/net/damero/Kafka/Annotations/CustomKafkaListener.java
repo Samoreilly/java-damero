@@ -40,5 +40,7 @@ public @interface CustomKafkaListener {
     long circuitBreakerWaitDuration() default 60000;  // Wait before half-open (default 1 minute)
 
     boolean deDuplication() default false;//when true, no duplicate messages will be sent to the topic
+
+    boolean openTelemetry() default false;//User must handle exporting traces
 }
 

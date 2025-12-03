@@ -12,6 +12,7 @@ import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ.ReplayDLQ;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.Tracing.TracingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.*;
@@ -86,8 +87,14 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DLQRouter dlqRouter() {
-        return new DLQRouter();
+    public TracingService tracingService() {
+        return new TracingService();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DLQRouter dlqRouter(TracingService tracingService) {
+        return new DLQRouter(tracingService);
     }
 
     @Bean
@@ -101,8 +108,9 @@ public class CustomKafkaAutoConfiguration {
     public ReplayDLQ replayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
                                KafkaTemplate<String, Object> kafkaTemplate,
                                ObjectMapper kafkaObjectMapper,
-                               KafkaAdmin kafkaAdmin) {
-        return new ReplayDLQ(dlqConsumerFactory, kafkaTemplate, kafkaObjectMapper, kafkaAdmin);
+                               KafkaAdmin kafkaAdmin,
+                               TracingService tracingService) {
+        return new ReplayDLQ(dlqConsumerFactory, kafkaTemplate, kafkaObjectMapper, kafkaAdmin, tracingService);
     }
 
     @Bean
@@ -208,14 +216,18 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RetryOrchestrator retryOrchestrator(RetrySched retrySched, PluggableRedisCache pluggableRedisCache) {
-        return new RetryOrchestrator(retrySched, pluggableRedisCache);
+    public RetryOrchestrator retryOrchestrator(RetrySched retrySched,
+                                               PluggableRedisCache pluggableRedisCache,
+                                               TracingService tracingService) {
+        return new RetryOrchestrator(retrySched, pluggableRedisCache, tracingService);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public DLQExceptionRoutingManager dlqExceptionRoutingManager(DLQRouter dlqRouter, RetryOrchestrator retryOrchestrator){
-        return new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator);
+    public DLQExceptionRoutingManager dlqExceptionRoutingManager(DLQRouter dlqRouter,
+                                                                  RetryOrchestrator retryOrchestrator,
+                                                                  TracingService tracingService) {
+        return new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator, tracingService);
     }
 
     @Bean
@@ -252,9 +264,12 @@ public class CustomKafkaAutoConfiguration {
                                                    CircuitBreakerWrapper circuitBreakerWrapper,
                                                    RetrySched retrySched,
                                                    DLQExceptionRoutingManager dlqExceptionRoutingManager,
-                                                   DuplicationManager duplicationManager) {
-        return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate, 
-                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper, retrySched, dlqExceptionRoutingManager, duplicationManager);
+                                                   DuplicationManager duplicationManager,
+                                                   TracingService tracingService) {
+        return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate,
+                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
+                                       retrySched, dlqExceptionRoutingManager, duplicationManager,
+                                       tracingService);
     }
 
     /*

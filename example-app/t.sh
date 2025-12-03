@@ -13,10 +13,15 @@ echo ""
 
 BASE_URL="http://localhost:8080/api/test"
 
-echo "1. Testing successful order (should be throttled)..."
-time curl -X POST $BASE_URL/order/success
-echo ""
-echo ""
+count=1
+while [ $count -le 50 ]; do
+  echo "1. Testing successful order (should be throttled)..."
+  time curl -X POST $BASE_URL/order/success
+  echo ""
+  echo ""
+  ((count++))
+done
+
 
 sleep 2
 

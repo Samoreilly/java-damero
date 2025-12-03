@@ -30,7 +30,8 @@ public class OrderProcessingService {
         },
         deDuplication = true,
         messagesPerWindow = 200,
-        messageWindow = 1000
+        messageWindow = 1000,
+        openTelemetry = true
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {

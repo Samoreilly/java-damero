@@ -1,6 +1,7 @@
 package net.damero.Kafka.KafkaServices;
 
 import net.damero.Kafka.CustomObject.EventWrapper;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
@@ -13,6 +14,9 @@ public class KafkaDLQ {
     //static method to call it avoid uneccessary injections
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper){
+
+        ProducerRecord<String, EventWrapper<?>> record = new ProducerRecord<>(topic, eventWrapper);
+
         logger.debug("sending to dlq topic: {}", topic);
         try {
             logger.debug("sending to dlq topic: {}", topic);

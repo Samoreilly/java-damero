@@ -1,9 +1,11 @@
 package net.damero.Kafka.Aspect.Components;
 
+import io.opentelemetry.api.trace.Span;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.RetryScheduler.RetrySched;
+import net.damero.Kafka.Tracing.TracingService;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.slf4j.Logger;
@@ -21,10 +23,12 @@ public class RetryOrchestrator {
     
     private final RetrySched retrySched;
     private final PluggableRedisCache cache;
+    private final TracingService tracingService;
 
-    public RetryOrchestrator(RetrySched retrySched, PluggableRedisCache cache) {
+    public RetryOrchestrator(RetrySched retrySched, PluggableRedisCache cache, TracingService tracingService) {
         this.retrySched = retrySched;
         this.cache = cache;
+        this.tracingService = tracingService;
     }
 
     /**
@@ -87,37 +91,71 @@ public class RetryOrchestrator {
                               int currentAttempts,
                               EventMetadata existingMetadata,
                               KafkaTemplate<?, ?> kafkaTemplate) {
-        // Build metadata for the retry
-        EventMetadata configMetadata = new EventMetadata(
-            existingMetadata != null && existingMetadata.getFirstFailureDateTime() != null 
-                ? existingMetadata.getFirstFailureDateTime() 
-                : LocalDateTime.now(),
-            LocalDateTime.now(),
-            existingMetadata != null && existingMetadata.getFirstFailureException() != null 
-                ? existingMetadata.getFirstFailureException() 
-                : exception,
-            exception,
-            currentAttempts,
-            customKafkaListener.topic(),
-            customKafkaListener.dlqTopic(),
-            (long) customKafkaListener.delay(),
-            customKafkaListener.delayMethod(),
-            customKafkaListener.maxAttempts()
-        );
-        
-        // Build headers from metadata
-        RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(
-            existingMetadata,
-            configMetadata,
-            currentAttempts,
-            exception
-        );
-        
-        // Schedule retry with original event and headers
-        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
-        
-        logger.debug("scheduled retry attempt {} for event in topic: {}", 
-            currentAttempts, customKafkaListener.topic());
+        Span retrySpan = null;
+        if (customKafkaListener.openTelemetry()) {
+            String eventId = EventUnwrapper.extractEventId(originalEvent);
+            double delayMs = customKafkaListener.delay();
+            retrySpan = tracingService.startRetrySpan(
+                customKafkaListener.topic(),
+                eventId,
+                currentAttempts,
+                (long)delayMs
+            );
+            retrySpan.setAttribute("damero.retry.delay_method", customKafkaListener.delayMethod().name());
+            retrySpan.setAttribute("damero.retry.max_attempts", customKafkaListener.maxAttempts());
+            retrySpan.setAttribute("damero.exception.type", exception.getClass().getSimpleName());
+        }
+
+        try {
+            // Build metadata for the retry
+            EventMetadata configMetadata = new EventMetadata(
+                existingMetadata != null && existingMetadata.getFirstFailureDateTime() != null
+                    ? existingMetadata.getFirstFailureDateTime()
+                    : LocalDateTime.now(),
+                LocalDateTime.now(),
+                existingMetadata != null && existingMetadata.getFirstFailureException() != null
+                    ? existingMetadata.getFirstFailureException()
+                    : exception,
+                exception,
+                currentAttempts,
+                customKafkaListener.topic(),
+                customKafkaListener.dlqTopic(),
+                (long) customKafkaListener.delay(),
+                customKafkaListener.delayMethod(),
+                customKafkaListener.maxAttempts()
+            );
+
+            // Build headers from metadata
+            RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(
+                existingMetadata,
+                configMetadata,
+                currentAttempts,
+                exception
+            );
+
+            // Inject trace context into headers if tracing is enabled
+            if (customKafkaListener.openTelemetry() && retrySpan != null) {
+                tracingService.injectContext(headers, null);
+            }
+
+            // Schedule retry with original event and headers
+            retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
+
+            logger.debug("scheduled retry attempt {} for event in topic: {}",
+                currentAttempts, customKafkaListener.topic());
+
+            if (customKafkaListener.openTelemetry() && retrySpan != null) {
+                tracingService.setSuccess(retrySpan);
+            }
+
+        } catch (Exception e) {
+            if (customKafkaListener.openTelemetry() && retrySpan != null) {
+                tracingService.recordException(retrySpan, e);
+            }
+            throw e;
+        } finally {
+            tracingService.endSpan(retrySpan);
+        }
     }
 }
 

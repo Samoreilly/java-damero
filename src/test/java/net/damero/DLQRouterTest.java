@@ -6,6 +6,7 @@ import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.Tracing.TracingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,9 +33,11 @@ class DLQRouterTest {
 
     private DLQRouter dlqRouter;
 
+    private TracingService tracingService;
+
     @BeforeEach
     void setUp() {
-        dlqRouter = new DLQRouter();
+        dlqRouter = new DLQRouter(tracingService);
 
         // Setup common mocks
         lenient().when(customKafkaListener.topic()).thenReturn("test-topic");
