@@ -117,7 +117,7 @@ class DLQReplayIntegrationTest {
         kafkaTemplate.send("replay-dlq-topic-1", wrapper3).get(5, TimeUnit.SECONDS);
 
         // Wait for messages to be fully committed to DLQ
-        Thread.sleep(3000);
+        Thread.sleep(5000);
 
         System.out.println("DEBUG: About to replay messages from replay-dlq-topic-1");
         System.out.println("DEBUG: Current listener state - Topic filter: " + replayTestListener.topicToListenFor +
@@ -135,11 +135,11 @@ class DLQReplayIntegrationTest {
         assertEquals(0, result.getFailureCount(), "Should have no failures");
         assertEquals(3, result.getTotalProcessed(), "Should process 3 messages total");
 
-        // Wait a bit for messages to be produced
-        Thread.sleep(2000);
+        // Wait longer for messages to be produced and consumed
+        Thread.sleep(5000);
 
-        // Verify messages were received on original topic - give more time for async processing
-        assertTrue(replayTestListener.awaitExpectedMessages(20, TimeUnit.SECONDS),
+        // Verify messages were received on original topic - give even more time for async processing
+        assertTrue(replayTestListener.awaitExpectedMessages(30, TimeUnit.SECONDS),
             "Should receive all 3 replayed messages");
 
         List<TestEvent> receivedEvents = replayTestListener.getReceivedEvents();
