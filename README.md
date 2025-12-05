@@ -33,9 +33,9 @@ add the library to your project:
 
 ```xml
 <dependency>
-    <groupid>java.damero</groupid>
-    <artifactid>kafka-damero</artifactid>
-    <version>0.1.0-snapshot</version>
+    <groupId>java.damero</groupId>
+    <artifactId>kafka-damero</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -52,8 +52,8 @@ optional: add redis for distributed caching across multiple instances:
 
 ```xml
 <dependency>
-    <groupid>org.springframework.boot</groupid>
-    <artifactid>spring-boot-starter-data-redis</artifactid>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
 </dependency>
 ```
 
@@ -61,19 +61,19 @@ optional: add opentelemetry for distributed tracing (recommended):
 
 ```xml
 <dependency>
-    <groupid>io.opentelemetry</groupid>
-    <artifactid>opentelemetry-sdk</artifactid>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-sdk</artifactId>
     <version>1.33.0</version>
 </dependency>
 
 <dependency>
-    <groupid>io.opentelemetry</groupid>
-    <artifactid>opentelemetry-exporter-otlp</artifactid>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-exporter-otlp</artifactId>
     <version>1.33.0</version>
 </dependency>
 ```
 
-note: the example-app folder includes a fully configured working example with tracing already set up. copy the opentelemetryconfig class from there to get started quickly.
+note: the example-app folder includes a fully configured working example with tracing already set up. copy the OpenTelemetryConfig class from there to get started quickly.
 
 configure kafka in your application.properties:
 
@@ -93,27 +93,27 @@ spring.data.redis.port=6379
 Create a listener with the @CustomKafkaListener annotation:
 
 ```java
-@service
-public class orderlistener {
+@Service
+public class OrderListener {
     
-    @customkafkalistener(
+    @CustomKafkaListener(
         topic = "orders",
-        dlqtopic = "orders-dlq",
-        maxattempts = 3,
+        dlqTopic = "orders-dlq",
+        maxAttempts = 3,
         delay = 1000,
-        delaymethod = delaymethod.expo,
-        opentelemetry = true  // optional: enable distributed tracing
+        delayMethod = DelayMethod.EXPO,
+        openTelemetry = true  // optional: enable distributed tracing
     )
-    @kafkalistener(
+    @KafkaListener(
         topics = "orders",
-        groupid = "order-processor",
-        containerfactory = "kafkalistenercontainerfactory"
+        groupId = "order-processor",
+        containerFactory = "kafkaListenerContainerFactory"
     )
-    public void processorder(consumerrecord<string, object> record, acknowledgment ack) {
-        orderevent order = (orderevent) record.value();
+    public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
+        OrderEvent order = (OrderEvent) record.value();
         
         // process the order
-        processpayment(order);
+        processPayment(order);
         
         ack.acknowledge();
     }
@@ -372,7 +372,7 @@ tracing gives you complete visibility into your kafka message processing:
 the library does all the hard work for you. you only need to:
 
 1. add opentelemetry dependencies to your pom.xml
-2. create one simple configuration class (opentelemetryconfig)
+2. create one simple configuration class (OpenTelemetryConfig)
 3. enable tracing in your listener annotation
 
 that is it. the library automatically creates spans for all operations and propagates trace context through kafka headers.
@@ -414,35 +414,35 @@ create this simple configuration class. the library will automatically use it:
 )
 public class OpenTelemetryConfig {
 
-    @value("${otel.exporter.otlp.endpoint:http://localhost:4317}")
-    private string otlpendpoint;
+    @Value("${otel.exporter.otlp.endpoint:http://localhost:4317}")
+    private String otlpEndpoint;
 
-    @value("${otel.service.name:my-service}")
-    private string servicename;
+    @Value("${otel.service.name:my-service}")
+    private String serviceName;
 
-    @bean
+    @Bean
     public OpenTelemetry openTelemetry() {
-        resource resource = resource.getDefault()
-            .merge(resource.create(attributes.of(
-                resourceattributes.service_name, servicename,
-                resourceattributes.service_version, "1.0.0"
+        Resource resource = Resource.getDefault()
+            .merge(Resource.create(Attributes.of(
+                ResourceAttributes.SERVICE_NAME, serviceName,
+                ResourceAttributes.SERVICE_VERSION, "1.0.0"
             )));
 
-        otlpgrpcspanexporter spanexporter = otlpgrpcspanexporter.builder()
-            .setendpoint(otlpendpoint)
+        OtlpGrpcSpanExporter spanExporter = OtlpGrpcSpanExporter.builder()
+            .setEndpoint(otlpEndpoint)
             .build();
 
-        sdktracerprovider sdktracerprovider = sdktracerprovider.builder()
-            .addspanprocessor(batchspanprocessor.builder(spanexporter).build())
-            .setresource(resource)
+        SdkTracerProvider sdkTracerProvider = SdkTracerProvider.builder()
+            .addSpanProcessor(BatchSpanProcessor.builder(spanExporter).build())
+            .setResource(resource)
             .build();
 
-        return OpenTelemetrysdk.builder()
-            .settracerprovider(sdktracerprovider)
-            .setpropagators(contextpropagators.create(
-                w3ctracecontextpropagator.getinstance()
+        return OpenTelemetrySdk.builder()
+            .setTracerProvider(sdkTracerProvider)
+            .setPropagators(ContextPropagators.create(
+                W3CTraceContextPropagator.getInstance()
             ))
-            .buildandregisterglobal();
+            .buildAndRegisterGlobal();
     }
 }
 ```
@@ -463,14 +463,14 @@ otel.exporter.otlp.endpoint=http://localhost:4317
 #### step 4: enable in your listener
 
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    dlqtopic = "orders-dlq",
-    maxattempts = 3,
-    opentelemetry = true  // just add this
+    dlqTopic = "orders-dlq",
+    maxAttempts = 3,
+    openTelemetry = true  // just add this
 )
-@kafkalistener(topics = "orders")
-public void processorder(ConsumerRecord<String, Order> record) {
+@KafkaListener(topics = "orders")
+public void processOrder(ConsumerRecord<String, Order> record) {
     // your code
 }
 ```
@@ -521,12 +521,12 @@ you only need to change the endpoint in application.properties. the library code
 for production, add sampling to reduce overhead:
 
 ```java
-@value("${otel.traces.sampler.ratio:0.01}")  // sample 1% of traces
-private double samplerratio;
+@Value("${otel.traces.sampler.ratio:0.01}")  // sample 1% of traces
+private double samplerRatio;
 
-sdktracerprovider sdkTracerProvider = sdkTracerProvider.builder()
-    .setsampler(sampler.traceidratiobased(samplerratio))  // add this
-    .addspanprocessor(...)
+SdkTracerProvider sdkTracerProvider = SdkTracerProvider.builder()
+    .setSampler(Sampler.traceIdRatioBased(samplerRatio))  // add this
+    .addSpanProcessor(...)
     .build();
 ```
 
@@ -637,7 +637,7 @@ These go directly to DLQ for manual review.
 Always use manual acknowledgment mode:
 
 ```java
-public void processorder(consumerrecord<string, object> record, acknowledgment ack) {
+public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
     // process message
     ack.acknowledge();
 }
@@ -650,9 +650,9 @@ the library handles acknowledgment timing to prevent duplicate processing.
 enable tracing in development to understand message flow:
 
 ```java
-@Customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    opentelemetry = true  // see exactly what happens to each message
+    openTelemetry = true  // see exactly what happens to each message
 )
 ```
 
@@ -725,41 +725,41 @@ spring retry is great for basic retry logic, but it was not built specifically f
 
 **before (spring retry):**
 ```java
-@retryable(
-    value = {timeoutexception.class},
-    maxattempts = 3,
-    backoff = @backoff(delay = 1000, multiplier = 2)
+@Retryable(
+    value = {TimeoutException.class},
+    maxAttempts = 3,
+    backoff = @Backoff(delay = 1000, multiplier = 2)
 )
-@kafkalistener(topics = "orders")
-public void processorder(order order) {
+@KafkaListener(topics = "orders")
+public void processOrder(Order order) {
     // processing logic
 }
 
-@recover
-public void recoverorder(timeoutexception e, order order) {
+@Recover
+public void recoverOrder(TimeoutException e, Order order) {
     // send to dlq manually
-    dlqtemplate.send("orders-dlq", order);
+    dlqTemplate.send("orders-dlq", order);
 }
 ```
 
 **after (damero):**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    dlqtopic = "orders-dlq",
-    maxattempts = 3,
+    dlqTopic = "orders-dlq",
+    maxAttempts = 3,
     delay = 1000,
-    delaymethod = delaymethod.expo
+    delayMethod = DelayMethod.EXPO
 )
-@kafkalistener(topics = "orders")
-public void processorder(consumerrecord<string, order> record, acknowledgment ack) {
-    order order = record.value();
+@KafkaListener(topics = "orders")
+public void processOrder(ConsumerRecord<String, Order> record, Acknowledgment ack) {
+    Order order = record.value();
     // processing logic
     ack.acknowledge();
 }
 ```
 
-no need for @recover method. damero handles dlq routing automatically.
+no need for @Recover method. damero handles dlq routing automatically.
 
 #### step 2: add manual acknowledgment
 
@@ -772,7 +772,7 @@ spring.kafka.listener.ack-mode=manual
 
 update your listener signature:
 ```java
-public void processorder(consumerrecord<string, order> record, acknowledgment ack) {
+public void processOrder(ConsumerRecord<String, Order> record, Acknowledgment ack) {
     // process
     ack.acknowledge();
 }
@@ -784,17 +784,17 @@ public void processorder(consumerrecord<string, order> record, acknowledgment ac
 
 | spring retry | damero equivalent |
 |-------------|-------------------|
-| @backoff(delay = 1000, multiplier = 2) | delay = 1000, delaymethod = delaymethod.expo |
-| @backoff(delay = 1000, multiplier = 1) | delay = 1000, delaymethod = delaymethod.linear |
-| @backoff(delay = 1000) | delay = 1000, delaymethod = delaymethod.max |
+| @Backoff(delay = 1000, multiplier = 2) | delay = 1000, delayMethod = DelayMethod.EXPO |
+| @Backoff(delay = 1000, multiplier = 1) | delay = 1000, delayMethod = DelayMethod.LINEAR |
+| @Backoff(delay = 1000) | delay = 1000, delayMethod = DelayMethod.MAX |
 
 **spring retry exception handling:**
 
 ```java
 // spring retry
-@retryable(
-    value = {timeoutexception.class},
-    noretryfor = {validationexception.class}
+@Retryable(
+    value = {TimeoutException.class},
+    noRetryFor = {ValidationException.class}
 )
 ```
 
@@ -802,9 +802,9 @@ becomes:
 
 ```java
 // damero
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    nonretryableexceptions = {validationexception.class}
+    nonRetryableExceptions = {ValidationException.class}
 )
 ```
 
@@ -814,31 +814,31 @@ if you were manually routing different exceptions to different topics:
 
 **before:**
 ```java
-@recover
-public void recover(validationexception e, order order) {
-    dlqtemplate.send("orders-validation-dlq", order);
+@Recover
+public void recover(ValidationException e, Order order) {
+    dlqTemplate.send("orders-validation-dlq", order);
 }
 
-@recover
-public void recover(timeoutexception e, order order) {
-    dlqtemplate.send("orders-timeout-dlq", order);
+@Recover
+public void recover(TimeoutException e, Order order) {
+    dlqTemplate.send("orders-timeout-dlq", order);
 }
 ```
 
 **after:**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    dlqroutes = {
-        @dlqexceptionroutes(
-            exception = validationexception.class,
-            dlqexceptiontopic = "orders-validation-dlq",
-            skipretry = true
+    dlqRoutes = {
+        @DlqExceptionRoutes(
+            exception = ValidationException.class,
+            dlqExceptionTopic = "orders-validation-dlq",
+            skipRetry = true
         ),
-        @dlqexceptionroutes(
-            exception = timeoutexception.class,
-            dlqexceptiontopic = "orders-timeout-dlq",
-            skipretry = false
+        @DlqExceptionRoutes(
+            exception = TimeoutException.class,
+            dlqExceptionTopic = "orders-timeout-dlq",
+            skipRetry = false
         )
     }
 )
@@ -850,21 +850,21 @@ remove from pom.xml:
 ```xml
 <!-- remove these -->
 <dependency>
-    <groupid>org.springframework.retry</groupid>
-    <artifactid>spring-retry</artifactid>
+    <groupId>org.springframework.retry</groupId>
+    <artifactId>spring-retry</artifactId>
 </dependency>
 <dependency>
-    <groupid>org.springframework</groupid>
-    <artifactid>spring-aspects</artifactid>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-aspects</artifactId>
 </dependency>
 ```
 
 remove from configuration:
 ```java
-// remove @enableretry from your config class
-@enableretry  // remove this
-@configuration
-public class kafkaconfig {
+// remove @EnableRetry from your config class
+@EnableRetry  // remove this
+@Configuration
+public class KafkaConfig {
     // ...
 }
 ```
@@ -873,23 +873,23 @@ public class kafkaconfig {
 
 ```xml
 <dependency>
-    <groupid>java.damero</groupid>
-    <artifactid>kafka-damero</artifactid>
-    <version>0.1.0-snapshot</version>
+    <groupId>java.damero</groupId>
+    <artifactId>kafka-damero</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
 ### migration checklist
 
-- [ ] replace @retryable with @customkafkalistener
-- [ ] remove @recover methods
+- [ ] replace @Retryable with @CustomKafkaListener
+- [ ] remove @Recover methods
 - [ ] enable manual acknowledgment mode
-- [ ] update listener signatures to include acknowledgment
+- [ ] update listener signatures to include Acknowledgment
 - [ ] map backoff strategies to delay methods
-- [ ] configure nonretryableexceptions if needed
+- [ ] configure nonRetryableExceptions if needed
 - [ ] set up conditional dlq routing if needed
 - [ ] remove spring retry dependencies
-- [ ] remove @enableretry annotation
+- [ ] remove @EnableRetry annotation
 - [ ] test with low-volume traffic first
 - [ ] monitor dlq topics for correct routing
 - [ ] verify retry counts in kafka headers
@@ -901,33 +901,33 @@ public class kafkaconfig {
 
 check that:
 - manual ack mode is enabled: `spring.kafka.listener.ack-mode=manual`
-- your listener has acknowledgment parameter
+- your listener has Acknowledgment parameter
 - you call `ack.acknowledge()` after processing
 
 **issue: messages going to dlq immediately**
 
 check:
-- `retryable = true` in @customkafkalistener (default is true)
-- exception is not in nonretryableexceptions list
-- maxattempts is greater than 1
+- `retryable = true` in @CustomKafkaListener (default is true)
+- exception is not in nonRetryableExceptions list
+- maxAttempts is greater than 1
 
 **issue: different retry behavior than spring retry**
 
 spring retry backoff formula: `delay * multiplier^attempt`
 damero expo formula: `delay * 2^attempt` (max 5 seconds)
 
-if you need custom backoff, use `delaymethod = delaymethod.custom` and set fixed delay.
+if you need custom backoff, use `delayMethod = DelayMethod.CUSTOM` and set fixed delay.
 
 ### side-by-side comparison
 
 | feature | spring retry | damero |
 |---------|-------------|---------|
-| basic retry | @retryable | @customkafkalistener |
-| max attempts | maxattempts | maxattempts |
-| backoff | @backoff | delay + delaymethod |
-| dlq support | manual @recover | automatic |
+| basic retry | @Retryable | @CustomKafkaListener |
+| max attempts | maxAttempts | maxAttempts |
+| backoff | @Backoff | delay + delayMethod |
+| dlq support | manual @Recover | automatic |
 | dlq metadata | none | full retry history |
-| exception routing | manual | conditional dlqroutes |
+| exception routing | manual | conditional dlqRoutes |
 | circuit breaker | separate config | built-in |
 | deduplication | manual | built-in |
 | tracing | manual | built-in opentelemetry |
@@ -1046,10 +1046,10 @@ spring.kafka.listener.ack-mode=manual
 **cause 2: acknowledgment parameter missing**
 ```java
 // wrong
-public void process(order order) { }
+public void process(Order order) { }
 
 // correct
-public void process(consumerrecord<string, order> record, acknowledgment ack) {
+public void process(ConsumerRecord<String, Order> record, Acknowledgment ack) {
     // process
     ack.acknowledge();
 }
@@ -1057,7 +1057,7 @@ public void process(consumerrecord<string, order> record, acknowledgment ack) {
 
 **cause 3: acknowledgment not called**
 ```java
-public void process(consumerrecord<string, order> record, acknowledgment ack) {
+public void process(ConsumerRecord<String, Order> record, Acknowledgment ack) {
     // process
     ack.acknowledge();  // must call this
 }
@@ -1071,7 +1071,7 @@ public void process(consumerrecord<string, order> record, acknowledgment ack) {
 
 **cause 1: retryable is false**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
     retryable = false  // this skips retries
 )
@@ -1079,17 +1079,17 @@ public void process(consumerrecord<string, order> record, acknowledgment ack) {
 
 **cause 2: exception is nonretryable**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    nonretryableexceptions = {illegalargumentexception.class}
+    nonRetryableExceptions = {IllegalArgumentException.class}
 )
 ```
 
 **cause 3: conditional dlq with skipretry**
 ```java
-@dlqexceptionroutes(
-    exception = validationexception.class,
-    skipretry = true  // skips retries for this exception
+@DlqExceptionRoutes(
+    exception = ValidationException.class,
+    skipRetry = true  // skips retries for this exception
 )
 ```
 
@@ -1103,14 +1103,14 @@ cannot deserialize value of type order from eventwrapper
 **solution:** use dlq-specific container factory
 
 ```java
-@kafkalistener(
+@KafkaListener(
     topics = "orders-dlq",
-    groupid = "dlq-processor",
-    containerfactory = "dlqkafkalistenercontainerfactory"  // use this
+    groupId = "dlq-processor",
+    containerFactory = "dlqKafkaListenerContainerFactory"  // use this
 )
-public void processdlq(eventwrapper<order> wrapper) {
-    order originalorder = wrapper.getevent();
-    eventmetadata metadata = wrapper.getmetadata();
+public void processDlq(EventWrapper<Order> wrapper) {
+    Order originalOrder = wrapper.getEvent();
+    EventMetadata metadata = wrapper.getMetadata();
     // process dlq message
 }
 ```
@@ -1131,12 +1131,12 @@ public void processdlq(eventwrapper<order> wrapper) {
 
 **check configuration:**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    enablecircuitbreaker = true,  // must be true
-    circuitbreakerfailurethreshold = 50,  // number of failures
-    circuitbreakerwindowduration = 60000,  // window in ms
-    circuitbreakerwaitduration = 60000  // wait before half-open
+    enableCircuitBreaker = true,  // must be true
+    circuitBreakerFailureThreshold = 50,  // number of failures
+    circuitBreakerWindowDuration = 60000,  // window in ms
+    circuitBreakerWaitDuration = 60000  // wait before half-open
 )
 ```
 
@@ -1144,8 +1144,8 @@ public void processdlq(eventwrapper<order> wrapper) {
 ```xml
 <!-- should be included automatically but verify -->
 <dependency>
-    <groupid>io.github.resilience4j</groupid>
-    <artifactid>resilience4j-circuitbreaker</artifactid>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-circuitbreaker</artifactId>
 </dependency>
 ```
 
@@ -1165,9 +1165,9 @@ public void processdlq(eventwrapper<order> wrapper) {
 
 **check configuration:**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    deduplication = true  // must be true
+    deDuplication = true  // must be true
 )
 ```
 
@@ -1209,18 +1209,18 @@ custom.kafka.deduplication.window-unit=hours
 
 **check tracing is enabled:**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    opentelemetry = true  // must be true
+    openTelemetry = true  // must be true
 )
 ```
 
 **check opentelemetryconfig exists:**
 ```java
-@configuration
-public class opentelemetryconfig {
-    @bean
-    public opentelemetry opentelemetry() {
+@Configuration
+public class OpenTelemetryConfig {
+    @Bean
+    public OpenTelemetry openTelemetry() {
         // configuration
     }
 }
@@ -1256,10 +1256,10 @@ otel.traces.sampler.ratio=1.0  # 100% for development
 
 **check rate limiting:**
 ```java
-@customkafkalistener(
+@CustomKafkaListener(
     topic = "orders",
-    messagesperwindow = 100,  // might be too restrictive
-    messagewindow = 60000
+    messagesPerWindow = 100,  // might be too restrictive
+    messageWindow = 60000
 )
 ```
 
@@ -1295,12 +1295,12 @@ spring.data.redis.lettuce.pool.min-idle=5
 
 **solution:** create your bean before damero's auto-configuration runs:
 ```java
-@configuration
-public class myconfig {
-    @bean
-    @primary  // mark as primary
-    public dlqrouter mycustomdlqrouter() {
-        return new mycustomdlqrouter();
+@Configuration
+public class MyConfig {
+    @Bean
+    @Primary  // mark as primary
+    public DlqRouter myCustomDlqRouter() {
+        return new MyCustomDlqRouter();
     }
 }
 ```
@@ -1319,17 +1319,17 @@ custom.kafka.auto-config.enabled=true
 
 **symptom:**
 ```
-error creating bean with name 'kafkalisteneraspect'
+error creating bean with name 'KafkaListenerAspect'
 ```
 
 **solution:** ensure component scanning includes damero packages:
 ```java
-@springbootapplication
-@componentscan(basepages = {
+@SpringBootApplication
+@ComponentScan(basePackages = {
     "com.yourpackage",
     "net.damero"  // add this if needed
 })
-public class application {
+public class Application {
 }
 ```
 
@@ -1347,7 +1347,7 @@ logging.level.net.damero.kafka=debug
 3. **create minimal reproduction** - try to reproduce with minimal code
 
 4. **open github issue** with:
-   - your @customkafkalistener configuration
+   - your @CustomKafkaListener configuration
    - relevant application.properties
    - error logs and stack traces
    - damero version
