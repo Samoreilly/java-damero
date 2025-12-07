@@ -12,6 +12,8 @@ import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ.ReplayDLQ;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.Tracing.NoOpTracingService;
+import net.damero.Kafka.Tracing.OpenTelemetryTracingService;
 import net.damero.Kafka.Tracing.TracingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,10 +87,25 @@ public class CustomKafkaAutoConfiguration {
         return new ReadFromDLQConsumer(dlqConsumerFactory, kafkaObjectMapper);
     }
 
+    /**
+     * Creates the OpenTelemetry-based TracingService when OpenTelemetry is on the classpath.
+     * This provides real distributed tracing functionality.
+     */
     @Bean
-    @ConditionalOnMissingBean
-    public TracingService tracingService() {
-        return new TracingService();
+    @ConditionalOnClass(name = "io.opentelemetry.api.OpenTelemetry")
+    public TracingService openTelemetryTracingService() {
+        return new OpenTelemetryTracingService();
+    }
+
+    /**
+     * Creates the No-Op TracingService when OpenTelemetry is NOT on the classpath.
+     * This allows the library to function without tracing - all trace operations become no-ops.
+        If TracingService bean is missing, provide NoOpTracingService
+     */
+    @Bean
+    @ConditionalOnMissingBean(TracingService.class)
+    public TracingService noOpTracingService() {
+        return new NoOpTracingService();
     }
 
     @Bean

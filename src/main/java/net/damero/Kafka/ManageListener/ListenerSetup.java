@@ -24,7 +24,7 @@ public class ListenerSetup {
     @PostConstruct
     public void listenerSetup(){
 
-        Reflections reflections = new Reflections("java.damero.kafka", Scanners.TypesAnnotated);
+        Reflections reflections = new Reflections("net.damero.kafka", Scanners.TypesAnnotated);
 
         Set<Method> methods = reflections.getMethodsAnnotatedWith(CustomKafkaListener.class);
         for (Method method : methods) {

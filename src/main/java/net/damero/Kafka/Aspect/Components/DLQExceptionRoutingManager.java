@@ -1,7 +1,7 @@
 package net.damero.Kafka.Aspect.Components;
 
 
-import io.opentelemetry.api.trace.Span;
+import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Annotations.DlqExceptionRoutes;
 import net.damero.Kafka.CustomObject.EventMetadata;
@@ -53,7 +53,7 @@ public class DLQExceptionRoutingManager {
             logger.info("Exception {} matched DLQ route with skipRetry=true - sending to {} without retry",
                 e.getClass().getSimpleName(), dlqTopic);
 
-            Span routingSpan = null;
+            TracingSpan routingSpan = null;
             if (customKafkaListener.openTelemetry()) {
                 String eventId = EventUnwrapper.extractEventId(originalEvent);
                 routingSpan = tracingService.startDLQSpan(
@@ -78,19 +78,19 @@ public class DLQExceptionRoutingManager {
                         customKafkaListener
                 );
 
-                if (customKafkaListener.openTelemetry()) {
-                    tracingService.setSuccess(routingSpan);
+                if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                    routingSpan.setSuccess();
                 }
 
                 return true;  // Message handled, stop processing
             } catch (Exception routingException) {
-                if (customKafkaListener.openTelemetry()) {
-                    tracingService.recordException(routingSpan, routingException);
+                if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                    routingSpan.recordException(routingException);
                 }
                 throw routingException;
             } finally {
-                if (customKafkaListener.openTelemetry()) {
-                    tracingService.endSpan(routingSpan);
+                if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                    routingSpan.end();
                 }
             }
         }
@@ -125,7 +125,7 @@ public class DLQExceptionRoutingManager {
             logger.info("Routing to default DLQ '{}' after {} attempts", targetDlq, currentAttempts);
         }
 
-        Span routingSpan = null;
+        TracingSpan routingSpan = null;
         if (customKafkaListener.openTelemetry()) {
             routingSpan = tracingService.startDLQSpan(
                 customKafkaListener.topic(),
@@ -151,17 +151,17 @@ public class DLQExceptionRoutingManager {
 
             retryOrchestrator.clearAttempts(eventId);
 
-            if (customKafkaListener.openTelemetry()) {
-                tracingService.setSuccess(routingSpan);
+            if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                routingSpan.setSuccess();
             }
         } catch (Exception routingException) {
-            if (customKafkaListener.openTelemetry()) {
-                tracingService.recordException(routingSpan, routingException);
+            if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                routingSpan.recordException(routingException);
             }
             throw routingException;
         } finally {
-            if (customKafkaListener.openTelemetry()) {
-                tracingService.endSpan(routingSpan);
+            if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                routingSpan.end();
             }
         }
     }

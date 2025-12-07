@@ -1,8 +1,8 @@
 package net.damero.Kafka.Aspect;
 
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
+import net.damero.Kafka.Tracing.TracingSpan;
+import net.damero.Kafka.Tracing.TracingContext;
+import net.damero.Kafka.Tracing.TracingScope;
 import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
@@ -107,13 +107,13 @@ public class KafkaListenerAspect {
         String eventId = EventUnwrapper.extractEventId(originalEvent);
 
         // Start main processing span if tracing is enabled
-        Span processingSpan = null;
-        Scope scope = null;
+        TracingSpan processingSpan = null;
+        TracingScope scope = null;
         if (customKafkaListener.openTelemetry()) {
             // Extract parent context from Kafka headers if available
-            Context parentContext = consumerRecord != null
+            TracingContext parentContext = consumerRecord != null
                 ? tracingService.extractContext(consumerRecord.headers())
-                : Context.current();
+                : tracingService.extractContext(null);
 
             processingSpan = tracingService.startProcessingSpan(
                 "damero.kafka.process",
@@ -129,7 +129,7 @@ public class KafkaListenerAspect {
             processingSpan.setAttribute("damero.deduplication.enabled", customKafkaListener.deDuplication());
 
             // Make this span the current context
-            scope = parentContext.with(processingSpan).makeCurrent();
+            scope = parentContext.with(processingSpan);
         }
 
         try {
@@ -141,10 +141,10 @@ public class KafkaListenerAspect {
             
             // Add circuit breaker span
             if (customKafkaListener.openTelemetry()) {
-                Span cbSpan = tracingService.startCircuitBreakerSpan(customKafkaListener.topic(), "OPEN");
+                TracingSpan cbSpan = tracingService.startCircuitBreakerSpan(customKafkaListener.topic(), "OPEN");
                 cbSpan.setAttribute("damero.circuit_breaker.action", "send_to_dlq");
-                tracingService.setSuccess(cbSpan);
-                tracingService.endSpan(cbSpan);
+                cbSpan.setSuccess();
+                cbSpan.end();
             }
 
             dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, customKafkaListener);
@@ -156,7 +156,7 @@ public class KafkaListenerAspect {
             if (customKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.circuit_breaker.open", true);
                 processingSpan.setAttribute("damero.outcome", "dlq_circuit_breaker");
-                tracingService.setSuccess(processingSpan);
+                processingSpan.setSuccess();
             }
 
             return null;
@@ -168,13 +168,13 @@ public class KafkaListenerAspect {
 
             // Add deduplication span
             if (customKafkaListener.openTelemetry()) {
-                Span dedupSpan = tracingService.startDeduplicationSpan(eventId, true);
+                TracingSpan dedupSpan = tracingService.startDeduplicationSpan(eventId, true);
                 dedupSpan.setAttribute("damero.deduplication.action", "ignored");
-                tracingService.setSuccess(dedupSpan);
-                tracingService.endSpan(dedupSpan);
+                dedupSpan.setSuccess();
+                dedupSpan.end();
 
                 processingSpan.setAttribute("damero.outcome", "duplicate_ignored");
-                tracingService.setSuccess(processingSpan);
+                processingSpan.setSuccess();
             }
 
             if (acknowledgment != null) {
@@ -204,10 +204,10 @@ public class KafkaListenerAspect {
                 duplicationManager.markAsSeen(eventId);
 
                 if (customKafkaListener.openTelemetry()) {
-                    Span dedupSpan = tracingService.startDeduplicationSpan(eventId, false);
+                    TracingSpan dedupSpan = tracingService.startDeduplicationSpan(eventId, false);
                     dedupSpan.setAttribute("damero.deduplication.action", "marked_as_seen");
-                    tracingService.setSuccess(dedupSpan);
-                    tracingService.endSpan(dedupSpan);
+                    dedupSpan.setSuccess();
+                    dedupSpan.end();
                 }
             }
 
@@ -217,7 +217,7 @@ public class KafkaListenerAspect {
 
             if (customKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.outcome", "success");
-                tracingService.setSuccess(processingSpan);
+                processingSpan.setSuccess();
             }
 
             return result;
@@ -245,10 +245,11 @@ public class KafkaListenerAspect {
 
                 if (customKafkaListener.openTelemetry()) {
                     processingSpan.setAttribute("damero.outcome", "dlq_non_retryable");
-                    tracingService.recordException(processingSpan, e);
+                    processingSpan.recordException(e);
                 }
 
                 return null;  //retryable is false - should not retry
+
             }
 
             logger.debug("exception caught during processing for topic: {}: {}",
@@ -274,7 +275,7 @@ public class KafkaListenerAspect {
 
                     if (customKafkaListener.openTelemetry()) {
                         processingSpan.setAttribute("damero.outcome", "dlq_conditional_skip_retry");
-                        tracingService.recordException(processingSpan, e);
+                        processingSpan.recordException(e);
                     }
 
                     return null;
@@ -306,7 +307,7 @@ public class KafkaListenerAspect {
                 if (customKafkaListener.openTelemetry()) {
                     processingSpan.setAttribute("damero.outcome", "dlq_non_retryable_exception");
                     processingSpan.setAttribute("damero.non_retryable", true);
-                    tracingService.recordException(processingSpan, e);
+                    processingSpan.recordException(e);
                 }
 
                 return null;
@@ -343,7 +344,7 @@ public class KafkaListenerAspect {
                 if (customKafkaListener.openTelemetry()) {
                     processingSpan.setAttribute("damero.outcome", "dlq_max_attempts");
                     processingSpan.setAttribute("damero.retry.exhausted", true);
-                    tracingService.recordException(processingSpan, e);
+                    processingSpan.recordException(e);
                 }
 
                 return null;
@@ -355,15 +356,15 @@ public class KafkaListenerAspect {
             if (customKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.outcome", "retry_scheduled");
                 processingSpan.setAttribute("damero.retry.current_attempt", currentAttempts);
-                tracingService.recordException(processingSpan, e);
+                processingSpan.recordException(e);
             }
 
             return null;
         }
         } finally {
             // Close the span and scope
-            if (customKafkaListener.openTelemetry()) {
-                tracingService.endSpan(processingSpan);
+            if (customKafkaListener.openTelemetry() && processingSpan != null) {
+                processingSpan.end();
                 if (scope != null) {
                     scope.close();
                 }
@@ -483,7 +484,7 @@ public class KafkaListenerAspect {
                 logger.debug("Topic: {}, Rate limit reached ({}/{} messages), sleeping for {} ms",
                     topic, currentCount, messagesPerWindow, sleepTime);
 
-                Span rateLimitSpan = null;
+                TracingSpan rateLimitSpan = null;
                 if (enableTracing) {
                     rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, sleepTime);
                 }
@@ -494,16 +495,16 @@ public class KafkaListenerAspect {
                     cache.resetRateLimitWindow(topic, System.currentTimeMillis());
 
                     if (enableTracing && rateLimitSpan != null) {
-                        tracingService.setSuccess(rateLimitSpan);
+                        rateLimitSpan.setSuccess();
                     }
                 } catch (InterruptedException e) {
                     if (enableTracing && rateLimitSpan != null) {
-                        tracingService.recordException(rateLimitSpan, e);
+                        rateLimitSpan.recordException(e);
                     }
                     throw e;
                 } finally {
-                    if (enableTracing) {
-                        tracingService.endSpan(rateLimitSpan);
+                    if (enableTracing && rateLimitSpan != null) {
+                        rateLimitSpan.end();
                     }
                 }
             } else {
@@ -511,9 +512,9 @@ public class KafkaListenerAspect {
                 cache.resetRateLimitWindow(topic, System.currentTimeMillis());
             }
         } else if (enableTracing) {
-            Span rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, 0);
-            tracingService.setSuccess(rateLimitSpan);
-            tracingService.endSpan(rateLimitSpan);
+            TracingSpan rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, 0);
+            rateLimitSpan.setSuccess();
+            rateLimitSpan.end();
         }
     }
 }

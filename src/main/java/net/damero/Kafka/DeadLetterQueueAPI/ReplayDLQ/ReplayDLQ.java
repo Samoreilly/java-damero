@@ -2,7 +2,7 @@ package net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.opentelemetry.api.trace.Span;
+import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.Tracing.TracingService;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -90,7 +90,7 @@ public class ReplayDLQ {
             throw new IllegalArgumentException("DLQ topic cannot be null or empty");
         }
 
-        Span replaySpan = tracingService.startReplaySpan(dlqTopic);
+        TracingSpan replaySpan = tracingService.startReplaySpan(dlqTopic);
         replaySpan.setAttribute("damero.replay.force_from_beginning", forceFromBeginning);
         replaySpan.setAttribute("damero.replay.skip_validation", skipValidation);
 
@@ -232,7 +232,7 @@ public class ReplayDLQ {
 
         } catch (Exception e) {
             log.error("Error during DLQ replay: {}", e.getMessage(), e);
-            tracingService.recordException(replaySpan, e);
+            replaySpan.recordException(e);
             throw new RuntimeException("DLQ replay failed", e);
         }
 
@@ -242,13 +242,13 @@ public class ReplayDLQ {
         replaySpan.setAttribute("damero.replay.total_count", successCount + failureCount);
 
         if (failureCount == 0) {
-            tracingService.setSuccess(replaySpan);
+            replaySpan.setSuccess();
         }
 
         log.info("Replay completed. Success: {}, Failures: {}", successCount, failureCount);
         return result;
         } finally {
-            tracingService.endSpan(replaySpan);
+            replaySpan.end();
         }
     }
 

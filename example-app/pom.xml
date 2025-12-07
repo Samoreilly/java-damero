@@ -55,21 +55,21 @@
             <artifactId>opentelemetry-api</artifactId>
         </dependency>
 
-		<!-- OpenTelemetry SDK for configuring and exporting traces -->
+<!--		 OpenTelemetry SDK for configuring and exporting traces -->
 		<dependency>
 			<groupId>io.opentelemetry</groupId>
 			<artifactId>opentelemetry-sdk</artifactId>
 			<version>1.33.0</version>
 		</dependency>
 
-		<!-- OTLP Exporter - sends traces to Jaeger, Tempo, or cloud providers -->
+<!--		 OTLP Exporter - sends traces to Jaeger, Tempo, or cloud providers -->
 		<dependency>
 			<groupId>io.opentelemetry</groupId>
 			<artifactId>opentelemetry-exporter-otlp</artifactId>
 			<version>1.33.0</version>
 		</dependency>
 
-		<!-- Semantic conventions for standard attribute names -->
+<!--		 Semantic conventions for standard attribute names -->
 		<dependency>
 			<groupId>io.opentelemetry.semconv</groupId>
 			<artifactId>opentelemetry-semconv</artifactId>

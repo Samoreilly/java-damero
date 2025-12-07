@@ -1,6 +1,6 @@
 package net.damero.Kafka.Aspect.Components;
 
-import io.opentelemetry.api.trace.Span;
+import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
@@ -90,7 +90,7 @@ public class RetryOrchestrator {
                               int currentAttempts,
                               EventMetadata existingMetadata,
                               KafkaTemplate<?, ?> kafkaTemplate) {
-        Span retrySpan = null;
+        TracingSpan retrySpan = null;
         if (customKafkaListener.openTelemetry()) {
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             double delayMs = customKafkaListener.delay();
@@ -144,16 +144,18 @@ public class RetryOrchestrator {
                 currentAttempts, customKafkaListener.topic());
 
             if (customKafkaListener.openTelemetry() && retrySpan != null) {
-                tracingService.setSuccess(retrySpan);
+                retrySpan.setSuccess();
             }
 
         } catch (Exception e) {
             if (customKafkaListener.openTelemetry() && retrySpan != null) {
-                tracingService.recordException(retrySpan, e);
+                retrySpan.recordException(e);
             }
             throw e;
         } finally {
-            tracingService.endSpan(retrySpan);
+            if (retrySpan != null) {
+                retrySpan.end();
+            }
         }
     }
 }

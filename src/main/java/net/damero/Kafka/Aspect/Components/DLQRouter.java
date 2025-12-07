@@ -1,7 +1,6 @@
 package net.damero.Kafka.Aspect.Components;
 
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.context.Context;
+import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
@@ -39,7 +38,7 @@ public class DLQRouter {
     public void sendToDLQForCircuitBreakerOpen(KafkaTemplate<?, ?> kafkaTemplate,
                                                 Object originalEvent,
                                                 CustomKafkaListener customKafkaListener) {
-        Span dlqSpan = null;
+        TracingSpan dlqSpan = null;
         if (customKafkaListener.openTelemetry()) {
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             dlqSpan = tracingService.startDLQSpan(
@@ -81,16 +80,16 @@ public class DLQRouter {
                 customKafkaListener.topic());
 
             if (customKafkaListener.openTelemetry() && dlqSpan != null) {
-                tracingService.setSuccess(dlqSpan);
+                dlqSpan.setSuccess();
             }
         } catch (Exception e) {
             if (customKafkaListener.openTelemetry() && dlqSpan != null) {
-                tracingService.recordException(dlqSpan, e);
+                dlqSpan.recordException(e);
             }
             throw e;
         } finally {
-            if (customKafkaListener.openTelemetry() && tracingService != null) {
-                tracingService.endSpan(dlqSpan);
+            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+                dlqSpan.end();
             }
         }
     }
@@ -100,9 +99,10 @@ public class DLQRouter {
     public void sendToDLQForCircuitBreakerOpen(KafkaTemplate<?, ?> kafkaTemplate, ProducerRecord<String, Object> record, CustomKafkaListener customKafkaListener) {
         Object originalEvent = record.value();
 
-        Span dlqSpan = null;
+        TracingSpan dlqSpan = null;
         if (customKafkaListener.openTelemetry()) {
-            Context parentContext = tracingService.extractContext(record.headers());
+            // Extract context for potential parent span linking (not used directly but good practice)
+            tracingService.extractContext(record.headers());
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             dlqSpan = tracingService.startDLQSpan(
                 customKafkaListener.topic(),
@@ -143,16 +143,16 @@ public class DLQRouter {
                     customKafkaListener.topic());
 
             if (customKafkaListener.openTelemetry() && dlqSpan != null) {
-                tracingService.setSuccess(dlqSpan);
+                dlqSpan.setSuccess();
             }
         } catch (Exception e) {
             if (customKafkaListener.openTelemetry() && dlqSpan != null) {
-                tracingService.recordException(dlqSpan, e);
+                dlqSpan.recordException(e);
             }
             throw e;
         } finally {
-            if (customKafkaListener.openTelemetry() && tracingService != null) {
-                tracingService.endSpan(dlqSpan);
+            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+                dlqSpan.end();
             }
         }
     }
@@ -204,7 +204,7 @@ public class DLQRouter {
                                           EventMetadata priorMetadata,
                                           String customDlqTopic,
                                           CustomKafkaListener customKafkaListener) {
-        Span dlqSpan = null;
+        TracingSpan dlqSpan = null;
         if (customKafkaListener.openTelemetry()) {
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             dlqSpan = tracingService.startDLQSpan(
@@ -251,16 +251,16 @@ public class DLQRouter {
                 customDlqTopic, currentAttempts, customKafkaListener.topic());
 
             if (customKafkaListener.openTelemetry() && dlqSpan != null) {
-                tracingService.setSuccess(dlqSpan);
+                dlqSpan.setSuccess();
             }
         } catch (Exception e) {
             if (customKafkaListener.openTelemetry() && dlqSpan != null) {
-                tracingService.recordException(dlqSpan, e);
+                dlqSpan.recordException(e);
             }
             throw e;
         } finally {
-            if (customKafkaListener.openTelemetry() && tracingService != null) {
-                tracingService.endSpan(dlqSpan);
+            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+                dlqSpan.end();
             }
         }
     }
