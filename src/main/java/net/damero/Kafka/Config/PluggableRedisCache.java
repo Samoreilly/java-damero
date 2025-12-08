@@ -9,16 +9,16 @@ import org.springframework.lang.Nullable;
 import java.time.Duration;
 
 /**
- * cache implementation that uses redis when available and falls back to caffeine
+ * Cache implementation that uses Redis when available and falls back to Caffeine.
  *
- * CRITICAL WARNING: in multi-instance deployments, if redis fails and strictMode=false,
- * different instances will use separate caffeine caches causing:
- * - duplicate message processing (deduplication breaks)
- * - incorrect retry counts (each instance tracks separately)
- * - inconsistent circuit breaker states
+ * CRITICAL WARNING: In multi-instance deployments, if Redis fails and strictMode=false,
+ * different instances will use separate Caffeine caches causing:
+ * - Duplicate message processing (deduplication breaks)
+ * - Incorrect retry counts (each instance tracks separately)
+ * - Inconsistent circuit breaker states
  *
- * RECOMMENDATION: always use strictMode=true in production (default)
- * this will fail fast when redis is unavailable instead of silently degrading
+ * RECOMMENDATION: Always use strictMode=true in production (default).
+ * This will fail fast when Redis is unavailable instead of silently degrading.
  */
 public class PluggableRedisCache {
 
@@ -35,7 +35,11 @@ public class PluggableRedisCache {
         "This prevents split-brain scenarios in multi-instance deployments. " +
         "Set damero.cache.strict-mode=false to allow degradation to Caffeine (NOT recommended for production).";
 
-    // Constructor with both Redis and Caffeine backends plus health check (for automatic failover)
+    // ==================== Constructors ====================
+
+    /**
+     * Primary constructor with all options.
+     */
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate,
                               CaffeineCache caffeineCache,
                               @Nullable RedisHealthCheck healthCheck,
@@ -54,47 +58,57 @@ public class PluggableRedisCache {
         }
     }
 
-    // backwards compatibility constructors
+    /**
+     * Constructor with Redis + Caffeine, strict mode enabled by default.
+     */
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate,
                               CaffeineCache caffeineCache,
                               @Nullable RedisHealthCheck healthCheck) {
-        this(redisTemplate, caffeineCache, healthCheck, true); // default to strict mode
+        this(redisTemplate, caffeineCache, healthCheck, true);
     }
 
-    // Redis constructor with health check
+    /**
+     * Redis-only constructor with health check.
+     */
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate, @Nullable RedisHealthCheck healthCheck) {
         this.redisTemplate = redisTemplate;
         this.caffeineCache = null;
         this.healthCheck = healthCheck;
-        this.strictMode = true; // redis-only is always strict
+        this.strictMode = true;
         if (redisTemplate != null) {
             logger.info("=== PluggableRedisCache initialized with Redis backend (no failover) ===");
         }
     }
 
-    // Redis constructor without health check (backwards compatibility)
+    /**
+     * Redis-only constructor (backwards compatibility).
+     */
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate) {
-        this(redisTemplate, null);
+        this(redisTemplate, (RedisHealthCheck) null);
     }
 
-    // Caffeine constructor with health check
+    /**
+     * Caffeine-only constructor with health check.
+     */
     public PluggableRedisCache(CaffeineCache caffeineCache, @Nullable RedisHealthCheck healthCheck) {
         this.redisTemplate = null;
         this.caffeineCache = caffeineCache;
         this.healthCheck = healthCheck;
-        this.strictMode = false; // caffeine-only can't be strict
+        this.strictMode = false;
         logger.info("=== PluggableRedisCache initialized with Caffeine backend ===");
     }
 
-    // overloaded constructor for Caffeine in memory cache (backwards compatibility)
+    /**
+     * Caffeine-only constructor (backwards compatibility).
+     */
     public PluggableRedisCache(CaffeineCache caffeineCache) {
         this(caffeineCache, null);
     }
 
+    // ==================== Core Cache Operations ====================
+
     /**
      * Determine which backend to use based on health check.
-     * If health check is available, use it to determine active backend.
-     * Otherwise, use the statically configured backend.
      */
     private boolean shouldUseRedis() {
         if (healthCheck != null) {
@@ -103,30 +117,16 @@ public class PluggableRedisCache {
         return redisTemplate != null;
     }
 
-    /*
-        Custom methods for the cache whether redis is available or not.
+    /**
+     * Store a value in the cache.
      */
-
     public void put(String key, Object value) {
         if (shouldUseRedis() && redisTemplate != null) {
             try {
-                logger.debug("Storing in Redis - key: {}, value type: {}", cacheKeyPrefix + key, value.getClass().getSimpleName());
+                logger.debug("Storing in Redis - key: {}", cacheKeyPrefix + key);
                 redisTemplate.opsForValue().set(cacheKeyPrefix + key, value);
-
             } catch (Exception e) {
-                logger.error("Failed to store key '{}' in Redis: {}", key, e.getMessage());
-                // notify health check of failure for immediate failover
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-
-                // in strict mode, fail fast to prevent split-brain
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
-
-                // fallback to Caffeine if Redis fails and strict mode is disabled
-                logger.warn("DEGRADED MODE: Falling back to Caffeine cache - may cause data inconsistency in multi-instance deployments");
+                handleRedisFailure("put", key, e);
                 if (caffeineCache != null && value instanceof Integer) {
                     caffeineCache.put(key, (Integer) value);
                 }
@@ -137,32 +137,14 @@ public class PluggableRedisCache {
     }
 
     /**
-     * Put a value in the cache with a time-to-live (TTL).
-     * After the TTL expires, the entry will be automatically removed.
-     *
-     * @param key the cache key
-     * @param value the value to cache
-     * @param ttl the time-to-live duration
-    */
-
+     * Store a value in the cache with TTL.
+     */
     public void put(String key, Object value, Duration ttl) {
         if (shouldUseRedis() && redisTemplate != null) {
             try {
                 redisTemplate.opsForValue().set(cacheKeyPrefix + key, value, ttl);
             } catch (Exception e) {
-                logger.error("Failed to store key '{}' in Redis with TTL: {}", key, e.getMessage());
-                // notify health check of failure for immediate failover
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-
-                // in strict mode, fail fast to prevent split-brain
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
-
-                // failover to Caffeine if Redis fails and strict mode is disabled
-                logger.warn("DEGRADED MODE: Falling back to Caffeine cache - may cause data inconsistency");
+                handleRedisFailure("put with TTL", key, e);
                 if (caffeineCache != null && value instanceof Integer) {
                     caffeineCache.put(key, (Integer) value);
                 }
@@ -172,24 +154,16 @@ public class PluggableRedisCache {
         }
     }
 
+    /**
+     * Check if a key exists in the cache.
+     */
     public boolean contains(String key) {
         if (shouldUseRedis() && redisTemplate != null) {
             try {
-                return Boolean.TRUE.equals(redisTemplate.hasKey(cacheKeyPrefix + key));
+                Boolean exists = redisTemplate.hasKey(cacheKeyPrefix + key);
+                return Boolean.TRUE.equals(exists);
             } catch (Exception e) {
-                logger.error("Failed to check key '{}' in Redis: {}", key, e.getMessage());
-                // notify health check of failure for immediate failover
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-
-                // in strict mode, fail fast
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
-
-                // failover to Caffeine if Redis fails
-                logger.warn("DEGRADED MODE: Falling back to Caffeine cache for contains check");
+                handleRedisFailure("contains", key, e);
                 if (caffeineCache != null) {
                     return caffeineCache.get(key) != null;
                 }
@@ -201,24 +175,15 @@ public class PluggableRedisCache {
         return false;
     }
 
+    /**
+     * Get a value from the cache.
+     */
     public Object get(String key) {
         if (shouldUseRedis() && redisTemplate != null) {
             try {
                 return redisTemplate.opsForValue().get(cacheKeyPrefix + key);
             } catch (Exception e) {
-                logger.error("Failed to retrieve key '{}' from Redis: {}", key, e.getMessage());
-                // notify health check of failure for immediate failover
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-
-                // in strict mode, fail fast
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
-
-                // failover to Caffeine if Redis fails
-                logger.warn("DEGRADED MODE: Falling back to Caffeine cache for get operation");
+                handleRedisFailure("get", key, e);
                 if (caffeineCache != null) {
                     return caffeineCache.get(key);
                 }
@@ -230,32 +195,30 @@ public class PluggableRedisCache {
         return null;
     }
 
+    /**
+     * Get an Integer value, returning default if not found.
+     * Does NOT store the default value.
+     */
     public Integer getOrDefault(String key, Integer defaultValue) {
         Object value = get(key);
         if (value instanceof Integer) {
             return (Integer) value;
         }
+        if (value instanceof Long) {
+            return ((Long) value).intValue();
+        }
         return defaultValue;
     }
 
+    /**
+     * Remove a key from the cache.
+     */
     public void remove(String key) {
         if (shouldUseRedis() && redisTemplate != null) {
             try {
                 redisTemplate.delete(cacheKeyPrefix + key);
             } catch (Exception e) {
-                logger.error("Failed to remove key '{}' from Redis: {}", key, e.getMessage());
-                // notify health check of failure for immediate failover
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-
-                // in strict mode, fail fast
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
-
-                // failover to Caffeine if Redis fails
-                logger.warn("DEGRADED MODE: Falling back to Caffeine cache for remove operation");
+                handleRedisFailure("remove", key, e);
                 if (caffeineCache != null) {
                     caffeineCache.remove(key);
                 }
@@ -266,14 +229,8 @@ public class PluggableRedisCache {
     }
 
     /**
-     * atomically increment a counter and return the new value
-     * this is critical for retry counting to prevent race conditions
-     *
-     * IMPORTANT: this uses Redis INCR command for atomicity when redis is available
-     * when using caffeine, this falls back to caffeine's atomic operations
-     *
-     * @param key the counter key
-     * @return the new incremented value
+     * Atomically increment a counter and return the new value.
+     * Uses Redis INCR for atomicity across instances.
      */
     public int incrementAndGet(String key) {
         if (shouldUseRedis() && redisTemplate != null) {
@@ -285,19 +242,7 @@ public class PluggableRedisCache {
                 }
                 return newValue.intValue();
             } catch (Exception e) {
-                logger.error("Failed to increment key '{}' in Redis: {}", key, e.getMessage());
-                // notify health check of failure
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-
-                // in strict mode, fail fast
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
-
-                // fallback to caffeine with warning
-                logger.warn("DEGRADED MODE: Falling back to Caffeine for increment - NOT ATOMIC across instances");
+                handleRedisFailure("increment", key, e);
                 if (caffeineCache != null) {
                     Integer current = caffeineCache.get(key);
                     int newValue = (current == null ? 0 : current) + 1;
@@ -315,28 +260,14 @@ public class PluggableRedisCache {
         return 1;
     }
 
-    /**
-     * exception thrown when cache operations fail and strict mode is enabled
-     * this prevents split-brain scenarios in multi-instance deployments
-     */
-    public static class CacheUnavailableException extends RuntimeException {
-        public CacheUnavailableException(String message, Throwable cause) {
-            super(message, cause);
-        }
-    }
-
-    // ==================== rate limiting ====================
+    // ==================== Rate Limiting ====================
 
     private static final String RATE_LIMIT_PREFIX = "ratelimit:";
     private static final String COUNTER_FIELD = "count";
     private static final String WINDOW_START_FIELD = "windowStart";
 
     /**
-     * increment the rate limit counter for a topic and return the new count
-     * uses redis HINCRBY for the counter field, falls back to caffeine
-     *
-     * @param topic the topic name
-     * @return the new counter value after increment
+     * Increment the rate limit counter for a topic.
      */
     public long incrementRateLimitCounter(String topic) {
         String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
@@ -346,16 +277,10 @@ public class PluggableRedisCache {
                 Long count = redisTemplate.opsForHash().increment(key, COUNTER_FIELD, 1);
                 return count != null ? count : 1;
             } catch (Exception e) {
-                logger.error("Failed to increment rate limit counter for '{}': {}", topic, e.getMessage());
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
+                handleRedisFailure("incrementRateLimitCounter", topic, e);
             }
         }
-        // caffeine fallback
+        // Caffeine fallback
         if (caffeineCache != null) {
             String counterKey = RATE_LIMIT_PREFIX + topic + ":count";
             Integer current = caffeineCache.get(counterKey);
@@ -367,10 +292,7 @@ public class PluggableRedisCache {
     }
 
     /**
-     * get the current window start time for a topic
-     *
-     * @param topic the topic name
-     * @return the window start time in milliseconds, or 0 if not set
+     * Get the current window start time for a topic.
      */
     public long getRateLimitWindowStart(String topic) {
         String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
@@ -385,16 +307,10 @@ public class PluggableRedisCache {
                     return Long.parseLong((String) value);
                 }
             } catch (Exception e) {
-                logger.error("Failed to get rate limit window start for '{}': {}", topic, e.getMessage());
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
+                handleRedisFailure("getRateLimitWindowStart", topic, e);
             }
         }
-        // caffeine fallback - store as int (seconds) to fit in Integer
+        // Caffeine fallback
         if (caffeineCache != null) {
             String windowKey = RATE_LIMIT_PREFIX + topic + ":window";
             Integer value = caffeineCache.get(windowKey);
@@ -404,10 +320,7 @@ public class PluggableRedisCache {
     }
 
     /**
-     * reset the rate limit window for a topic (sets counter to 1 and updates window start time)
-     *
-     * @param topic the topic name
-     * @param windowStartTime the new window start time in milliseconds
+     * Reset the rate limit window for a topic.
      */
     public void resetRateLimitWindow(String topic, long windowStartTime) {
         String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
@@ -418,16 +331,10 @@ public class PluggableRedisCache {
                 redisTemplate.opsForHash().put(key, WINDOW_START_FIELD, windowStartTime);
                 return;
             } catch (Exception e) {
-                logger.error("Failed to reset rate limit window for '{}': {}", topic, e.getMessage());
-                if (healthCheck != null) {
-                    healthCheck.markRedisUnavailable();
-                }
-                if (strictMode) {
-                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-                }
+                handleRedisFailure("resetRateLimitWindow", topic, e);
             }
         }
-        // caffeine fallback
+        // Caffeine fallback
         if (caffeineCache != null) {
             String counterKey = RATE_LIMIT_PREFIX + topic + ":count";
             String windowKey = RATE_LIMIT_PREFIX + topic + ":window";
@@ -436,40 +343,117 @@ public class PluggableRedisCache {
         }
     }
 
+    // ==================== Fibonacci State Management ====================
+
+    private static final String FIBONACCI_PREFIX = "fib:";
+
     /**
-     * get the current rate limit counter for a topic
+     * Gets the next Fibonacci delay value for an event and advances the state.
+     * This is atomic across distributed instances when using Redis.
      *
-     * @param topic the topic name
-     * @return the current counter value, or 0 if not set
+     * @param eventId the event identifier
+     * @param fibonacciLimit the maximum fibonacci sequence index
+     * @return the next fibonacci delay value in the sequence
      */
-//    public long getRateLimitCounter(String topic) {
-//        String key = cacheKeyPrefix + RATE_LIMIT_PREFIX + topic;
-//
-//        if (shouldUseRedis() && redisTemplate != null) {
-//            try {
-//                Object value = redisTemplate.opsForHash().get(key, COUNTER_FIELD);
-//                if (value instanceof Number) {
-//                    return ((Number) value).longValue();
-//                }
-//                if (value instanceof String) {
-//                    return Long.parseLong((String) value);
-//                }
-//            } catch (Exception e) {
-//                logger.error("Failed to get rate limit counter for '{}': {}", topic, e.getMessage());
-//                if (healthCheck != null) {
-//                    healthCheck.markRedisUnavailable();
-//                }
-//                if (strictMode) {
-//                    throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
-//                }
-//            }
-//        }
-//        // caffeine fallback
-//        if (caffeineCache != null) {
-//            String counterKey = RATE_LIMIT_PREFIX + topic + ":count";
-//            Integer value = caffeineCache.get(counterKey);
-//            return value != null ? value : 0;
-//        }
-//        return 0;
-//    }
+    public long getNextFibonacciDelay(String eventId, int fibonacciLimit) {
+        String key = FIBONACCI_PREFIX + eventId;
+
+        // Get current index and increment atomically
+        int currentIndex = incrementAndGetFibonacciIndex(key);
+
+        // Calculate fibonacci value for this index (capped at limit)
+        int effectiveIndex = Math.min(currentIndex, fibonacciLimit - 1);
+        return calculateFibonacci(effectiveIndex);
+    }
+
+    /**
+     * Atomically increment the fibonacci index and return the new value.
+     */
+    private int incrementAndGetFibonacciIndex(String key) {
+        if (shouldUseRedis() && redisTemplate != null) {
+            try {
+                Long newValue = redisTemplate.opsForValue().increment(cacheKeyPrefix + key);
+                // Start from index 2 (first computed fibonacci after 0,1)
+                return newValue != null ? newValue.intValue() + 1 : 2;
+            } catch (Exception e) {
+                handleRedisFailure("incrementFibonacciIndex", key, e);
+                return incrementFibonacciIndexCaffeine(key);
+            }
+        }
+        return incrementFibonacciIndexCaffeine(key);
+    }
+
+    /**
+     * Caffeine fallback for fibonacci index increment.
+     */
+    private int incrementFibonacciIndexCaffeine(String key) {
+        if (caffeineCache != null) {
+            Integer current = caffeineCache.get(FIBONACCI_PREFIX + key);
+            int newValue = (current == null ? 1 : current) + 1;
+            caffeineCache.put(FIBONACCI_PREFIX + key, newValue);
+            return newValue + 1; // +1 to start from index 2
+        }
+        return 2; // Default starting index
+    }
+
+    /**
+     * Calculate fibonacci value at given index.
+     * Uses iterative approach to avoid stack overflow for large indices.
+     */
+    private long calculateFibonacci(int index) {
+        if (index <= 0) return 0;
+        if (index == 1) return 1;
+
+        long prev = 0;
+        long curr = 1;
+        for (int i = 2; i <= index; i++) {
+            long next = prev + curr;
+            prev = curr;
+            curr = next;
+        }
+        return curr;
+    }
+
+    /**
+     * Clear the fibonacci state for an event.
+     * Call this when event processing completes successfully.
+     *
+     * @param eventId the event identifier
+     */
+    public void clearFibonacciState(String eventId) {
+        if (eventId == null) return;
+
+        String key = FIBONACCI_PREFIX + eventId;
+        remove(key);
+        logger.debug("Cleared fibonacci state for event: {}", eventId);
+    }
+
+    // ==================== Error Handling ====================
+
+    /**
+     * Common error handling for Redis failures.
+     */
+    private void handleRedisFailure(String operation, String key, Exception e) {
+        logger.error("Failed to {} key '{}' in Redis: {}", operation, key, e.getMessage());
+
+        if (healthCheck != null) {
+            healthCheck.markRedisUnavailable();
+        }
+
+        if (strictMode) {
+            throw new CacheUnavailableException(STRICT_MODE_ERROR, e);
+        }
+
+        logger.warn("DEGRADED MODE: Falling back to Caffeine cache for {} operation", operation);
+    }
+
+    /**
+     * Exception thrown when cache operations fail and strict mode is enabled.
+     */
+    public static class CacheUnavailableException extends RuntimeException {
+        public CacheUnavailableException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }
+

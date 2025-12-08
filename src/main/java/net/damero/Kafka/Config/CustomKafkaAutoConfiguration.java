@@ -90,9 +90,11 @@ public class CustomKafkaAutoConfiguration {
     /**
      * Creates the OpenTelemetry-based TracingService when OpenTelemetry is on the classpath.
      * This provides real distributed tracing functionality.
+     * Users can override by providing their own TracingService bean.
      */
     @Bean
     @ConditionalOnClass(name = "io.opentelemetry.api.OpenTelemetry")
+    @ConditionalOnMissingBean(TracingService.class)
     public TracingService openTelemetryTracingService() {
         return new OpenTelemetryTracingService();
     }
@@ -100,7 +102,7 @@ public class CustomKafkaAutoConfiguration {
     /**
      * Creates the No-Op TracingService when OpenTelemetry is NOT on the classpath.
      * This allows the library to function without tracing - all trace operations become no-ops.
-        If TracingService bean is missing, provide NoOpTracingService
+        If openTelemetryTracingService did not provide TracingService bean, provide NoOpTracingService
      */
     @Bean
     @ConditionalOnMissingBean(TracingService.class)
@@ -321,8 +323,8 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RetrySched retrySched(TaskScheduler kafkaRetryScheduler) {
-        return new RetrySched(kafkaRetryScheduler);
+    public RetrySched retrySched(TaskScheduler kafkaRetryScheduler, PluggableRedisCache pluggableRedisCache) {
+        return new RetrySched(kafkaRetryScheduler, pluggableRedisCache);
     }
 
     /*

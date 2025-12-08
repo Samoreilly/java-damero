@@ -3,65 +3,35 @@ package net.damero.Kafka.RetryScheduler;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.Aspect.Components.HeaderUtils;
+import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.CustomObject.EventMetadata;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
+
 import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static net.damero.Kafka.Aspect.Components.EventUnwrapper.extractEventId;
 
 
 @Component
 public class RetrySched {
 
-    private static class FibonacciState {
-        private final long[] sequence;
-        private int nextIndex;
-        private final int maxIndex;
-
-        public FibonacciState(int limit) {
-            if (limit < 2) {
-                throw new IllegalArgumentException("Fibonacci limit must be at least 2");
-            }
-            this.sequence = new long[limit];
-            this.sequence[0] = 0;
-            this.sequence[1] = 1;
-            this.nextIndex = 2;
-            this.maxIndex = limit - 1;
-        }
-
-        public synchronized long getNext() {
-            // If we haven't filled the array yet, calculate next value
-            if (nextIndex <= maxIndex) {
-                //dp[i] = dp[i-1] + dp[i-2]
-                sequence[nextIndex] = sequence[nextIndex - 1] + sequence[nextIndex - 2];
-                return sequence[nextIndex++];
-            }
-            // If at limit, return the last (max) value
-            return sequence[maxIndex];
-        }
-
-        public synchronized long getCurrent() {
-            int currentIndex = Math.max(0, nextIndex - 1);
-            return sequence[currentIndex];
-        }
-    }
-
-    @Autowired
-    private final TaskScheduler taskScheduler;
     private static final Logger logger = LoggerFactory.getLogger(RetrySched.class);
 
-    private final ConcurrentHashMap<Object, FibonacciState> fibonacciCache = new ConcurrentHashMap<>();
+    private final TaskScheduler taskScheduler;
+    private final PluggableRedisCache cache;
 
-    public RetrySched(TaskScheduler taskScheduler) {
+
+    public RetrySched(TaskScheduler taskScheduler, PluggableRedisCache cache) {
         this.taskScheduler = taskScheduler;
+        this.cache = cache;
     }
 
     /**
@@ -111,6 +81,7 @@ public class RetrySched {
                 e.getMessage(), 
                 e);
         }
+
     }
 
     private long getBackOffDelay(CustomKafkaListener customKafkaListener, Object object, DelayMethod delayMethod, int attempts) {
@@ -138,13 +109,13 @@ public class RetrySched {
         };
     }
 
-    private long getFibonacciDelay(CustomKafkaListener customKafkaListener, Object object){
-        // Get or create FibonacciState for this event
-        FibonacciState state = fibonacciCache.computeIfAbsent(object,
-            k -> new FibonacciState(customKafkaListener.fibonacciLimit()));
-
-        // Get next delay value
-        return state.getNext();
+    private long getFibonacciDelay(CustomKafkaListener customKafkaListener, Object object) {
+        String eventId = extractEventId(object);
+        if (eventId == null) {
+            logger.warn("Cannot get fibonacci delay - eventId is null, using default");
+            return (long) customKafkaListener.delay();
+        }
+        return cache.getNextFibonacciDelay(eventId, customKafkaListener.fibonacciLimit());
     }
 
     /**
@@ -153,7 +124,8 @@ public class RetrySched {
      */
     public void clearFibonacciState(Object event) {
         if (event != null) {
-            fibonacciCache.remove(event);
+            String eventId = extractEventId(event);
+            cache.clearFibonacciState(eventId);
         }
     }
 
@@ -163,14 +135,14 @@ public class RetrySched {
     @SuppressWarnings("unchecked")
     private <K, V> void sendToTopicWithHeaders(KafkaTemplate<?, ?> template, String topic, V message, Headers headers) {
         try {
-            org.apache.kafka.clients.producer.ProducerRecord<K, V> record = 
-                new org.apache.kafka.clients.producer.ProducerRecord<>(topic, null, null, null, message, headers);
+            ProducerRecord<K, V> record =
+                new ProducerRecord<>(topic, null, null, null, message, headers);
             ((KafkaTemplate<K, V>) template).send(record);
         } catch (Exception e) {
             throw new RuntimeException("failed to send to kafka topic: " + topic, e);
         }
     }
-    
+
     @SuppressWarnings("unchecked")
     private <K, V> void sendToTopic(KafkaTemplate<?, ?> template, String topic, V message) {
         try {

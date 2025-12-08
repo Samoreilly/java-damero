@@ -1,5 +1,6 @@
 package net.damero;
 
+import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
@@ -34,11 +35,14 @@ class RetrySchedTest {
     @Mock
     private CustomKafkaListener customKafkaListener;
 
+    @Mock
+    private PluggableRedisCache cache;
+
     private RetrySched retrySched;
 
     @BeforeEach
     void setUp() {
-        retrySched = new RetrySched(taskScheduler);
+        retrySched = new RetrySched(taskScheduler, cache);
 
         // Use lenient() to avoid UnnecessaryStubbingException
         // These stubs are shared across multiple tests
