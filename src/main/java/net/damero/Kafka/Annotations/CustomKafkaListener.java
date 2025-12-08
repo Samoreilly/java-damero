@@ -112,5 +112,17 @@ public @interface CustomKafkaListener {
      * Set to false for high-volume topics where tracing overhead is unacceptable.
      */
     boolean openTelemetry() default false;
+
+
+    /**
+     * Batch processing default to 0 - DISABLED
+     * Batches are processes when mininum batch size threshold is met - Default is disabled which is zero
+     * Batch limit is max capacity to be processed at one
+     */
+
+    int batchSize() default 0;
+    int batchThreshold() default 0;
+
+
 }
 
