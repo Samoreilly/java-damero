@@ -49,6 +49,7 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.lang.reflect.Method;
@@ -492,13 +493,32 @@ public class CustomKafkaAutoConfiguration {
     @Primary
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
             ObjectMapper kafkaObjectMapper,
-            @Value("${spring.kafka.consumer.properties.spring.json.value.default.type:}") @Nullable String defaultType,
-            @Value("${spring.kafka.consumer.properties.spring.json.use.type.headers:false}") boolean useTypeHeaders) {
+            KafkaProperties kafkaProperties,
+            @Value("${kafka.damero.consumer.default-type:}") @Nullable String defaultType,
+            @Value("${kafka.damero.consumer.use-type-headers:false}") boolean useTypeHeaders) {
 
-        Map<String, Object> props = new HashMap<>();
+        // Start with Spring Boot's consumer properties (includes max.poll.records, etc.)
+        Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
+
+        // Override with our specific settings
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
+
+        // Remove ALL JSON deserializer properties from the map since we configure the deserializer programmatically
+        // This prevents "JsonDeserializer must be configured with property setters, or via configuration properties; not both"
+        // Remove both the prefixed and non-prefixed versions
+        props.remove("spring.json.value.default.type");
+        props.remove("spring.json.use.type.headers");
+        props.remove("spring.json.trusted.packages");
+        props.remove("spring.json.type.mapping");
+        props.remove("spring.json.add.type.headers");
+        // Also remove the JsonDeserializer specific config keys
+        props.entrySet().removeIf(entry ->
+            entry.getKey() != null && entry.getKey().toString().startsWith("spring.json."));
+        // Also remove key.deserializer and value.deserializer as we provide them explicitly
+        props.remove(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+        props.remove(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
 
         JsonDeserializer<Object> jsonDeserializer;
 

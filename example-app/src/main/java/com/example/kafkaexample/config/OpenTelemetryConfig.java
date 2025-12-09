@@ -103,13 +103,14 @@ public class OpenTelemetryConfig {
             Sampler sampler = Sampler.traceIdRatioBased(samplerRatio);
 
             // configure tracer provider with batch processing for efficiency
+            // increased limits for high-throughput scenarios (50k+ messages)
             SdkTracerProvider sdkTracerProvider = SdkTracerProvider.builder()
                 .setSampler(sampler)
                 .addSpanProcessor(BatchSpanProcessor.builder(spanExporter)
-                    .setMaxExportBatchSize(512)
-                    .setMaxQueueSize(2048)
+                    .setMaxExportBatchSize(2048)      // increased from 512 for high throughput
+                    .setMaxQueueSize(65536)           // increased from 2048 to prevent span drops
                     .setExporterTimeout(Duration.ofMillis(exporterTimeoutMs))
-                    .setScheduleDelay(Duration.ofMillis(5000))
+                    .setScheduleDelay(Duration.ofMillis(1000))  // reduced from 5000ms for faster export
                     .build())
                 .setResource(resource)
                 .build();

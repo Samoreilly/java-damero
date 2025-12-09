@@ -1,0 +1,132 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper (file:/usr/share/maven/lib/guava.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.common.util.concurrent.AbstractFuture$UnsafeAtomicHelper
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-------------------< [0;36mcom.example:kafka-example-app[0;1m >--------------------[m
+[[1;34mINFO[m] [1mBuilding Kafka Example Application 1.0.0[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m>>> [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[0;1m > [0;1mtest-compile[m @ [36mkafka-example-app[0;1m >>>[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:resources[m [1m(default-resources)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Copying 1 resource from src/main/resources to target/classes
+[[1;34mINFO[m] Copying 0 resource from src/main/resources to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:compile[m [1m(default-compile)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged source code[m.
+[[1;34mINFO[m] Compiling 8 source files with javac [debug parameters release 21] to target/classes
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:3.3.1:testResources[m [1m(default-testResources)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] skip non existing resourceDirectory /home/sam-o-reilly/Downloads/java-damero/example-app/src/test/resources
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.14.1:testCompile[m [1m(default-testCompile)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Recompiling the module because of [1mchanged dependency[m.
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m<<< [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[0;1m < [0;1mtest-compile[m @ [36mkafka-example-app[0;1m <<<[m
+[[1;34mINFO[m] 
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mspring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[m @ [36mkafka-example-app[0;1m ---[m
+[[1;34mINFO[m] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.7)
+
+2025-12-09T21:01:37.898Z  INFO 232090 --- [           main] c.e.k.KafkaExampleApplication            : Starting KafkaExampleApplication using Java 25.0.1 with PID 232090 (/home/sam-o-reilly/Downloads/java-damero/example-app/target/classes started by sam-o-reilly in /home/sam-o-reilly/Downloads/java-damero/example-app)
+2025-12-09T21:01:37.900Z DEBUG 232090 --- [           main] c.e.k.KafkaExampleApplication            : Running with Spring Boot v3.5.7, Spring v6.2.12
+2025-12-09T21:01:37.900Z  INFO 232090 --- [           main] c.e.k.KafkaExampleApplication            : No active profile set, falling back to 1 default profile: "default"
+2025-12-09T21:01:38.157Z  INFO 232090 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2025-12-09T21:01:38.158Z  INFO 232090 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-12-09T21:01:38.170Z  INFO 232090 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 5 ms. Found 0 Redis repository interfaces.
+2025-12-09T21:01:38.414Z  INFO 232090 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2025-12-09T21:01:38.430Z  INFO 232090 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-12-09T21:01:38.430Z  INFO 232090 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.48]
+2025-12-09T21:01:38.451Z  INFO 232090 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-12-09T21:01:38.451Z  INFO 232090 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 528 ms
+2025-12-09T21:01:38.554Z  INFO 232090 --- [           main] n.d.K.C.CustomKafkaAutoConfiguration     : ==> Kafka consumer configured with default type: com.example.kafkaexample.model.OrderEvent
+2025-12-09T21:01:38.559Z  INFO 232090 --- [           main] c.e.k.config.OpenTelemetryConfig         : initializing opentelemetry - endpoint: http://localhost:4317, service: damero-service, environment: development, sampling: 100.0%
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by io.opentelemetry.internal.shaded.jctools.util.UnsafeAccess (file:/home/sam-o-reilly/.m2/repository/io/opentelemetry/opentelemetry-sdk-trace/1.49.0/opentelemetry-sdk-trace-1.49.0.jar)
+WARNING: Please consider reporting this to the maintainers of class io.opentelemetry.internal.shaded.jctools.util.UnsafeAccess
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+2025-12-09T21:01:38.615Z  INFO 232090 --- [           main] c.e.k.config.OpenTelemetryConfig         : opentelemetry initialized successfully
+2025-12-09T21:01:38.860Z  INFO 232090 --- [           main] n.d.K.T.OpenTelemetryTracingService      : OpenTelemetryTracingService initialized - distributed tracing enabled
+2025-12-09T21:01:38.860Z DEBUG 232090 --- [           main] n.d.K.T.OpenTelemetryTracingService      : Using instrumentation name: net.damero.kafka
+2025-12-09T21:01:38.876Z  INFO 232090 --- [           main] n.d.K.C.CustomKafkaAutoConfiguration     : Creating RedisTemplate for kafka-damero library - Redis dependency detected
+2025-12-09T21:01:38.878Z  INFO 232090 --- [           main] n.d.K.C.CustomKafkaAutoConfiguration     : RedisTemplate successfully configured for kafka-damero distributed cache
+2025-12-09T21:01:39.090Z  INFO 232090 --- [           main] f.a.AutowiredAnnotationBeanPostProcessor : Autowired annotation is not supported on static fields: private static final long net.damero.Kafka.Config.RedisHealthCheck.HEALTH_CHECK_INTERVAL_SECONDS
+2025-12-09T21:01:39.091Z  INFO 232090 --- [           main] n.damero.Kafka.Config.RedisHealthCheck   : Redis health check started - checking every 10 seconds
+2025-12-09T21:01:39.093Z  INFO 232090 --- [           main] n.d.K.C.CustomKafkaAutoConfiguration     : ==> PluggableRedisCache configured with Redis + Caffeine failover (STRICT MODE ENABLED)
+2025-12-09T21:01:39.093Z  INFO 232090 --- [           main] n.d.K.C.CustomKafkaAutoConfiguration     : ==> Redis failures will throw exceptions to prevent split-brain scenarios
+2025-12-09T21:01:39.093Z  INFO 232090 --- [           main] n.d.Kafka.Config.PluggableRedisCache     : === PluggableRedisCache initialized with Redis + Caffeine failover (STRICT MODE ENABLED) ===
+2025-12-09T21:01:39.093Z  INFO 232090 --- [           main] n.d.Kafka.Config.PluggableRedisCache     : === Redis failures will throw exceptions to prevent split-brain scenarios ===
+2025-12-09T21:01:39.101Z  INFO 232090 --- [           main] n.d.K.A.D.DuplicationManager             : Initializing DuplicationManager with 10 HOURS window (TTL: PT10H)
+2025-12-09T21:01:39.101Z  INFO 232090 --- [           main] n.d.K.A.D.DuplicationManager             : DuplicationManager initialized. Max capacity: 50000000 entries
+2025-12-09T21:01:39.217Z  INFO 232090 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2025-12-09T21:01:39.234Z  INFO 232090 --- [           main] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-09T21:01:39.236Z  INFO 232090 --- [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2025-12-09T21:01:39.242Z  WARN 232090 --- [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'org.springframework.kafka.config.internalKafkaListenerEndpointRegistry'
+2025-12-09T21:01:39.244Z  INFO 232090 --- [           main] n.damero.Kafka.Config.RedisHealthCheck   : Redis health check stopped
+2025-12-09T21:01:39.253Z  INFO 232090 --- [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-12-09T21:01:39.260Z ERROR 232090 --- [           main] o.s.boot.SpringApplication               : Application run failed
+
+org.springframework.context.ApplicationContextException: Failed to start bean 'org.springframework.kafka.config.internalKafkaListenerEndpointRegistry'
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:408) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:394) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.DefaultLifecycleProcessor$LifecycleGroup.start(DefaultLifecycleProcessor.java:586) ~[spring-context-6.2.12.jar:6.2.12]
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75) ~[na:na]
+	at org.springframework.context.support.DefaultLifecycleProcessor.startBeans(DefaultLifecycleProcessor.java:364) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.DefaultLifecycleProcessor.onRefresh(DefaultLifecycleProcessor.java:310) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.AbstractApplicationContext.finishRefresh(AbstractApplicationContext.java:1009) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:630) ~[spring-context-6.2.12.jar:6.2.12]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361) ~[spring-boot-3.5.7.jar:3.5.7]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350) ~[spring-boot-3.5.7.jar:3.5.7]
+	at com.example.kafkaexample.KafkaExampleApplication.main(KafkaExampleApplication.java:10) ~[classes/:na]
+Caused by: java.lang.IllegalStateException: JsonDeserializer must be configured with property setters, or via configuration properties; not both
+	at org.springframework.util.Assert.state(Assert.java:79) ~[spring-core-6.2.12.jar:6.2.12]
+	at org.springframework.kafka.support.serializer.JsonDeserializer.configure(JsonDeserializer.java:411) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory.valueDeserializer(DefaultKafkaConsumerFactory.java:488) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory$ExtendedKafkaConsumer.<init>(DefaultKafkaConsumerFactory.java:498) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory.createRawConsumer(DefaultKafkaConsumerFactory.java:453) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory.createKafkaConsumer(DefaultKafkaConsumerFactory.java:430) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory.createConsumerWithAdjustedProperties(DefaultKafkaConsumerFactory.java:407) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory.createKafkaConsumer(DefaultKafkaConsumerFactory.java:374) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.core.DefaultKafkaConsumerFactory.createConsumer(DefaultKafkaConsumerFactory.java:335) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.listener.KafkaMessageListenerContainer$ListenerConsumer.<init>(KafkaMessageListenerContainer.java:877) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.listener.KafkaMessageListenerContainer.doStart(KafkaMessageListenerContainer.java:388) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.listener.AbstractMessageListenerContainer.start(AbstractMessageListenerContainer.java:520) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.listener.ConcurrentMessageListenerContainer.doStart(ConcurrentMessageListenerContainer.java:264) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.listener.AbstractMessageListenerContainer.start(AbstractMessageListenerContainer.java:520) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.config.KafkaListenerEndpointRegistry.startIfNecessary(KafkaListenerEndpointRegistry.java:436) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.kafka.config.KafkaListenerEndpointRegistry.start(KafkaListenerEndpointRegistry.java:382) ~[spring-kafka-3.3.10.jar:3.3.10]
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:405) ~[spring-context-6.2.12.jar:6.2.12]
+	... 14 common frames omitted
+
+2025-12-09T21:01:39.757Z  INFO 232090 --- [       Thread-1] c.e.k.config.OpenTelemetryConfig         : shutting down opentelemetry...
+2025-12-09T21:01:39.757Z  INFO 232090 --- [       Thread-1] c.e.k.config.OpenTelemetryConfig         : opentelemetry shutdown complete
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;31mBUILD FAILURE[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  3.368 s
+[[1;34mINFO[m] Finished at: 2025-12-09T21:01:39Z
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;31mERROR[m] Failed to execute goal [32morg.springframework.boot:spring-boot-maven-plugin:3.5.7:run[m [1m(default-cli)[m on project [36mkafka-example-app[m: [1;31mProcess terminated with exit code: 1[m -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

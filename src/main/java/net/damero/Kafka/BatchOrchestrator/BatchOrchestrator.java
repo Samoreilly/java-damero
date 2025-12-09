@@ -105,16 +105,10 @@ public class BatchOrchestrator {
             ConcurrentLinkedQueue<Object[]> queue = batchQueues.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>());
             long currentCount = batchCounters.computeIfAbsent(topic, k -> new AtomicLong(0)).get();
 
-            if (fixedWindow && currentCount >= batchCapacity) {
-                // CRITICAL FIX: Do NOT queue messages beyond capacity in fixed window mode
-                // This prevents memory leak where counter grows unbounded
-                // Message will NOT be acknowledged, so Kafka will redeliver it in next poll
-                // This provides natural backpressure
-                logger.debug("Fixed window batch at capacity for topic: {} ({}/{}) - applying backpressure (message will be redelivered)",
-                    topic, currentCount, batchCapacity);
-                metricsRecorder.recordBatchBackpressure(topic);
-                return BatchStatus.PROCESSING;
-            }
+            // In fixed window mode, we still queue messages even beyond capacity
+            // This ensures all messages in the poll batch are captured
+            // The batch processor will drain only batchCapacity items at a time
+            // Remaining items will be processed in subsequent batches
 
             // Add to queue
             queue.add(args);

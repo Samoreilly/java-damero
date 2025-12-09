@@ -32,7 +32,7 @@ public class OrderProcessingService {
         deDuplication = false,
         openTelemetry = true,
         batchCapacity = 6000,
-        batchWindowLength = 1000,
+        batchWindowLength = 2000,
         fixedWindow = true
 
     )
