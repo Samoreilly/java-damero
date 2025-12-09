@@ -29,11 +29,11 @@ public class OrderProcessingService {
             ValidationException.class
         },
         deDuplication = true,
-        openTelemetry = true,
-        batchCapacity = 10,
-        batchWindowLength = 5000
-//        messagesPerWindow = 200,
-//        messageWindow = 1000,
+        openTelemetry = true
+//        batchCapacity = 10000,
+//        batchWindowLength = 2000,
+//        fixedWindow = true
+
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {

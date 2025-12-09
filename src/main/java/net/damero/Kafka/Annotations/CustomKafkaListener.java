@@ -115,15 +115,44 @@ public @interface CustomKafkaListener {
 
 
     /**
-     * Batch processing default to 0 - DISABLED
-     * Batches are processes when mininum batch size threshold is met - Default is disabled which is zero
-     * Batch limit is max capacity to be processed at one
-     * ITS RECOMEMENDED TO NOT MIX BATCH PROCESSING WITH MESSAGES PER WINDOW AND MESSAGE WINDOW AS ODD BEHAVIOUR MAY OCCUR
+     * Batch processing configuration. Set batchCapacity > 0 to enable.
+     *
+     * <p><b>Two batch modes available (controlled by fixedWindow):</b></p>
+     *
+     * <p><b>Mode 1: Capacity-First (fixedWindow = false, default)</b></p>
+     * <ul>
+     *   <li>Batch processes IMMEDIATELY when batchCapacity is reached</li>
+     *   <li>batchWindowLength is a fallback timer for slow periods</li>
+     *   <li>Use case: Maximum throughput, process as fast as possible</li>
+     * </ul>
+     *
+     * <p><b>Mode 2: Fixed Window (fixedWindow = true)</b></p>
+     * <ul>
+     *   <li>Batch processes ONLY when the window timer expires</li>
+     *   <li>batchCapacity is the maximum messages collected per window</li>
+     *   <li>Use case: Predictable intervals, rate-controlled processing</li>
+     * </ul>
+     *
+     * <p>IT'S RECOMMENDED TO NOT MIX BATCH PROCESSING WITH messagesPerWindow/messageWindow</p>
      */
 
+    /** Maximum messages per batch. Set to 0 to disable batch processing. */
     int batchCapacity() default 0;
+
+    /** Minimum messages to trigger early processing (only in capacity-first mode). */
     int minimumCapacity() default 0;
-    int batchWindowLength() default 2500; //in milliseconds, default 2.5 seconds
+
+    /** Batch window duration in milliseconds. Default: 2500ms (2.5 seconds) */
+    int batchWindowLength() default 2500;
+
+    /**
+     * Enable fixed window mode for predictable batch timing.
+     * <
+     *   false: Process immediately when capacity reached, window is fallback</li>
+     *   true: Process ONLY when window expires, capacity is just a limit</li>
+     * </ul>
+     */
+    boolean fixedWindow() default false;
 
 
 }

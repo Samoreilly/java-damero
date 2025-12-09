@@ -8,6 +8,7 @@ import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
 import net.damero.Kafka.BatchOrchestrator.BatchOrchestrator;
+import net.damero.Kafka.BatchOrchestrator.BatchProcessor;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
@@ -93,7 +94,7 @@ public class CustomKafkaAutoConfiguration {
      * This provides real distributed tracing functionality.
      * Users can override by providing their own TracingService bean.
      */
-    @Bean
+    @Bean("openTelemetryTracingService")
     @ConditionalOnClass(name = "io.opentelemetry.api.OpenTelemetry")
     @ConditionalOnMissingBean(TracingService.class)
     public TracingService openTelemetryTracingService() {
@@ -103,9 +104,10 @@ public class CustomKafkaAutoConfiguration {
     /**
      * Creates the No-Op TracingService when OpenTelemetry is NOT on the classpath.
      * This allows the library to function without tracing - all trace operations become no-ops.
-        If openTelemetryTracingService did not provide TracingService bean, provide NoOpTracingService
+     * Only creates this bean if OpenTelemetry is NOT available (no TracingService bean exists).
      */
-    @Bean
+    @Bean("noOpTracingService")
+    @ConditionalOnMissingClass("io.opentelemetry.api.OpenTelemetry")
     @ConditionalOnMissingBean(TracingService.class)
     public TracingService noOpTracingService() {
         return new NoOpTracingService();
@@ -283,6 +285,20 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public BatchProcessor batchProcessor(BatchOrchestrator batchOrchestrator,
+                                         DuplicationManager duplicationManager,
+                                         CircuitBreakerWrapper circuitBreakerWrapper,
+                                         DLQRouter dlqRouter,
+                                         MetricsRecorder metricsRecorder,
+                                         RetryOrchestrator retryOrchestrator,
+                                         RetrySched retrySched,
+                                         TracingService tracingService) {
+        return new BatchProcessor(batchOrchestrator, duplicationManager, circuitBreakerWrapper,
+                                  dlqRouter, metricsRecorder, retryOrchestrator, retrySched, tracingService);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public KafkaListenerAspect kafkaListenerAspect(DLQRouter dlqRouter,
                                                    ApplicationContext context,
                                                    KafkaTemplate<?, ?> defaultKafkaTemplate,
@@ -294,11 +310,12 @@ public class CustomKafkaAutoConfiguration {
                                                    DuplicationManager duplicationManager,
                                                    TracingService tracingService,
                                                    PluggableRedisCache pluggableRedisCache,
-                                                   BatchOrchestrator batchOrchestrator) {
+                                                   BatchOrchestrator batchOrchestrator,
+                                                   BatchProcessor batchProcessor) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate,
                                        retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
                                        retrySched, dlqExceptionRoutingManager, duplicationManager,
-                                       tracingService, pluggableRedisCache, batchOrchestrator);
+                                       tracingService, pluggableRedisCache, batchOrchestrator, batchProcessor);
     }
 
     /*
@@ -331,8 +348,8 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public BatchOrchestrator batchOrchestrator(TaskScheduler taskScheduler) {
-        return new BatchOrchestrator(taskScheduler);
+    public BatchOrchestrator batchOrchestrator(TaskScheduler taskScheduler, MetricsRecorder metricsRecorder) {
+        return new BatchOrchestrator(taskScheduler, metricsRecorder);
     }
 
     /*

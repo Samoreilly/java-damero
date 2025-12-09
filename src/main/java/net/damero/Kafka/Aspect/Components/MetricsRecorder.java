@@ -1,6 +1,7 @@
 package net.damero.Kafka.Aspect.Components;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.lang.Nullable;
@@ -94,6 +95,132 @@ public class MetricsRecorder {
      */
     public boolean isAvailable() {
         return meterRegistry != null;
+    }
+
+    /**
+     * Records batch processing metrics.
+     *
+     * @param topic the Kafka topic
+     * @param batchSize the number of messages in the batch
+     * @param processed the number of successfully processed messages
+     * @param failed the number of failed messages
+     * @param processingTimeMs the total batch processing time in milliseconds
+     * @param fixedWindow whether fixed window mode was used
+     */
+    public void recordBatch(String topic, int batchSize, int processed, int failed,
+                           long processingTimeMs, boolean fixedWindow) {
+        if (meterRegistry == null) {
+            return;
+        }
+
+        try {
+            // Batch size histogram
+            DistributionSummary.builder("kafka.damero.batch.size")
+                .tag("topic", topic)
+                .tag("mode", fixedWindow ? "fixed_window" : "capacity_first")
+                .register(meterRegistry)
+                .record(batchSize);
+
+            // Batch processing time
+            Timer.builder("kafka.damero.batch.processing.time")
+                .tag("topic", topic)
+                .tag("mode", fixedWindow ? "fixed_window" : "capacity_first")
+                .register(meterRegistry)
+                .record(processingTimeMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+            // Success/failure counts
+            Counter.builder("kafka.damero.batch.messages.processed")
+                .tag("topic", topic)
+                .tag("status", "success")
+                .register(meterRegistry)
+                .increment(processed);
+
+            if (failed > 0) {
+                Counter.builder("kafka.damero.batch.messages.processed")
+                    .tag("topic", topic)
+                    .tag("status", "failed")
+                    .register(meterRegistry)
+                    .increment(failed);
+            }
+
+            // Per-message processing time (average)
+            if (batchSize > 0) {
+                double avgTimePerMessage = (double) processingTimeMs / batchSize;
+                DistributionSummary.builder("kafka.damero.batch.time.per.message")
+                    .tag("topic", topic)
+                    .register(meterRegistry)
+                    .record(avgTimePerMessage);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to record batch metrics for topic {}: {}", topic, e.getMessage());
+        }
+    }
+
+    /**
+     * Records batch window expiry event.
+     *
+     * @param topic the Kafka topic
+     * @param messageCount the number of messages in the batch when window expired
+     */
+    public void recordBatchWindowExpiry(String topic, long messageCount) {
+        if (meterRegistry == null) {
+            return;
+        }
+
+        try {
+            Counter.builder("kafka.damero.batch.window.expired")
+                .tag("topic", topic)
+                .register(meterRegistry)
+                .increment();
+
+            // Record how full the batch was when window expired
+            DistributionSummary.builder("kafka.damero.batch.window.fill.count")
+                .tag("topic", topic)
+                .register(meterRegistry)
+                .record(messageCount);
+        } catch (Exception e) {
+            logger.warn("Failed to record batch window expiry metrics for topic {}: {}", topic, e.getMessage());
+        }
+    }
+
+    /**
+     * Records batch capacity reached event.
+     *
+     * @param topic the Kafka topic
+     */
+    public void recordBatchCapacityReached(String topic) {
+        if (meterRegistry == null) {
+            return;
+        }
+
+        try {
+            Counter.builder("kafka.damero.batch.capacity.reached")
+                .tag("topic", topic)
+                .register(meterRegistry)
+                .increment();
+        } catch (Exception e) {
+            logger.warn("Failed to record batch capacity metrics for topic {}: {}", topic, e.getMessage());
+        }
+    }
+
+    /**
+     * Records batch backpressure event (when messages are rejected due to full batch).
+     *
+     * @param topic the Kafka topic
+     */
+    public void recordBatchBackpressure(String topic) {
+        if (meterRegistry == null) {
+            return;
+        }
+
+        try {
+            Counter.builder("kafka.damero.batch.backpressure")
+                .tag("topic", topic)
+                .register(meterRegistry)
+                .increment();
+        } catch (Exception e) {
+            logger.warn("Failed to record batch backpressure metrics for topic {}: {}", topic, e.getMessage());
+        }
     }
 }
 

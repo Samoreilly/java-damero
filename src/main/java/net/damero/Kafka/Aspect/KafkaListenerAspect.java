@@ -1,6 +1,7 @@
 package net.damero.Kafka.Aspect;
 
 import net.damero.Kafka.BatchOrchestrator.BatchOrchestrator;
+import net.damero.Kafka.BatchOrchestrator.BatchProcessor;
 import net.damero.Kafka.BatchOrchestrator.BatchStatus;
 import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Tracing.TracingContext;
@@ -22,7 +23,6 @@ import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 
 /**
@@ -47,6 +47,7 @@ public class KafkaListenerAspect {
     private final TracingService tracingService;
     private final PluggableRedisCache cache;
     private final BatchOrchestrator batchOrchestrator;
+    private final BatchProcessor batchProcessor;
 
     // Store ProceedingJoinPoint per topic for async batch processing
     private final ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints = new ConcurrentHashMap<>();
@@ -62,7 +63,8 @@ public class KafkaListenerAspect {
                                DuplicationManager duplicationManager,
                                TracingService tracingService,
                                PluggableRedisCache cache,
-                               BatchOrchestrator batchOrchestrator) {
+                               BatchOrchestrator batchOrchestrator,
+                               BatchProcessor batchProcessor) {
         this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
@@ -75,6 +77,7 @@ public class KafkaListenerAspect {
         this.tracingService = tracingService;
         this.cache = cache;
         this.batchOrchestrator = batchOrchestrator;
+        this.batchProcessor = batchProcessor;
 
         // Register callback for async batch window expiry
         this.batchOrchestrator.setWindowExpiryCallback(this::handleBatchWindowExpiry);
@@ -93,7 +96,13 @@ public class KafkaListenerAspect {
 
         try {
             logger.info("Processing expired batch for topic: {}", topic);
-            processBatchInternal(pjp, listener);
+            KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(listener);
+            batchProcessor.processBatch(pjp, listener, kafkaTemplate);
+
+            // Clean up join point if no more pending messages
+            if (!batchProcessor.hasPendingMessages(topic)) {
+                topicJoinPoints.remove(topic);
+            }
         } catch (Throwable e) {
             logger.error("Error processing expired batch for topic: {}: {}", topic, e.getMessage(), e);
         }
@@ -119,19 +128,24 @@ public class KafkaListenerAspect {
             BatchStatus status = batchOrchestrator.orchestrate(customKafkaListener, topic, pjp.getArgs());
 
             if (status == BatchStatus.PROCESSING) {
-                // Still collecting - acknowledge and return early
-                Acknowledgment batchAck = extractAcknowledgment(pjp.getArgs());
-                if (batchAck != null) {
-                    batchAck.acknowledge();
-                }
-                logger.debug("Batch collecting for topic: {} - message queued", topic);
+                // Still collecting - DO NOT acknowledge yet
+                // Messages will be redelivered if server crashes before batch completes
+                // Deduplication will handle any reprocessing after recovery
+                logger.debug("Batch collecting for topic: {} - message queued (unacknowledged)", topic);
                 return null;
             }
 
             if (status == BatchStatus.CAPACITY_REACHED) {
                 // Capacity reached - process the batch immediately
                 logger.info("Batch capacity reached for topic: {} - processing batch", topic);
-                return processBatchInternal(pjp, customKafkaListener);
+                KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
+                Object result = batchProcessor.processBatch(pjp, customKafkaListener, kafkaTemplate);
+
+                // Clean up join point if no more pending messages
+                if (!batchProcessor.hasPendingMessages(topic)) {
+                    topicJoinPoints.remove(topic);
+                }
+                return result;
             }
         }
 
@@ -574,149 +588,6 @@ public class KafkaListenerAspect {
             TracingSpan rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, 0);
             rateLimitSpan.setSuccess();
             rateLimitSpan.end();
-        }
-    }
-
-    /**
-     * Process all events in the batch queue for a topic.
-     * Each event goes through the full processing pipeline (dedup, circuit breaker, retry, etc.)
-     * Called either when capacity is reached (synchronously) or when window expires (asynchronously).
-     */
-    private Object processBatchInternal(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
-        String topic = customKafkaListener.topic();
-        ConcurrentLinkedQueue<Object[]> batchQueue = batchOrchestrator.drainBatch(topic);
-
-        // Clean up stored join point after draining
-        topicJoinPoints.remove(topic);
-
-        if (batchQueue == null || batchQueue.isEmpty()) {
-            logger.debug("Batch queue empty for topic: {} - nothing to process", topic);
-            return null;
-        }
-
-        int processed = 0;
-        int failed = 0;
-        int batchSize = batchQueue.size();
-
-        logger.info("Processing batch of {} events for topic: {}", batchSize, topic);
-
-        // Process each queued event through the standard pipeline
-        Object[] eventArgs;
-        while ((eventArgs = batchQueue.poll()) != null) {
-            try {
-                processEvent(pjp, customKafkaListener, eventArgs);
-                processed++;
-            } catch (Exception e) {
-                failed++;
-                logger.error("Batch item failed for topic: {}: {}", topic, e.getMessage());
-                // Continue processing remaining items - don't let one failure stop the batch
-            }
-        }
-
-        logger.info("Batch complete for topic: {} - processed: {}, failed: {}", topic, processed, failed);
-        return null;
-    }
-
-    /**
-     * Process a single event through the full pipeline.
-     * Extracted to allow both single-message and batch processing to share logic.
-     */
-    private void processEvent(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener, Object[] args) throws Throwable {
-        long processingStartTime = System.currentTimeMillis();
-
-        Object arg0 = args.length > 0 ? args[0] : null;
-        ConsumerRecord<?, ?> consumerRecord = extractConsumerRecord(arg0);
-        EventMetadata existingMetadata = null;
-        if (consumerRecord != null) {
-            existingMetadata = HeaderUtils.extractMetadataFromHeaders(consumerRecord.headers());
-        }
-
-        Object event = EventUnwrapper.unwrapEvent(arg0);
-        KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
-
-        if (event == null) {
-            logger.warn("No event found in batch item for topic: {}", customKafkaListener.topic());
-            return;
-        }
-
-        Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
-        String eventId = EventUnwrapper.extractEventId(originalEvent);
-
-        // Circuit breaker check
-        Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(customKafkaListener);
-        if (circuitBreaker != null && circuitBreakerWrapper.isOpen(circuitBreaker)) {
-            logger.warn("Circuit breaker open for topic: {} - sending to DLQ", customKafkaListener.topic());
-            dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, customKafkaListener);
-            return;
-        }
-
-        // Deduplication check
-        if (customKafkaListener.deDuplication() && duplicationManager.isDuplicate(eventId)) {
-            logger.debug("Batch: duplicate detected for eventId: {} - skipping", eventId);
-            return;
-        }
-
-        try {
-            // Execute the actual listener method with original args
-            if (circuitBreaker != null) {
-                circuitBreakerWrapper.executeWithArgs(circuitBreaker, pjp, args);
-            } else {
-                // Invoke via reflection or proceed with modified args
-                pjp.proceed(args);
-            }
-
-            metricsRecorder.recordSuccess(customKafkaListener.topic(), processingStartTime);
-
-            if (customKafkaListener.deDuplication()) {
-                duplicationManager.markAsSeen(eventId);
-            }
-
-            retryOrchestrator.clearAttempts(eventId);
-            retrySched.clearFibonacciState(event);
-
-        } catch (Exception e) {
-            handleBatchItemException(customKafkaListener, kafkaTemplate, originalEvent, eventId, e, existingMetadata, processingStartTime);
-        }
-    }
-
-    /**
-     * Handle exception for a batch item - retry or send to DLQ
-     */
-    private void handleBatchItemException(CustomKafkaListener customKafkaListener,
-                                          KafkaTemplate<?, ?> kafkaTemplate, Object originalEvent,
-                                          String eventId, Exception e, EventMetadata existingMetadata,
-                                          long processingStartTime) {
-
-        if (!customKafkaListener.retryable()) {
-            metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
-            dlqRouter.sendToDLQAfterMaxAttempts(kafkaTemplate, originalEvent, e, 1, existingMetadata, customKafkaListener);
-            return;
-        }
-
-        // Check for non-retryable exceptions
-        for (Class<? extends Throwable> nonRetryable : customKafkaListener.nonRetryableExceptions()) {
-            if (nonRetryable.isAssignableFrom(e.getClass())) {
-                logger.info("Exception {} is non-retryable for topic: {} - sending to DLQ",
-                    e.getClass().getSimpleName(), customKafkaListener.topic());
-                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
-                dlqRouter.sendToDLQAfterMaxAttempts(kafkaTemplate, originalEvent, e, 1, existingMetadata, customKafkaListener);
-                return;
-            }
-        }
-
-        // Increment attempt count BEFORE checking max attempts
-        int currentAttempt = retryOrchestrator.incrementAttempts(eventId);
-
-        if (currentAttempt >= customKafkaListener.maxAttempts()) {
-            logger.info("Max attempts reached ({}) for event in topic: {} - sending to DLQ",
-                currentAttempt, customKafkaListener.topic());
-            metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempt, processingStartTime);
-            dlqRouter.sendToDLQAfterMaxAttempts(kafkaTemplate, originalEvent, e, currentAttempt, existingMetadata, customKafkaListener);
-            retryOrchestrator.clearAttempts(eventId);
-        } else {
-            logger.debug("Scheduling retry attempt {} for event {} in topic: {}",
-                currentAttempt, eventId, customKafkaListener.topic());
-            retryOrchestrator.scheduleRetry(customKafkaListener, originalEvent, e, currentAttempt, existingMetadata, kafkaTemplate);
         }
     }
 }
