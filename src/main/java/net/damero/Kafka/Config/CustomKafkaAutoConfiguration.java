@@ -76,6 +76,12 @@ public class CustomKafkaAutoConfiguration {
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
 
+    @Value("${spring.kafka.consumer.group-id:custom-kafka-default-group}")
+    private String consumerGroupId;
+
+    @Value("${spring.kafka.consumer.auto-offset-reset:earliest}")
+    private String autoOffsetReset;
+
     @Bean
     @ConditionalOnMissingBean
     public KafkaDLQ kafkaDLQ() {
@@ -479,22 +485,42 @@ public class CustomKafkaAutoConfiguration {
 
     /**
      * Default factory for internal use by the library.
-     * Users typically don't need to interact with this.
+     * Marked @Primary to override Spring Boot's auto-configured factory.
+     * This factory is configured to work with or without type headers.
      */
     @Bean
-    @ConditionalOnMissingBean(name = "kafkaListenerContainerFactory")
+    @Primary
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
-            ObjectMapper kafkaObjectMapper) {
+            ObjectMapper kafkaObjectMapper,
+            @Value("${spring.kafka.consumer.properties.spring.json.value.default.type:}") @Nullable String defaultType,
+            @Value("${spring.kafka.consumer.properties.spring.json.use.type.headers:false}") boolean useTypeHeaders) {
 
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "custom-kafka-default-group");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
 
-        JsonDeserializer<Object> jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
+        JsonDeserializer<Object> jsonDeserializer;
+
+        // If a default type is specified, use it to create a typed deserializer
+        if (defaultType != null && !defaultType.isEmpty()) {
+            try {
+                Class<?> targetType = Class.forName(defaultType);
+                @SuppressWarnings("unchecked")
+                JsonDeserializer<Object> typedDeserializer = (JsonDeserializer<Object>) new JsonDeserializer<>(targetType, kafkaObjectMapper);
+                jsonDeserializer = typedDeserializer;
+                logger.info("==> Kafka consumer configured with default type: {}", defaultType);
+            } catch (ClassNotFoundException e) {
+                logger.warn("==> Could not find default type class: {}. Falling back to Object deserialization", defaultType);
+                jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
+            }
+        } else {
+            jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
+        }
+
         jsonDeserializer.addTrustedPackages("*");
-        // Honor type headers so EventWrapper<?> sent on main topic can be deserialized
-        jsonDeserializer.setUseTypeHeaders(true);
+        // Allow messages from kafka-console-producer or other non-Spring producers
+        jsonDeserializer.setUseTypeHeaders(useTypeHeaders);
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                 props,
@@ -506,10 +532,9 @@ public class CustomKafkaAutoConfiguration {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
 
-        // Disable container-level error handling - let aspect handle retries
+        // lets the aspect handle retries
         factory.setCommonErrorHandler(null);
 
-        // Enable manual ack mode for proper message acknowledgment
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
 
         return factory;

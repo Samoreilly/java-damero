@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
+import org.springframework.kafka.annotation.TopicPartition;
 
 @Service
 public class OrderProcessingService {
@@ -28,11 +29,11 @@ public class OrderProcessingService {
             IllegalArgumentException.class,
             ValidationException.class
         },
-        deDuplication = true,
-        openTelemetry = true
-//        batchCapacity = 10000,
-//        batchWindowLength = 2000,
-//        fixedWindow = true
+        deDuplication = false,
+        openTelemetry = true,
+        batchCapacity = 6000,
+        batchWindowLength = 1000,
+        fixedWindow = true
 
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
