@@ -61,14 +61,18 @@ public class TestController {
 
     @PostMapping("/order/success")
     public String testSuccess() {
-        OrderEvent order = new OrderEvent();
-        order.setOrderId("order-005");
-        order.setAmount(100.0);
-        order.setCustomerId("customer-123");
-        order.setPaymentMethod("credit-card");
-        order.setStatus("PENDING");
-        
-        kafkaTemplate.send("orders", order);
+        for(int i = 0; i < 50; i++) {
+            String orderId = "order-10" + i;
+            OrderEvent order = new OrderEvent();
+            order.setOrderId(orderId);
+            order.setAmount(100.0);
+            order.setCustomerId("customer-123");
+            order.setPaymentMethod("credit-card");
+            order.setStatus("PENDING");
+
+            kafkaTemplate.send("orders", order);
+            System.out.println("sent order: " + orderId);
+        }
         return "sent valid order - should process successfully";
     }
 

@@ -29,9 +29,11 @@ public class OrderProcessingService {
             ValidationException.class
         },
         deDuplication = true,
-        messagesPerWindow = 200,
-        messageWindow = 1000,
-        openTelemetry = true
+        openTelemetry = true,
+        batchCapacity = 10,
+        batchWindowLength = 5000
+//        messagesPerWindow = 200,
+//        messageWindow = 1000,
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
@@ -47,7 +49,7 @@ public class OrderProcessingService {
         boolean isReplay = record.headers().lastHeader("X-Replay-Mode") != null;
 
         if (isReplay) {
-            logger.warn("⚠️ REPLAY MODE: Skipping validation for order: {} (this is for testing only!)", order.getOrderId());
+            logger.warn("REPLAY MODE: Skipping validation for order: {} (this is for testing only!)", order.getOrderId());
             logger.info("order {} processed successfully (validation skipped in replay mode)", order.getOrderId());
             ack.acknowledge();
             return;
