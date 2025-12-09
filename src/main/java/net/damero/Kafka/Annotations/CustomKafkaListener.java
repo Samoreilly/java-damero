@@ -118,10 +118,12 @@ public @interface CustomKafkaListener {
      * Batch processing default to 0 - DISABLED
      * Batches are processes when mininum batch size threshold is met - Default is disabled which is zero
      * Batch limit is max capacity to be processed at one
+     * ITS RECOMEMENDED TO NOT MIX BATCH PROCESSING WITH MESSAGES PER WINDOW AND MESSAGE WINDOW AS ODD BEHAVIOUR MAY OCCUR
      */
 
-    int batchSize() default 0;
-    int batchThreshold() default 0;
+    int batchCapacity() default 0;
+    int minimumCapacity() default 0;
+    int batchWindowLength() default 2500; //in milliseconds, default 2.5 seconds
 
 
 }

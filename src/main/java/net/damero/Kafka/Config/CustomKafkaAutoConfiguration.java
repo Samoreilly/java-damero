@@ -7,6 +7,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
+import net.damero.Kafka.BatchOrchestrator.BatchOrchestrator;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
@@ -292,11 +293,12 @@ public class CustomKafkaAutoConfiguration {
                                                    DLQExceptionRoutingManager dlqExceptionRoutingManager,
                                                    DuplicationManager duplicationManager,
                                                    TracingService tracingService,
-                                                   PluggableRedisCache pluggableRedisCache) {
+                                                   PluggableRedisCache pluggableRedisCache,
+                                                   BatchOrchestrator batchOrchestrator) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate,
                                        retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
                                        retrySched, dlqExceptionRoutingManager, duplicationManager,
-                                       tracingService, pluggableRedisCache);
+                                       tracingService, pluggableRedisCache, batchOrchestrator);
     }
 
     /*
@@ -325,6 +327,12 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean
     public RetrySched retrySched(TaskScheduler kafkaRetryScheduler, PluggableRedisCache pluggableRedisCache) {
         return new RetrySched(kafkaRetryScheduler, pluggableRedisCache);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public BatchOrchestrator batchOrchestrator(TaskScheduler taskScheduler) {
+        return new BatchOrchestrator(taskScheduler);
     }
 
     /*

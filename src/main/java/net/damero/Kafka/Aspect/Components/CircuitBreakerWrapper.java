@@ -80,13 +80,27 @@ public class CircuitBreakerWrapper {
      * @throws Throwable if execution fails
      */
     public Object execute(Object circuitBreaker, ProceedingJoinPoint pjp) throws Throwable {
+        return executeWithArgs(circuitBreaker, pjp, pjp.getArgs());
+    }
+
+    /**
+     * Executes the join point with circuit breaker tracking using custom arguments.
+     * Used for batch processing where we need to pass different args than the original.
+     *
+     * @param circuitBreaker the circuit breaker instance
+     * @param pjp the proceeding join point
+     * @param args the arguments to use for execution
+     * @return the result of execution
+     * @throws Throwable if execution fails
+     */
+    public Object executeWithArgs(Object circuitBreaker, ProceedingJoinPoint pjp, Object[] args) throws Throwable {
         try {
             Method executeSupplierMethod = circuitBreaker.getClass().getMethod("executeSupplier", 
                 Supplier.class);
             
             Supplier<Object> supplier = () -> {
                 try {
-                    return pjp.proceed();
+                    return pjp.proceed(args);
                 } catch (Throwable throwable) {
                     if (throwable instanceof RuntimeException) {
                         throw (RuntimeException) throwable;
@@ -98,7 +112,7 @@ public class CircuitBreakerWrapper {
             return executeSupplierMethod.invoke(circuitBreaker, supplier);
         } catch (Exception e) {
             logger.warn("circuit breaker execution failed, falling back to normal execution: {}", e.getMessage());
-            return pjp.proceed();
+            return pjp.proceed(args);
         }
     }
 
