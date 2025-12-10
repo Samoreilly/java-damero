@@ -495,7 +495,7 @@ public class CustomKafkaAutoConfiguration {
             ObjectMapper kafkaObjectMapper,
             KafkaProperties kafkaProperties,
             @Value("${kafka.damero.consumer.default-type:}") @Nullable String defaultType,
-            @Value("${kafka.damero.consumer.use-type-headers:false}") boolean useTypeHeaders) {
+            @Value("${kafka.damero.consumer.use-type-headers:true}") boolean useTypeHeaders) {
 
         // Start with Spring Boot's consumer properties (includes max.poll.records, etc.)
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
@@ -539,7 +539,8 @@ public class CustomKafkaAutoConfiguration {
         }
 
         jsonDeserializer.addTrustedPackages("*");
-        // Allow messages from kafka-console-producer or other non-Spring producers
+        // Use type headers by default (true) for compatibility with Spring Kafka producers
+        // Set kafka.damero.consumer.use-type-headers=false for non-Spring producers
         jsonDeserializer.setUseTypeHeaders(useTypeHeaders);
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
@@ -599,7 +600,7 @@ public class CustomKafkaAutoConfiguration {
         JsonDeserializer<EventWrapper<?>> deserializer =
                 new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
         deserializer.addTrustedPackages("*");
-        deserializer.setUseTypeHeaders(false);
+        deserializer.setUseTypeHeaders(true);
 
         return new DefaultKafkaConsumerFactory<>(
                 props,

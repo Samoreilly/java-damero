@@ -33,7 +33,7 @@ public class KafkaConsumerFactoryProvider {
         JsonDeserializer<EventWrapper<T>> deserializer =
                 new JsonDeserializer<>(type, mapper);
         deserializer.addTrustedPackages("*");
-        deserializer.setUseTypeHeaders(false);
+        deserializer.setUseTypeHeaders(true);
 
         return new DefaultKafkaConsumerFactory<>(
                 Map.of(
