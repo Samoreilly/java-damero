@@ -207,14 +207,13 @@ tested with 75,000 messages on a standard laptop:
 | capacity-first | 5,000 | 150,000/sec | 0.3 ms |
 | fixed window | 4,000 | 120,000/sec | 0.4 ms |
 
-![batch processing performance](src/main/java/net/damero/PerformanceScreenshots/JaegerScreenshotOfBatches.png)
 
 ### real-world performance with distributed tracing
 
 the image below shows actual batch processing with full opentelemetry tracing enabled. this is around 83 batches processing 6,000 messages each (500,000 total messages) with complete distributed tracing overhead included:
 The high response time at the start is due to the kafka consumer starting up and jvm warming up.
 Batches settle around 750ms (12.5ms per message) and is consistent the whole time.
-![batch processing with tracing](src/main/java/net/damero/PerformanceScreenshots/500000Messages%7C6000Batch%7C2000msWindow%7CAverageResponseTime15msPerMessage.png)
+![batch processing with tracing](src/main/java/net/damero/PerformanceScreenshots/500000Messages|6000Batch|2000msWindow|AverageResponseTime15msPerMessage.png)
 **key metrics from this run:**
 - **average batch duration**: ~ 750 seconds per 6,000 message batch
 - **throughput**: ~3,300 messages/second
