@@ -211,15 +211,14 @@ tested with 75,000 messages on a standard laptop:
 
 ### real-world performance with distributed tracing
 
-the image below shows actual batch processing with full opentelemetry tracing enabled. this is 6 batches processing 6,000 messages each (36,000 total messages) with complete distributed tracing overhead included:
-
-![batch processing with tracing](src/main/java/net/damero/PerformanceScreenshots/img.png)
-
+the image below shows actual batch processing with full opentelemetry tracing enabled. this is around 83 batches processing 6,000 messages each (500,000 total messages) with complete distributed tracing overhead included:
+The high response time at the start is due to the kafka consumer starting up and jvm warming up.
+Batches settle around 750ms (12.5ms per message) and is consistent the whole time.
+![batch processing with tracing](src/main/java/net/damero/PerformanceScreenshots/500000Messages%7C6000Batch%7C2000msWindow%7CAverageResponseTime15msPerMessage.png)
 **key metrics from this run:**
-- **average batch duration**: ~1.8 seconds per 6,000 message batch
-- **throughput**: ~3,333 messages/second
-- **overhead per message**: approximately 0.3ms including full distributed tracing
-- **total spans created**: 36,000+ spans (one per message plus batch spans)
+- **average batch duration**: ~ 750 seconds per 6,000 message batch
+- **throughput**: ~3,300 messages/second
+- **overhead per message**: approximately .3ms including full distributed tracing
 
 this demonstrates that even with the overhead of creating and exporting thousands of opentelemetry spans, the library maintains excellent performance. the 0.3ms overhead per message is minimal and gives you complete visibility into your message processing pipeline - you can trace every message from producer to consumer through retries and dlq routing.
 
