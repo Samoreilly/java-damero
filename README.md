@@ -2,6 +2,8 @@
 
 A Spring Boot library that adds automatic retry logic, dead letter queue handling, and circuit breaker support to Kafka listeners. The library reduces boilerplate code and provides production-ready error handling with minimal configuration.
 
+**📘 [View Troubleshooting Guide](TROUBLESHOOTING.md)** - Solutions for common issues (deserialization errors, type headers, Redis warnings)
+
 ## Status
 
 Beta release. All core features are implemented and tested. The library is functional and ready for testing in development environments. Use in production at your own discretion.

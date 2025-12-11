@@ -488,9 +488,12 @@ public class CustomKafkaAutoConfiguration {
      * Default factory for internal use by the library.
      * Marked @Primary to override Spring Boot's auto-configured factory.
      * This factory is configured to work with or without type headers.
+     *
+     * Users can override by defining their own ConcurrentKafkaListenerContainerFactory bean.
      */
     @Bean
     @Primary
+    @ConditionalOnMissingBean(ConcurrentKafkaListenerContainerFactory.class)
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
             ObjectMapper kafkaObjectMapper,
             KafkaProperties kafkaProperties,
@@ -542,6 +545,15 @@ public class CustomKafkaAutoConfiguration {
         // Use type headers by default (true) for compatibility with Spring Kafka producers
         // Set kafka.damero.consumer.use-type-headers=false for non-Spring producers
         jsonDeserializer.setUseTypeHeaders(useTypeHeaders);
+
+        // GUARD RAIL: If using type headers but no default type provided, warn user about potential deserialization failures
+        if (useTypeHeaders && (defaultType == null || defaultType.isEmpty())) {
+            logger.warn("==> CONFIGURATION WARNING: kafka.damero.consumer.use-type-headers=true but no default-type set.");
+            logger.warn("==> Messages from non-Spring producers (CLI tools, other languages) will fail with 'No type information in headers'");
+            logger.warn("==> Solutions: (1) Set kafka.damero.consumer.default-type=your.package.YourClass");
+            logger.warn("==>            (2) Set kafka.damero.consumer.use-type-headers=false");
+            logger.warn("==> See documentation: https://github.com/yourrepo/kafka-damero#type-headers");
+        }
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                 props,
