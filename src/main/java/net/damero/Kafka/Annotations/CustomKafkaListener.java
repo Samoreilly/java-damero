@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation to enhance Kafka listeners with automatic retry logic, DLQ routing,
- * circuit breaker support, rate limiting, deduplication, and distributed tracing.
+ * circuit breaker support, deduplication, and distributed tracing.
  *
  * <p>Must be used alongside Spring's {@code @KafkaListener} annotation.</p>
  *
@@ -71,11 +71,6 @@ public @interface CustomKafkaListener {
      */
     DlqExceptionRoutes[] dlqRoutes() default {};
 
-    /** Maximum messages to process per window. Set to 0 to disable rate limiting. */
-    int messagesPerWindow() default 0;
-
-    /** Rate limiting window duration in milliseconds. Set to 0 to disable rate limiting. */
-    long messageWindow() default 0;
 
     /** Custom KafkaTemplate bean class to use. Default: uses default template. */
     Class<Void> kafkaTemplate() default void.class;
@@ -108,7 +103,7 @@ public @interface CustomKafkaListener {
     /**
      * Enable OpenTelemetry distributed tracing for this listener.
      * Requires opentelemetry-api on classpath. Traces include retry attempts,
-     * DLQ routing, circuit breaker state, and rate limiting events.
+     * DLQ routing, circuit breaker state, and processing duration.
      * Set to false for high-volume topics where tracing overhead is unacceptable.
      */
     boolean openTelemetry() default false;

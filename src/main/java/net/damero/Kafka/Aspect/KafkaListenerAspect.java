@@ -112,10 +112,6 @@ public class KafkaListenerAspect {
     @Around("@annotation(customKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
 
-        // Handle rate limiting per topic
-        if (customKafkaListener.messagesPerWindow() > 0 && customKafkaListener.messageWindow() > 0) {
-            handleRateLimiting(customKafkaListener, customKafkaListener.openTelemetry());
-        }
 
         // BATCH PROCESSING: Collect and defer until capacity reached
         // Window expiry is handled asynchronously via BatchOrchestrator callback
@@ -513,81 +509,4 @@ public class KafkaListenerAspect {
         return false;
     }
 
-    /**
-     * Handles rate limiting per topic using a fixed window algorithm.
-     * Uses PluggableRedisCache for distributed rate limiting state.
-     * Each topic has its own independent rate limiting state.
-     *
-     * @param customKafkaListener the listener configuration
-     * @param enableTracing whether to create trace spans for rate limiting
-     * @throws InterruptedException if thread is interrupted during sleep
-     */
-    private void handleRateLimiting(CustomKafkaListener customKafkaListener, boolean enableTracing) throws InterruptedException {
-
-        String topic = customKafkaListener.topic();
-        int messagesPerWindow = customKafkaListener.messagesPerWindow();
-        long messageWindowMs = customKafkaListener.messageWindow();
-
-        long now = System.currentTimeMillis();
-        long windowStart = cache.getRateLimitWindowStart(topic);
-
-        // if no window exists, initialize it
-        if (windowStart == 0) {
-            cache.resetRateLimitWindow(topic, now);
-            cache.incrementRateLimitCounter(topic);
-            return;
-        }
-
-        long elapsed = now - windowStart;
-
-        // check if window has expired
-        if (elapsed >= messageWindowMs) {
-            cache.resetRateLimitWindow(topic, now);
-            return;
-        }
-
-        // increment counter
-        long currentCount = cache.incrementRateLimitCounter(topic);
-
-        // if more messages than allowed
-        if (currentCount > messagesPerWindow) {
-            long sleepTime = messageWindowMs - elapsed;
-
-            if (sleepTime > 0) {
-                logger.debug("Topic: {}, Rate limit reached ({}/{} messages), sleeping for {} ms",
-                    topic, currentCount, messagesPerWindow, sleepTime);
-
-                TracingSpan rateLimitSpan = null;
-                if (enableTracing) {
-                    rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, sleepTime);
-                }
-
-                try {
-                    Thread.sleep(sleepTime);
-                    // reset window after sleep
-                    cache.resetRateLimitWindow(topic, System.currentTimeMillis());
-
-                    if (enableTracing && rateLimitSpan != null) {
-                        rateLimitSpan.setSuccess();
-                    }
-                } catch (InterruptedException e) {
-                    if (enableTracing && rateLimitSpan != null) {
-                        rateLimitSpan.recordException(e);
-                    }
-                    throw e;
-                } finally {
-                    if (enableTracing && rateLimitSpan != null) {
-                        rateLimitSpan.end();
-                    }
-                }
-            } else {
-                // window expired during check, reset it
-                cache.resetRateLimitWindow(topic, System.currentTimeMillis());
-            }
-        } else if (enableTracing) {
-            TracingSpan rateLimitSpan = tracingService.startRateLimitSpan(topic, (int) currentCount, messagesPerWindow, 0);
-            rateLimitSpan.setSuccess();
-            rateLimitSpan.end();
-        }
-    }
 }
