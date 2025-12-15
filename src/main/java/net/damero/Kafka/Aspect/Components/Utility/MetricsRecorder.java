@@ -1,4 +1,4 @@
-package net.damero.Kafka.Aspect.Components;
+package net.damero.Kafka.Aspect.Components.Utility;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;

@@ -1,4 +1,4 @@
-package net.damero.Kafka.Aspect.Components;
+package net.damero.Kafka.Aspect.Components.Utility;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.damero.Kafka.CustomObject.EventMetadata;

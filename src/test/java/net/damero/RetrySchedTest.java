@@ -4,7 +4,7 @@ import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
-import net.damero.Kafka.Aspect.Components.HeaderUtils;
+import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;

@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import net.damero.Kafka.Aspect.Components.*;
+import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
 import net.damero.Kafka.BatchOrchestrator.BatchOrchestrator;
 import net.damero.Kafka.BatchOrchestrator.BatchProcessor;
+import net.damero.Kafka.BatchOrchestrator.BatchUtility;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
@@ -124,6 +126,11 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean
     public DLQRouter dlqRouter(TracingService tracingService) {
         return new DLQRouter(tracingService);
+    }
+
+    @Bean
+    public BatchUtility batchUtility(BatchProcessor batchProcessor) {
+        return new BatchUtility(batchProcessor);
     }
 
     @Bean
@@ -318,11 +325,12 @@ public class CustomKafkaAutoConfiguration {
                                                    TracingService tracingService,
                                                    PluggableRedisCache pluggableRedisCache,
                                                    BatchOrchestrator batchOrchestrator,
-                                                   BatchProcessor batchProcessor) {
+                                                   BatchProcessor batchProcessor,
+                                                   BatchUtility batchUtility) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate,
                                        retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
                                        retrySched, dlqExceptionRoutingManager, duplicationManager,
-                                       tracingService, pluggableRedisCache, batchOrchestrator, batchProcessor);
+                                       tracingService, pluggableRedisCache, batchOrchestrator, batchProcessor, batchUtility);
     }
 
     /*

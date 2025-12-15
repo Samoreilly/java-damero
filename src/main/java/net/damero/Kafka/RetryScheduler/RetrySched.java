@@ -2,7 +2,7 @@ package net.damero.Kafka.RetryScheduler;
 
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
-import net.damero.Kafka.Aspect.Components.HeaderUtils;
+import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.CustomObject.EventMetadata;
 
@@ -17,7 +17,7 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static net.damero.Kafka.Aspect.Components.EventUnwrapper.extractEventId;
+import static net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper.extractEventId;
 
 
 @Component

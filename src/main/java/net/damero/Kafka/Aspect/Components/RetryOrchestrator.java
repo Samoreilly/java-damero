@@ -1,5 +1,7 @@
 package net.damero.Kafka.Aspect.Components;
 
+import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
+import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
 import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.CustomObject.EventMetadata;

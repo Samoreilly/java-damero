@@ -1,5 +1,6 @@
 package net.damero.Kafka.Aspect.Components;
 
+import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
 import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
@@ -7,7 +8,6 @@ import net.damero.Kafka.KafkaServices.KafkaDLQ;
 import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Tracing.TracingService;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.header.Header;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

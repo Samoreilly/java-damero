@@ -1,8 +1,10 @@
 package net.damero.Kafka.Aspect;
 
-import net.damero.Kafka.BatchOrchestrator.BatchOrchestrator;
-import net.damero.Kafka.BatchOrchestrator.BatchProcessor;
-import net.damero.Kafka.BatchOrchestrator.BatchStatus;
+import net.damero.Kafka.Aspect.Components.Utility.AspectHelperMethods;
+import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
+import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
+import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
+import net.damero.Kafka.BatchOrchestrator.*;
 import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Tracing.TracingContext;
 import net.damero.Kafka.Tracing.TracingScope;
@@ -22,6 +24,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -48,6 +51,7 @@ public class KafkaListenerAspect {
     private final PluggableRedisCache cache;
     private final BatchOrchestrator batchOrchestrator;
     private final BatchProcessor batchProcessor;
+    private final BatchUtility batchUtility;
 
     // Store ProceedingJoinPoint per topic for async batch processing
     private final ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints = new ConcurrentHashMap<>();
@@ -64,7 +68,8 @@ public class KafkaListenerAspect {
                                TracingService tracingService,
                                PluggableRedisCache cache,
                                BatchOrchestrator batchOrchestrator,
-                               BatchProcessor batchProcessor) {
+                               BatchProcessor batchProcessor,
+                               BatchUtility batchUtility) {
         this.dlqRouter = dlqRouter;
         this.context = context;
         this.defaultKafkaTemplate = defaultKafkaTemplate;
@@ -78,6 +83,7 @@ public class KafkaListenerAspect {
         this.cache = cache;
         this.batchOrchestrator = batchOrchestrator;
         this.batchProcessor = batchProcessor;
+        this.batchUtility = batchUtility;
 
         // Register callback for async batch window expiry
         this.batchOrchestrator.setWindowExpiryCallback(this::handleBatchWindowExpiry);
@@ -96,7 +102,7 @@ public class KafkaListenerAspect {
 
         try {
             logger.info("Processing expired batch for topic: {}", topic);
-            KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(listener);
+            KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(listener, context, defaultKafkaTemplate);
             batchProcessor.processBatch(pjp, listener, kafkaTemplate);
 
             // Clean up join point if no more pending messages
@@ -123,37 +129,26 @@ public class KafkaListenerAspect {
 
             BatchStatus status = batchOrchestrator.orchestrate(customKafkaListener, topic, pjp.getArgs());
 
-            if (status == BatchStatus.PROCESSING) {
-                // Still collecting - DO NOT acknowledge yet
-                // Messages will be redelivered if server crashes before batch completes
-                // Deduplication will handle any reprocessing after recovery
-                logger.debug("Batch collecting for topic: {} - message queued (unacknowledged)", topic);
+            //checks if batch should still collect or capacity reached
+            BatchCheckResult batchCheck = batchUtility.checkBatchStatus(status, context, defaultKafkaTemplate, pjp, customKafkaListener, topicJoinPoints, topic);
+
+            if(batchCheck.status() == BatchStatus.PROCESSING) {
                 return null;
+            }else if(batchCheck.status() == BatchStatus.CAPACITY_REACHED) {
+                return batchCheck.object();
             }
 
-            if (status == BatchStatus.CAPACITY_REACHED) {
-                // Capacity reached - process the batch immediately
-                logger.info("Batch capacity reached for topic: {} - processing batch", topic);
-                KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
-                Object result = batchProcessor.processBatch(pjp, customKafkaListener, kafkaTemplate);
-
-                // Clean up join point if no more pending messages
-                if (!batchProcessor.hasPendingMessages(topic)) {
-                    topicJoinPoints.remove(topic);
-                }
-                return result;
-            }
         }
 
         logger.debug("aspect triggered for topic: {}", customKafkaListener.topic());
         long processingStartTime = System.currentTimeMillis();
 
-        Acknowledgment acknowledgment = extractAcknowledgment(pjp.getArgs());
+        Acknowledgment acknowledgment = AspectHelperMethods.extractAcknowledgment(pjp.getArgs());
 
         Object arg0 = pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null;
         
         // Extract ConsumerRecord if present to get headers
-        ConsumerRecord<?, ?> consumerRecord = extractConsumerRecord(arg0);
+        ConsumerRecord<?, ?> consumerRecord = AspectHelperMethods.extractConsumerRecord(arg0);
 
         EventMetadata existingMetadata = null;
         if (consumerRecord != null) {
@@ -162,7 +157,7 @@ public class KafkaListenerAspect {
         
         Object event = EventUnwrapper.unwrapEvent(arg0);
 
-        KafkaTemplate<?, ?> kafkaTemplate = resolveKafkaTemplate(customKafkaListener);
+        KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(customKafkaListener, context, defaultKafkaTemplate);
 
         if (event == null) {
             logger.warn("no event found in listener arguments for topic: {}", customKafkaListener.topic());
@@ -358,7 +353,7 @@ public class KafkaListenerAspect {
              *  This does not retry events with these exceptions
              */
 
-            if (isNonRetryableException(e, customKafkaListener)) {
+            if (AspectHelperMethods.isNonRetryableException(e, customKafkaListener)) {
                 logger.info("exception {} is non-retryable for topic: {} - sending directly to dlq", 
                     e.getClass().getSimpleName(), customKafkaListener.topic());
                 
@@ -441,72 +436,5 @@ public class KafkaListenerAspect {
         }
     }
 
-
-
-    private KafkaTemplate<?, ?> resolveKafkaTemplate(CustomKafkaListener customKafkaListener) {
-        Class<?> templateClass = customKafkaListener.kafkaTemplate();
-
-        if (templateClass.equals(void.class)) {
-            return defaultKafkaTemplate;
-        }
-
-        try {
-            return (KafkaTemplate<?, ?>) context.getBean(templateClass);
-        } catch (Exception e) {
-            logger.warn("failed to resolve custom kafka template {}, using default: {}", 
-                templateClass.getName(), e.getMessage());
-            return defaultKafkaTemplate;
-        }
-    }
-
-    private Acknowledgment extractAcknowledgment(Object[] args) {
-        for (Object arg : args) {
-            if (arg instanceof Acknowledgment) {
-                return (Acknowledgment) arg;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Extracts ConsumerRecord from method arguments if present.
-     * 
-     * @param arg the first argument from the join point
-     * @return ConsumerRecord if present, null otherwise
-     */
-    @SuppressWarnings("unchecked")
-    private ConsumerRecord<?, ?> extractConsumerRecord(Object arg) {
-        if (arg instanceof ConsumerRecord<?, ?>) {
-            return (ConsumerRecord<?, ?>) arg;
-        }
-        return null;
-    }
-
-    /**
-     * Checks if an exception is non-retryable based on the configured nonRetryableExceptions.
-     * If nonRetryableExceptions is empty, all exceptions are retryable.
-     * 
-     * @param exception the exception to check
-     * @param customKafkaListener the listener configuration
-     * @return true if the exception is non-retryable (should go to DLQ), false if it should be retried
-     */
-    
-    private boolean isNonRetryableException(Exception exception, CustomKafkaListener customKafkaListener) {
-        Class<? extends Throwable>[] nonRetryableExceptions = customKafkaListener.nonRetryableExceptions();
-        
-        // If no non-retryable exceptions specified, all exceptions are retryable
-        if (nonRetryableExceptions == null || nonRetryableExceptions.length == 0) {
-            return false;
-        }
-        
-        Class<?> exceptionClass = exception.getClass();
-        for (Class<? extends Throwable> nonRetryableException : nonRetryableExceptions) {
-            if (nonRetryableException != null && nonRetryableException.isAssignableFrom(exceptionClass)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
 
 }

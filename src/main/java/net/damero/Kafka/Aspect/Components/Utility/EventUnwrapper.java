@@ -1,4 +1,4 @@
-package net.damero.Kafka.Aspect.Components;
+package net.damero.Kafka.Aspect.Components.Utility;
 
 import net.damero.Kafka.CustomObject.EventWrapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;

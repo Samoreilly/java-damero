@@ -1,13 +1,12 @@
 package net.damero.Kafka.BatchOrchestrator;
 
 import net.damero.Kafka.Annotations.CustomKafkaListener;
-import net.damero.Kafka.Aspect.Components.MetricsRecorder;
+import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -84,7 +83,7 @@ public class BatchOrchestrator {
         ReentrantLock lock = topicLocks.computeIfAbsent(topic, k -> new ReentrantLock());
         lock.lock();
         try {
-            // Check if already being processed (window expiry beat us)
+            // Check if already being processed
             AtomicBoolean processing = processingFlags.get(topic);
             if (processing != null && processing.get()) {
                 // Another thread is processing - queue for NEXT batch

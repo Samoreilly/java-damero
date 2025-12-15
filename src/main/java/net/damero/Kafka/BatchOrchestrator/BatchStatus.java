@@ -9,4 +9,6 @@ public enum BatchStatus {
     WINDOW_EXPIRED,
     /** Batch processing failed */
     FAILED,
+    /** Continue processing messages */
+    CONTINUE_PROCESSING,
 }
