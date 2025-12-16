@@ -1,11 +1,11 @@
 package net.damero.Kafka.Aspect.Components;
 
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
 import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Tracing.TracingService;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -33,17 +33,17 @@ public class DLQRouter {
      * 
      * @param kafkaTemplate the Kafka template to use
      * @param originalEvent the original event to send
-     * @param customKafkaListener the listener configuration
+     * @param dameroKafkaListener the listener configuration
      */
     public void sendToDLQForCircuitBreakerOpen(KafkaTemplate<?, ?> kafkaTemplate,
                                                 Object originalEvent,
-                                                CustomKafkaListener customKafkaListener) {
+                                                DameroKafkaListener dameroKafkaListener) {
         TracingSpan dlqSpan = null;
-        if (customKafkaListener.openTelemetry()) {
+        if (dameroKafkaListener.openTelemetry()) {
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             dlqSpan = tracingService.startDLQSpan(
-                customKafkaListener.topic(),
-                customKafkaListener.dlqTopic(),
+                dameroKafkaListener.topic(),
+                dameroKafkaListener.dlqTopic(),
                 eventId,
                 1,
                 "circuit_breaker_open"
@@ -57,11 +57,11 @@ public class DLQRouter {
                 null,
                 new RuntimeException("Circuit breaker OPEN - service unavailable"),
                 1,
-                customKafkaListener.topic(),
-                customKafkaListener.dlqTopic(),
-                (long) customKafkaListener.delay(),
-                customKafkaListener.delayMethod(),
-                customKafkaListener.maxAttempts()
+                dameroKafkaListener.topic(),
+                dameroKafkaListener.dlqTopic(),
+                (long) dameroKafkaListener.delay(),
+                dameroKafkaListener.delayMethod(),
+                dameroKafkaListener.maxAttempts()
             );
 
             EventWrapper<Object> dlqWrapper = new EventWrapper<>(
@@ -72,23 +72,23 @@ public class DLQRouter {
 
             KafkaDLQ.sendToDLQ(
                 kafkaTemplate,
-                customKafkaListener.dlqTopic(),
+                dameroKafkaListener.dlqTopic(),
                 dlqWrapper
             );
 
             logger.info("sent event to dlq due to circuit breaker OPEN for topic: {}",
-                customKafkaListener.topic());
+                dameroKafkaListener.topic());
 
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.setSuccess();
             }
         } catch (Exception e) {
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.recordException(e);
             }
             throw e;
         } finally {
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.end();
             }
         }
@@ -96,17 +96,17 @@ public class DLQRouter {
     /*
     OVERLOADED METHOD FOR OPEN TELEMETRY TRACING
      */
-    public void sendToDLQForCircuitBreakerOpen(KafkaTemplate<?, ?> kafkaTemplate, ProducerRecord<String, Object> record, CustomKafkaListener customKafkaListener) {
+    public void sendToDLQForCircuitBreakerOpen(KafkaTemplate<?, ?> kafkaTemplate, ProducerRecord<String, Object> record, DameroKafkaListener dameroKafkaListener) {
         Object originalEvent = record.value();
 
         TracingSpan dlqSpan = null;
-        if (customKafkaListener.openTelemetry()) {
+        if (dameroKafkaListener.openTelemetry()) {
             // Extract context for potential parent span linking (not used directly but good practice)
             tracingService.extractContext(record.headers());
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             dlqSpan = tracingService.startDLQSpan(
-                customKafkaListener.topic(),
-                customKafkaListener.dlqTopic(),
+                dameroKafkaListener.topic(),
+                dameroKafkaListener.dlqTopic(),
                 eventId,
                 1,
                 "circuit_breaker_open"
@@ -120,11 +120,11 @@ public class DLQRouter {
                     null,
                     new RuntimeException("Circuit breaker OPEN - service unavailable"),
                     1,
-                    customKafkaListener.topic(),
-                    customKafkaListener.dlqTopic(),
-                    (long) customKafkaListener.delay(),
-                    customKafkaListener.delayMethod(),
-                    customKafkaListener.maxAttempts()
+                    dameroKafkaListener.topic(),
+                    dameroKafkaListener.dlqTopic(),
+                    (long) dameroKafkaListener.delay(),
+                    dameroKafkaListener.delayMethod(),
+                    dameroKafkaListener.maxAttempts()
             );
 
             EventWrapper<Object> dlqWrapper = new EventWrapper<>(
@@ -135,23 +135,23 @@ public class DLQRouter {
 
             KafkaDLQ.sendToDLQ(
                     kafkaTemplate,
-                    customKafkaListener.dlqTopic(),
+                    dameroKafkaListener.dlqTopic(),
                     dlqWrapper
             );
 
             logger.info("sent event to dlq due to circuit breaker OPEN for topic: {}",
-                    customKafkaListener.topic());
+                    dameroKafkaListener.topic());
 
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.setSuccess();
             }
         } catch (Exception e) {
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.recordException(e);
             }
             throw e;
         } finally {
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.end();
             }
         }
@@ -165,22 +165,22 @@ public class DLQRouter {
      * @param exception the exception that occurred
      * @param currentAttempts the current number of attempts
      * @param priorMetadata prior metadata if available
-     * @param customKafkaListener the listener configuration
+     * @param dameroKafkaListener the listener configuration
      */
     public void sendToDLQAfterMaxAttempts(KafkaTemplate<?, ?> kafkaTemplate,
                                           Object originalEvent,
                                           Exception exception,
                                           int currentAttempts,
                                           EventMetadata priorMetadata,
-                                          CustomKafkaListener customKafkaListener) {
+                                          DameroKafkaListener dameroKafkaListener) {
         sendToDLQAfterMaxAttempts(
             kafkaTemplate,
             originalEvent,
             exception,
             currentAttempts,
             priorMetadata,
-            customKafkaListener.dlqTopic(),  // Use default DLQ topic
-            customKafkaListener
+            dameroKafkaListener.dlqTopic(),  // Use default DLQ topic
+                dameroKafkaListener
         );
     }
 
@@ -195,7 +195,7 @@ public class DLQRouter {
      * @param currentAttempts the current number of attempts
      * @param priorMetadata prior metadata if available
      * @param customDlqTopic the custom DLQ topic to send to (overrides default)
-     * @param customKafkaListener the listener configuration
+     * @param dameroKafkaListener the listener configuration
      */
     public void sendToDLQAfterMaxAttempts(KafkaTemplate<?, ?> kafkaTemplate,
                                           Object originalEvent,
@@ -203,12 +203,12 @@ public class DLQRouter {
                                           int currentAttempts,
                                           EventMetadata priorMetadata,
                                           String customDlqTopic,
-                                          CustomKafkaListener customKafkaListener) {
+                                          DameroKafkaListener dameroKafkaListener) {
         TracingSpan dlqSpan = null;
-        if (customKafkaListener.openTelemetry()) {
+        if (dameroKafkaListener.openTelemetry()) {
             String eventId = EventUnwrapper.extractEventId(originalEvent);
             dlqSpan = tracingService.startDLQSpan(
-                customKafkaListener.topic(),
+                dameroKafkaListener.topic(),
                 customDlqTopic,
                 eventId,
                 currentAttempts,
@@ -228,11 +228,11 @@ public class DLQRouter {
                     : exception,
                 exception,
                 currentAttempts,
-                customKafkaListener.topic(),
+                dameroKafkaListener.topic(),
                 customDlqTopic,  // Use the custom DLQ topic (not the default)
-                (long) customKafkaListener.delay(),
-                customKafkaListener.delayMethod(),
-                customKafkaListener.maxAttempts()
+                (long) dameroKafkaListener.delay(),
+                dameroKafkaListener.delayMethod(),
+                dameroKafkaListener.maxAttempts()
             );
 
             EventWrapper<Object> dlqWrapper = new EventWrapper<>(
@@ -248,18 +248,18 @@ public class DLQRouter {
             );
 
             logger.info("sent event to custom dlq '{}' after {} attempts for topic: {}",
-                customDlqTopic, currentAttempts, customKafkaListener.topic());
+                customDlqTopic, currentAttempts, dameroKafkaListener.topic());
 
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.setSuccess();
             }
         } catch (Exception e) {
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.recordException(e);
             }
             throw e;
         } finally {
-            if (customKafkaListener.openTelemetry() && dlqSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && dlqSpan != null) {
                 dlqSpan.end();
             }
         }

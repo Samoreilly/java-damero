@@ -1,7 +1,7 @@
 package net.damero;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Config.CustomKafkaAutoConfiguration;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventWrapper;
@@ -573,7 +573,7 @@ class CircuitBreakerIntegrationTest {
         private final java.util.List<EventWrapper<?>> allDLQMessages = new CopyOnWriteArrayList<>();
         private final Map<String, Integer> attemptCounts = new java.util.concurrent.ConcurrentHashMap<>();
 
-        @CustomKafkaListener(
+        @DameroKafkaListener(
                 topic = "circuit-breaker-topic",
                 retryableTopic = "circuit-breaker-retry",
                 dlqTopic = "circuit-breaker-dlq",

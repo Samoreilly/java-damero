@@ -1,8 +1,6 @@
 package net.damero.Kafka.BatchOrchestrator;
 
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.Utility.AspectHelperMethods;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.slf4j.Logger;
@@ -29,7 +27,7 @@ public class BatchUtility {
      * Handle batch window expiry callback from BatchOrchestrator.
      * Called asynchronously when the batch window timer expires.
      */
-    public BatchCheckResult checkBatchStatus(BatchStatus status, ApplicationContext context, KafkaTemplate<?, ?> defaultKafkaTemplate, ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener, ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints, String topic) throws Throwable {
+    public BatchCheckResult checkBatchStatus(BatchStatus status, ApplicationContext context, KafkaTemplate<?, ?> defaultKafkaTemplate, ProceedingJoinPoint pjp, DameroKafkaListener dameroKafkaListener, ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints, String topic) throws Throwable {
 
         if (status == BatchStatus.PROCESSING) {
             // Still collecting - DO NOT acknowledge yet
@@ -43,8 +41,8 @@ public class BatchUtility {
         if (status == BatchStatus.CAPACITY_REACHED) {
             // Capacity reached - process the batch immediately
             logger.info("Batch capacity reached for topic: {} - processing batch", topic);
-            KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(customKafkaListener, context, defaultKafkaTemplate);
-            Object result = batchProcessor.processBatch(pjp, customKafkaListener, kafkaTemplate);
+            KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(dameroKafkaListener, context, defaultKafkaTemplate);
+            Object result = batchProcessor.processBatch(pjp, dameroKafkaListener, kafkaTemplate);
 
             // Clean up join point if no more pending messages
             if (!batchProcessor.hasPendingMessages(topic)) {

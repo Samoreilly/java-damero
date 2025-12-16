@@ -1,7 +1,7 @@
 package net.damero;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Annotations.DlqExceptionRoutes;
 import net.damero.Kafka.Config.CustomKafkaAutoConfiguration;
 import net.damero.Kafka.Config.DelayMethod;
@@ -170,7 +170,7 @@ class ConditionalDLQRoutingIntegrationTest {
         private volatile boolean throwTimeoutError = false;
         private volatile boolean throwGenericError = false;
 
-        @CustomKafkaListener(
+        @DameroKafkaListener(
             topic = "conditional-routing-test",
             dlqTopic = "default-dlq",
             maxAttempts = 3,

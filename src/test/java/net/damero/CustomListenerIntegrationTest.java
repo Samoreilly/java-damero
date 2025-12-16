@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = CustomKafkaListenerIntegrationTest.TestConfig.class)
+@SpringBootTest(classes = DameroKafkaListenerIntegrationTest.TestConfig.class)
 @EmbeddedKafka(
         partitions = 1,
         topics = {"test-topic", "test-topic-retry", "test-dlq"},
@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class CustomKafkaListenerIntegrationTest {
+class DameroKafkaListenerIntegrationTest {
 
     @Autowired
     private EmbeddedKafkaBroker embeddedKafka;

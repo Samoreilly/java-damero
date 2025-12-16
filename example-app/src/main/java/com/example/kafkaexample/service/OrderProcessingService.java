@@ -3,7 +3,7 @@ package com.example.kafkaexample.service;
 import com.example.kafkaexample.model.OrderEvent;
 import com.example.kafkaexample.model.PaymentException;
 import com.example.kafkaexample.model.ValidationException;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
@@ -18,9 +18,10 @@ public class OrderProcessingService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderProcessingService.class);
 
-    @CustomKafkaListener(
+    @DameroKafkaListener(
         topic = "orders",
         dlqTopic = "test-dlq",
+        eventType =  com.example.kafkaexample.model.OrderEvent.class,
         maxAttempts = 3,
         delay = 1000,
         delayMethod = DelayMethod.FIBONACCI,
@@ -32,7 +33,7 @@ public class OrderProcessingService {
         deDuplication = false,
         openTelemetry = true,
         batchCapacity = 4000,
-        batchWindowLength = 2000,
+        batchWindowLength = 1000,
         fixedWindow = true
 
     )

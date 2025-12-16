@@ -1,8 +1,8 @@
 package net.damero;
 
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.RetryScheduler.RetrySched;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
 import net.damero.Kafka.CustomObject.EventMetadata;
@@ -33,7 +33,7 @@ class RetrySchedTest {
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     @Mock
-    private CustomKafkaListener customKafkaListener;
+    private DameroKafkaListener dameroKafkaListener;
 
     @Mock
     private PluggableRedisCache cache;
@@ -46,23 +46,23 @@ class RetrySchedTest {
 
         // Use lenient() to avoid UnnecessaryStubbingException
         // These stubs are shared across multiple tests
-        lenient().when(customKafkaListener.topic()).thenReturn("test-topic");
-        lenient().when(customKafkaListener.dlqTopic()).thenReturn("test-dlq");
-        lenient().when(customKafkaListener.maxAttempts()).thenReturn(3);
-        lenient().when(customKafkaListener.delay()).thenReturn(1000.0);
+        lenient().when(dameroKafkaListener.topic()).thenReturn("test-topic");
+        lenient().when(dameroKafkaListener.dlqTopic()).thenReturn("test-dlq");
+        lenient().when(dameroKafkaListener.maxAttempts()).thenReturn(3);
+        lenient().when(dameroKafkaListener.delay()).thenReturn(1000.0);
     }
 
     @Test
     void testScheduleRetry_LinearDelay() {
         // Given
-        when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.LINEAR);
+        when(dameroKafkaListener.delayMethod()).thenReturn(DelayMethod.LINEAR);
 
         EventMetadata metadata = createMetadata(1);
         RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 1, new RuntimeException("Test"));
         String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
+        retrySched.scheduleRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -78,14 +78,14 @@ class RetrySchedTest {
     @Test
     void testScheduleRetry_ExponentialDelay() {
         // Given
-        when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
+        when(dameroKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
 
         EventMetadata metadata = createMetadata(2);
         RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 2, new RuntimeException("Test"));
         String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
+        retrySched.scheduleRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -101,8 +101,8 @@ class RetrySchedTest {
     @Test
     void testScheduleRetry_ExponentialDelay_MaxCap() {
         // Given
-        when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
-        when(customKafkaListener.delay()).thenReturn(100.0);
+        when(dameroKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
+        when(dameroKafkaListener.delay()).thenReturn(100.0);
 
         // Simulate many attempts - should hit 5 second max
         EventMetadata metadata = createMetadata(20);
@@ -110,7 +110,7 @@ class RetrySchedTest {
         String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
+        retrySched.scheduleRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -127,15 +127,15 @@ class RetrySchedTest {
     @Test
     void testScheduleRetry_CustomDelay() {
         // Given
-        when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.CUSTOM);
-        when(customKafkaListener.delay()).thenReturn(2500.0);
+        when(dameroKafkaListener.delayMethod()).thenReturn(DelayMethod.CUSTOM);
+        when(dameroKafkaListener.delay()).thenReturn(2500.0);
 
         EventMetadata metadata = createMetadata(1);
         RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 1, new RuntimeException("Test"));
         String originalEvent = "test-event";
 
         // When
-        retrySched.scheduleRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
+        retrySched.scheduleRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then
         ArgumentCaptor<Instant> instantCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -151,14 +151,14 @@ class RetrySchedTest {
     @Test
     void testExecuteRetry_SendsToCorrectTopic() {
         // Given
-        when(customKafkaListener.topic()).thenReturn("test-topic");
+        when(dameroKafkaListener.topic()).thenReturn("test-topic");
 
         EventMetadata metadata = createMetadata(1);
         RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(metadata, null, 1, new RuntimeException("Test"));
         String originalEvent = "test-event";
 
         // When
-        retrySched.executeRetry(customKafkaListener, originalEvent, headers, kafkaTemplate);
+        retrySched.executeRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate);
 
         // Then - verify ProducerRecord is sent with headers
         ArgumentCaptor<org.apache.kafka.clients.producer.ProducerRecord> recordCaptor = 

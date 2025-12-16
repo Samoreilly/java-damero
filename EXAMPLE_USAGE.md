@@ -7,7 +7,7 @@ Add `nonRetryableExceptions` to your `@CustomKafkaListener` annotation:
 ```java
 package com.example.service;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -16,41 +16,41 @@ import org.springframework.stereotype.Service;
 @Service
 public class OrderProcessingService {
 
-    @CustomKafkaListener(
-        topic = "orders",
-        dlqTopic = "orders-dlq",
-        maxAttempts = 3,
-        delay = 1000,
-        delayMethod = DelayMethod.EXPO,
-        nonRetryableExceptions = {
-            IllegalArgumentException.class,
-            ValidationException.class,
-            UnsupportedOperationException.class
-        }
-    )
-    @KafkaListener(topics = "orders", groupId = "order-processor")
-    public void processOrder(ConsumerRecord<String, OrderEvent> record, Acknowledgment ack) {
-        OrderEvent order = record.value();
-        
-        // This will be retried if it fails
-        if (order.getAmount() < 0) {
-            throw new IllegalArgumentException("Order amount cannot be negative");
-        }
-        
-        // This will be retried if it fails
-        if (!isValidPayment(order)) {
-            throw new PaymentException("Payment validation failed");
-        }
-        
-        // Process the order
-        orderService.process(order);
-        ack.acknowledge();
-    }
-    
-    private boolean isValidPayment(OrderEvent order) {
-        // Simulate payment validation
-        return order.getPaymentMethod() != null;
-    }
+   @DameroKafkaListener(
+           topic = "orders",
+           dlqTopic = "orders-dlq",
+           maxAttempts = 3,
+           delay = 1000,
+           delayMethod = DelayMethod.EXPO,
+           nonRetryableExceptions = {
+                   IllegalArgumentException.class,
+                   ValidationException.class,
+                   UnsupportedOperationException.class
+           }
+   )
+   @KafkaListener(topics = "orders", groupId = "order-processor")
+   public void processOrder(ConsumerRecord<String, OrderEvent> record, Acknowledgment ack) {
+      OrderEvent order = record.value();
+
+      // This will be retried if it fails
+      if (order.getAmount() < 0) {
+         throw new IllegalArgumentException("Order amount cannot be negative");
+      }
+
+      // This will be retried if it fails
+      if (!isValidPayment(order)) {
+         throw new PaymentException("Payment validation failed");
+      }
+
+      // Process the order
+      orderService.process(order);
+      ack.acknowledge();
+   }
+
+   private boolean isValidPayment(OrderEvent order) {
+      // Simulate payment validation
+      return order.getPaymentMethod() != null;
+   }
 }
 ```
 
@@ -279,6 +279,6 @@ nonRetryableExceptions = {
    logger.info("Processing order: {}, Exception type: {}, Is retryable: {}", 
        order.getId(), 
        e.getClass().getSimpleName(),
-       !isNonRetryableException(e, customKafkaListener));
+       !isNonRetryableException(e, dameroKafkaListener));
    ```
 

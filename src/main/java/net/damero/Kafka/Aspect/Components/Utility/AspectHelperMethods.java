@@ -1,7 +1,7 @@
 package net.damero.Kafka.Aspect.Components.Utility;
 
 import lombok.experimental.UtilityClass;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.springframework.context.ApplicationContext;
@@ -18,8 +18,8 @@ public class AspectHelperMethods {
     private static final Logger logger = org.slf4j.LoggerFactory.getLogger(AspectHelperMethods.class);
 
 
-    public KafkaTemplate<?, ?> resolveKafkaTemplate(CustomKafkaListener customKafkaListener, ApplicationContext context, KafkaTemplate<?, ?> defaultKafkaTemplate) {
-        Class<?> templateClass = customKafkaListener.kafkaTemplate();
+    public KafkaTemplate<?, ?> resolveKafkaTemplate(DameroKafkaListener dameroKafkaListener, ApplicationContext context, KafkaTemplate<?, ?> defaultKafkaTemplate) {
+        Class<?> templateClass = dameroKafkaListener.kafkaTemplate();
 
         if (templateClass.equals(void.class)) {
             return defaultKafkaTemplate;
@@ -62,12 +62,12 @@ public class AspectHelperMethods {
      * If nonRetryableExceptions is empty, all exceptions are retryable.
      *
      * @param exception the exception to check
-     * @param customKafkaListener the listener configuration
+     * @param dameroKafkaListener the listener configuration
      * @return true if the exception is non-retryable (should go to DLQ), false if it should be retried
      */
 
-    public boolean isNonRetryableException(Exception exception, CustomKafkaListener customKafkaListener) {
-        Class<? extends Throwable>[] nonRetryableExceptions = customKafkaListener.nonRetryableExceptions();
+    public boolean isNonRetryableException(Exception exception, DameroKafkaListener dameroKafkaListener) {
+        Class<? extends Throwable>[] nonRetryableExceptions = dameroKafkaListener.nonRetryableExceptions();
 
         // If no non-retryable exceptions specified, all exceptions are retryable
         if (nonRetryableExceptions == null || nonRetryableExceptions.length == 0) {

@@ -1,7 +1,7 @@
 package net.damero.Kafka.Config;
 
 import lombok.Getter;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Factory.KafkaConsumerFactoryProvider;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -34,7 +34,7 @@ public class CustomKafkaListenerConfig{
         this.nonRetryableExceptions = builder.nonRetryableExceptions;
     }
 
-    public static CustomKafkaListenerConfig fromAnnotation(CustomKafkaListener annotation) {
+    public static CustomKafkaListenerConfig fromAnnotation(DameroKafkaListener annotation) {
 
 
         CustomKafkaListenerConfig.Builder build = new CustomKafkaListenerConfig.Builder();

@@ -1,6 +1,6 @@
 package net.damero;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.DLQRouter;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventMetadata;
@@ -29,7 +29,7 @@ class DLQRouterTest {
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     @Mock
-    private CustomKafkaListener customKafkaListener;
+    private DameroKafkaListener dameroKafkaListener;
 
     private DLQRouter dlqRouter;
 
@@ -40,11 +40,11 @@ class DLQRouterTest {
         dlqRouter = new DLQRouter(tracingService);
 
         // Setup common mocks
-        lenient().when(customKafkaListener.topic()).thenReturn("test-topic");
-        lenient().when(customKafkaListener.dlqTopic()).thenReturn("test-dlq");
-        lenient().when(customKafkaListener.delay()).thenReturn(1000.0);
-        lenient().when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
-        lenient().when(customKafkaListener.maxAttempts()).thenReturn(3);
+        lenient().when(dameroKafkaListener.topic()).thenReturn("test-topic");
+        lenient().when(dameroKafkaListener.dlqTopic()).thenReturn("test-dlq");
+        lenient().when(dameroKafkaListener.delay()).thenReturn(1000.0);
+        lenient().when(dameroKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
+        lenient().when(dameroKafkaListener.maxAttempts()).thenReturn(3);
     }
 
     @Test
@@ -56,7 +56,7 @@ class DLQRouterTest {
             ArgumentCaptor<EventWrapper> wrapperCaptor = ArgumentCaptor.forClass(EventWrapper.class);
 
             // When
-            dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, customKafkaListener);
+            dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, dameroKafkaListener);
 
             // Then
             kafkaDLQMock.verify(() -> KafkaDLQ.sendToDLQ(
@@ -94,7 +94,7 @@ class DLQRouterTest {
                 exception,
                 currentAttempts,
                 priorMetadata,
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Then
@@ -136,7 +136,7 @@ class DLQRouterTest {
                 currentAttempts,
                 priorMetadata,
                 customDlqTopic,
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Then
@@ -190,7 +190,7 @@ class DLQRouterTest {
                 currentException,
                 currentAttempts,
                 priorMetadata,
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Then
@@ -229,7 +229,7 @@ class DLQRouterTest {
                 1,
                 null,
                 "validation-dlq",
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Scenario 2: Timeout error -> timeout-dlq
@@ -240,7 +240,7 @@ class DLQRouterTest {
                 3,
                 null,
                 "timeout-dlq",
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Scenario 3: Fraud detection -> fraud-dlq
@@ -251,7 +251,7 @@ class DLQRouterTest {
                 1,
                 null,
                 "fraud-dlq",
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Then - verify each went to correct DLQ
@@ -292,7 +292,7 @@ class DLQRouterTest {
                 1,
                 null,  // null prior metadata
                 "custom-dlq",
-                customKafkaListener
+                    dameroKafkaListener
             );
 
             // Then

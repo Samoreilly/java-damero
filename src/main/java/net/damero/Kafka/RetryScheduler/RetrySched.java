@@ -1,6 +1,6 @@
 package net.damero.Kafka.RetryScheduler;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
 import net.damero.Kafka.Config.PluggableRedisCache;
@@ -37,60 +37,60 @@ public class RetrySched {
     /**
      * Schedules a retry for the given event with headers-based metadata.
      * 
-     * @param customKafkaListener the listener configuration
+     * @param dameroKafkaListener the listener configuration
      * @param originalEvent the original event to retry
      * @param headers headers containing retry metadata
      * @param kafkaTemplate the Kafka template to use
      */
-    public void scheduleRetry(CustomKafkaListener customKafkaListener, 
-                              Object originalEvent, 
-                              Headers headers, 
+    public void scheduleRetry(DameroKafkaListener dameroKafkaListener,
+                              Object originalEvent,
+                              Headers headers,
                               KafkaTemplate<?, ?> kafkaTemplate) {
 
         // Extract current attempts from headers
         EventMetadata metadata = HeaderUtils.extractMetadataFromHeaders(headers);
         int currentAttempts = metadata != null ? metadata.getAttempts() : 0;
 
-        long delay = getBackOffDelay(customKafkaListener, originalEvent,
-                                     customKafkaListener.delayMethod(), currentAttempts);
+        long delay = getBackOffDelay(dameroKafkaListener, originalEvent,
+                                     dameroKafkaListener.delayMethod(), currentAttempts);
 
-        taskScheduler.schedule(() -> executeRetry(customKafkaListener, originalEvent, headers, kafkaTemplate),
+        taskScheduler.schedule(() -> executeRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate),
                 Instant.now().plusMillis(delay)
         );
 
-        logger.info("scheduled retry for event: {} to topic: {}", originalEvent.toString(), customKafkaListener.topic());
+        logger.info("scheduled retry for event: {} to topic: {}", originalEvent.toString(), dameroKafkaListener.topic());
     }
 
     /**
      * Executes the retry by sending the event with headers to the topic.
      */
-    public void executeRetry(CustomKafkaListener customKafkaListener, 
-                            Object originalEvent, 
-                            Headers headers, 
-                            KafkaTemplate<?, ?> kafkaTemplate) {
+    public void executeRetry(DameroKafkaListener dameroKafkaListener,
+                             Object originalEvent,
+                             Headers headers,
+                             KafkaTemplate<?, ?> kafkaTemplate) {
         try {
             // Send the original event with headers attached
-            sendToTopicWithHeaders(kafkaTemplate, customKafkaListener.topic(), originalEvent, headers);
-            logger.info("retried event: {} to topic: {}", originalEvent.toString(), customKafkaListener.topic());
+            sendToTopicWithHeaders(kafkaTemplate, dameroKafkaListener.topic(), originalEvent, headers);
+            logger.info("retried event: {} to topic: {}", originalEvent.toString(), dameroKafkaListener.topic());
         } catch (Exception e) {
             // Log error but don't throw - allows scheduled task to complete even if Kafka is unavailable
             // This prevents test hangs when embedded Kafka shuts down before scheduled retries execute
             logger.error("failed to execute retry for event: {} to topic: {} - {}", 
                 originalEvent != null ? originalEvent.toString() : "null", 
-                customKafkaListener.topic(), 
+                dameroKafkaListener.topic(),
                 e.getMessage(), 
                 e);
         }
 
     }
 
-    private long getBackOffDelay(CustomKafkaListener customKafkaListener, Object object, DelayMethod delayMethod, int attempts) {
+    private long getBackOffDelay(DameroKafkaListener dameroKafkaListener, Object object, DelayMethod delayMethod, int attempts) {
         if(delayMethod == DelayMethod.FIBONACCI && object == null){
             logger.warn("Object cannot be null for FIBONACCI delay method");
             throw new IllegalArgumentException("Object cannot be null for FIBONACCI delay method");
         }
 
-        double base = customKafkaListener.delay();
+        double base = dameroKafkaListener.delay();
 
         return (long) switch (delayMethod) {
             case EXPO -> {
@@ -102,20 +102,20 @@ public class RetrySched {
             }
 
             case LINEAR -> base * attempts;
-            case FIBONACCI -> getFibonacciDelay(customKafkaListener, object);
-            case CUSTOM -> customKafkaListener.delay();
+            case FIBONACCI -> getFibonacciDelay(dameroKafkaListener, object);
+            case CUSTOM -> dameroKafkaListener.delay();
             case MAX -> base;
             default -> base;
         };
     }
 
-    private long getFibonacciDelay(CustomKafkaListener customKafkaListener, Object object) {
+    private long getFibonacciDelay(DameroKafkaListener dameroKafkaListener, Object object) {
         String eventId = extractEventId(object);
         if (eventId == null) {
             logger.warn("Cannot get fibonacci delay - eventId is null, using default");
-            return (long) customKafkaListener.delay();
+            return (long) dameroKafkaListener.delay();
         }
-        return cache.getNextFibonacciDelay(eventId, customKafkaListener.fibonacciLimit());
+        return cache.getNextFibonacciDelay(eventId, dameroKafkaListener.fibonacciLimit());
     }
 
     /**

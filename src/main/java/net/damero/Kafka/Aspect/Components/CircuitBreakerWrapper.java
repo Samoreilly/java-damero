@@ -1,7 +1,7 @@
 package net.damero.Kafka.Aspect.Components;
 
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Resilience.CircuitBreakerService;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.springframework.lang.Nullable;
 import org.slf4j.Logger;
@@ -27,22 +27,22 @@ public class CircuitBreakerWrapper {
     /**
      * Gets a circuit breaker instance for the given listener configuration.
      * 
-     * @param customKafkaListener the listener configuration
+     * @param dameroKafkaListener the listener configuration
      * @return the circuit breaker instance, or null if not available
      */
     @Nullable
-    public Object getCircuitBreaker(CustomKafkaListener customKafkaListener) {
-        if (!customKafkaListener.enableCircuitBreaker() || 
+    public Object getCircuitBreaker(DameroKafkaListener dameroKafkaListener) {
+        if (!dameroKafkaListener.enableCircuitBreaker() ||
             circuitBreakerService == null || 
             !circuitBreakerService.isAvailable()) {
             return null;
         }
 
         return circuitBreakerService.getCircuitBreaker(
-            customKafkaListener.topic(),
-            customKafkaListener.circuitBreakerFailureThreshold(),
-            customKafkaListener.circuitBreakerWindowDuration(),
-            customKafkaListener.circuitBreakerWaitDuration()
+            dameroKafkaListener.topic(),
+            dameroKafkaListener.circuitBreakerFailureThreshold(),
+            dameroKafkaListener.circuitBreakerWindowDuration(),
+            dameroKafkaListener.circuitBreakerWaitDuration()
         );
     }
 

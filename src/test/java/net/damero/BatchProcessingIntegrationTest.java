@@ -1,7 +1,7 @@
 package net.damero;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.BatchOrchestrator.BatchOrchestrator;
 import net.damero.Kafka.Config.CustomKafkaAutoConfiguration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -356,7 +356,7 @@ class BatchProcessingIntegrationTest {
         private final AtomicInteger batchProcessingCount = new AtomicInteger(0);
         private final AtomicInteger windowExpiryCount = new AtomicInteger(0);
 
-        @CustomKafkaListener(
+        @DameroKafkaListener(
                 topic = "batch-capacity-topic",
                 dlqTopic = "batch-capacity-dlq",
                 maxAttempts = 3,
@@ -405,7 +405,7 @@ class BatchProcessingIntegrationTest {
         private final AtomicInteger batchProcessingCount = new AtomicInteger(0);
         private final AtomicInteger windowExpiryCount = new AtomicInteger(0);
 
-        @CustomKafkaListener(
+        @DameroKafkaListener(
                 topic = "batch-window-topic",
                 dlqTopic = "batch-window-dlq",
                 maxAttempts = 3,
@@ -454,7 +454,7 @@ class BatchProcessingIntegrationTest {
         private final List<TestEvent> processedEvents = new CopyOnWriteArrayList<>();
         private final AtomicInteger batchProcessingCount = new AtomicInteger(0);
 
-        @CustomKafkaListener(
+        @DameroKafkaListener(
                 topic = "batch-mixed-topic",
                 dlqTopic = "batch-mixed-dlq",
                 maxAttempts = 3,

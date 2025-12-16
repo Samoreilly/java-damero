@@ -16,6 +16,7 @@ import net.damero.Kafka.DeadLetterQueueAPI.DLQController;
 import net.damero.Kafka.DeadLetterQueueAPI.ReadFromDLQ.ReadFromDLQConsumer;
 import net.damero.Kafka.DeadLetterQueueAPI.ReplayDLQ.ReplayDLQ;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
+import net.damero.Kafka.ManageListener.ListenerSetup;
 import net.damero.Kafka.Tracing.NoOpTracingService;
 import net.damero.Kafka.Tracing.OpenTelemetryTracingService;
 import net.damero.Kafka.Tracing.TracingService;
@@ -96,6 +97,12 @@ public class CustomKafkaAutoConfiguration {
     public ReadFromDLQConsumer readFromDLQConsumer(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
                                                    ObjectMapper kafkaObjectMapper) {
         return new ReadFromDLQConsumer(dlqConsumerFactory, kafkaObjectMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ListenerSetup listenerSetup(){
+        return new ListenerSetup();
     }
 
     /**

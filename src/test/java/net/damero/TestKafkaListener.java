@@ -1,6 +1,6 @@
 package net.damero;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Config.DelayMethod;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
@@ -18,7 +18,7 @@ public class TestKafkaListener {
     private final List<TestEvent> failedEvents = new CopyOnWriteArrayList<>();
     private final Map<String, Integer> attemptCounts = new ConcurrentHashMap<>();
 
-    @CustomKafkaListener(
+    @DameroKafkaListener(
             topic = "test-topic",
             retryableTopic = "test-topic-retry",
             dlqTopic = "test-dlq",

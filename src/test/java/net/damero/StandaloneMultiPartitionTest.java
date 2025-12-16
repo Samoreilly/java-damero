@@ -1,7 +1,7 @@
 package net.damero;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Config.CustomKafkaAutoConfiguration;
 import net.damero.Kafka.Config.DelayMethod;
 import net.damero.Kafka.CustomObject.EventWrapper;
@@ -343,7 +343,7 @@ class StandaloneMultiPartitionTest {
         private final ConcurrentHashMap<String, Integer> succeedOnAttemptMap = new ConcurrentHashMap<>();
         private volatile CountDownLatch processingLatch = null;
 
-        @CustomKafkaListener(
+        @DameroKafkaListener(
                 topic = "multi-partition-topic",
                 retryableTopic = "multi-partition-retry",
                 dlqTopic = "multi-partition-dlq",

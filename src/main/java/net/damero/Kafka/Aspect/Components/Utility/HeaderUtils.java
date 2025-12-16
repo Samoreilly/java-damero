@@ -1,6 +1,5 @@
 package net.damero.Kafka.Aspect.Components.Utility;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.Config.DelayMethod;
 import org.apache.kafka.common.header.Header;
@@ -8,7 +7,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -32,9 +30,10 @@ public class HeaderUtils {
     private static final String HEADER_DELAY_MS = "damero-delay-ms";
     private static final String HEADER_DELAY_METHOD = "damero-delay-method";
     private static final String HEADER_MAX_ATTEMPTS = "damero-max-attempts";
-    
+    // Spring Kafka type header used by JsonDeserializer/JsonSerializer
+    private static final String HEADER_TYPE_ID = "__TypeId__";
+
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-    private static final ObjectMapper objectMapper = new ObjectMapper();
     
     /**
      * Extracts EventMetadata from Kafka headers if present.
@@ -89,10 +88,35 @@ public class HeaderUtils {
     }
     
     /**
+     * Ensures the Spring Kafka type header (__TypeId__) is present on the provided headers.
+     * Priority: explicitType (from annotation) -> originalEvent.getClass() -> no-op.
+     * If a type header already exists, this method does not override it.
+     */
+    public static void ensureTypeHeader(Headers headers, Class<?> explicitType, Object originalEvent) {
+        if (headers == null) return;
+        Header existing = headers.lastHeader(HEADER_TYPE_ID);
+        if (existing != null) return; // already present
+
+        String typeName = null;
+        if (explicitType != null && explicitType != Void.class) {
+            typeName = explicitType.getName();
+        } else if (originalEvent != null) {
+            typeName = originalEvent.getClass().getName();
+        }
+
+        if (typeName != null) {
+            headers.add(HEADER_TYPE_ID, typeName.getBytes(StandardCharsets.UTF_8));
+            logger.debug("added type header {} = {}", HEADER_TYPE_ID, typeName);
+        }
+    }
+
+    /**
      * Builds Kafka headers from EventMetadata for retrying a message.
      * 
-     * @param metadata the metadata to encode in headers
+     * @param existingMetadata the existing metadata extracted from headers (may be null)
      * @param customMetadata new metadata to merge with existing (for updates)
+     * @param newAttempts the attempt count to encode
+     * @param newException the most recent exception
      * @return RecordHeaders with all metadata encoded
      */
     public static RecordHeaders buildHeadersFromMetadata(EventMetadata existingMetadata, 

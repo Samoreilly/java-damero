@@ -100,7 +100,7 @@ When your code processes a Kafka message:
 
 ```java
 // In KafkaListenerAspect.java
-if (customKafkaListener.openTelemetry()) {
+if (dameroKafkaListener.openTelemetry()) {
     Span processingSpan = tracingService.startProcessingSpan(...);
     // ↓
     // TracingService uses the Tracer

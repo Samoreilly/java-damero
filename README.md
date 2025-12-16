@@ -94,13 +94,13 @@ spring.data.redis.port=6379
 
 ## Quick Start
 
-Create a listener with the @CustomKafkaListener annotation:
+Create a listener with the @DameroKafkaListener annotation:
 
 ```java
 @Service
 public class OrderListener {
     
-    @CustomKafkaListener(
+    @DameroKafkaListener(
         topic = "orders",
         dlqTopic = "orders-dlq",
         maxAttempts = 3,
@@ -146,7 +146,7 @@ batch processing can dramatically improve throughput when you need to process ma
 just add batch configuration to your existing listener:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     dlqTopic = "orders-dlq",
     maxAttempts = 3,
@@ -171,7 +171,7 @@ that is it. your method signature stays the same. the library batches messages a
 processes batches as soon as they reach the capacity limit. best for maximum throughput.
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "analytics-events",
     batchCapacity = 5000,          // process immediately when 5000 messages arrive
     batchWindowLength = 10000,     // or every 10 seconds if messages are slow
@@ -186,7 +186,7 @@ use this when you want maximum speed and can handle variable batch timing.
 processes batches only when the time window expires. best for predictable timing and rate limiting.
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "external-api",
     batchCapacity = 100,           // maximum 100 messages per batch
     batchWindowLength = 60000,     // strict 60 second intervals
@@ -291,7 +291,7 @@ here is a real-world example processing order events:
 @Service
 public class OrderBatchProcessor {
     
-    @CustomKafkaListener(
+    @DameroKafkaListener(
         topic = "orders",
         dlqTopic = "orders-dlq",
         
@@ -329,7 +329,7 @@ for more details including troubleshooting and advanced configuration, see [BATC
 
 ### Annotation Parameters
 
-The @CustomKafkaListener annotation supports these parameters:
+The @DameroKafkaListener annotation supports these parameters:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -410,7 +410,7 @@ Key auto-configured beans:
 - kafkaListenerContainerFactory: Container factory for listeners
 - dlqKafkaListenerContainerFactory: Container factory for DLQ listeners
 - pluggableRedisCache: Cache for retry tracking (Redis if available, otherwise Caffeine)
-- kafkaListenerAspect: Intercepts @CustomKafkaListener methods
+- kafkaListenerAspect: Intercepts @DameroKafkaListener methods
 - retryOrchestrator: Manages retry logic
 - dlqRouter: Routes messages to DLQ
 - metricsRecorder: Tracks metrics if Micrometer is available
@@ -487,7 +487,7 @@ public class EventMetadata {
 Route different exceptions to different DLQ topics:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     dlqRoutes = {
         @DlqExceptionRoutes(
@@ -513,7 +513,7 @@ Use skipRetry=true for validation errors that should not be retried. Use skipRet
 Limit message processing throughput:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     messagesPerWindow = 100,
     messageWindow = 60000  // 100 messages per minute
@@ -525,7 +525,7 @@ Limit message processing throughput:
 Prevent duplicate message processing:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     deDuplication = true
 )
@@ -548,7 +548,7 @@ custom.kafka.deduplication.max-entries-per-bucket=50000
 Protect downstream services:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     enableCircuitBreaker = true,
     circuitBreakerFailureThreshold = 50,
@@ -670,7 +670,7 @@ otel.exporter.otlp.endpoint=http://localhost:4317
 #### step 4: enable in your listener
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     dlqTopic = "orders-dlq",
     maxAttempts = 3,
@@ -828,7 +828,7 @@ Metrics include tags for topic, status, exception type, and attempt number.
 Mark validation and business logic errors as non-retryable:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     nonRetryableExceptions = {
         IllegalArgumentException.class,
@@ -857,7 +857,7 @@ the library handles acknowledgment timing to prevent duplicate processing.
 enable tracing in development to understand message flow:
 
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     openTelemetry = true  // see exactly what happens to each message
 )
@@ -951,7 +951,7 @@ public void recoverOrder(TimeoutException e, Order order) {
 
 **after (damero):**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     dlqTopic = "orders-dlq",
     maxAttempts = 3,
@@ -1009,7 +1009,7 @@ becomes:
 
 ```java
 // damero
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     nonRetryableExceptions = {ValidationException.class}
 )
@@ -1034,7 +1034,7 @@ public void recover(TimeoutException e, Order order) {
 
 **after:**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     dlqRoutes = {
         @DlqExceptionRoutes(
@@ -1088,7 +1088,7 @@ public class KafkaConfig {
 
 ### migration checklist
 
-- [ ] replace @Retryable with @CustomKafkaListener
+- [ ] replace @Retryable with @DameroKafkaListener
 - [ ] remove @Recover methods
 - [ ] enable manual acknowledgment mode
 - [ ] update listener signatures to include Acknowledgment
@@ -1114,7 +1114,7 @@ check that:
 **issue: messages going to dlq immediately**
 
 check:
-- `retryable = true` in @CustomKafkaListener (default is true)
+- `retryable = true` in @DameroKafkaListener (default is true)
 - exception is not in nonRetryableExceptions list
 - maxAttempts is greater than 1
 
@@ -1129,7 +1129,7 @@ if you need custom backoff, use `delayMethod = DelayMethod.CUSTOM` and set fixed
 
 | feature | spring retry | damero |
 |---------|-------------|---------|
-| basic retry | @Retryable | @CustomKafkaListener |
+| basic retry | @Retryable | @DameroKafkaListener |
 | max attempts | maxAttempts | maxAttempts |
 | backoff | @Backoff | delay + delayMethod |
 | dlq support | manual @Recover | automatic |
@@ -1278,7 +1278,7 @@ public void process(ConsumerRecord<String, Order> record, Acknowledgment ack) {
 
 **cause 1: retryable is false**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     retryable = false  // this skips retries
 )
@@ -1286,7 +1286,7 @@ public void process(ConsumerRecord<String, Order> record, Acknowledgment ack) {
 
 **cause 2: exception is nonretryable**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     nonRetryableExceptions = {IllegalArgumentException.class}
 )
@@ -1338,7 +1338,7 @@ public void processDlq(EventWrapper<Order> wrapper) {
 
 **check configuration:**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     enableCircuitBreaker = true,  // must be true
     circuitBreakerFailureThreshold = 50,  // number of failures
@@ -1372,7 +1372,7 @@ public void processDlq(EventWrapper<Order> wrapper) {
 
 **check configuration:**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     deDuplication = true  // must be true
 )
@@ -1416,7 +1416,7 @@ custom.kafka.deduplication.window-unit=hours
 
 **check tracing is enabled:**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     openTelemetry = true  // must be true
 )
@@ -1463,7 +1463,7 @@ otel.traces.sampler.ratio=1.0  # 100% for development
 
 **check rate limiting:**
 ```java
-@CustomKafkaListener(
+@DameroKafkaListener(
     topic = "orders",
     messagesPerWindow = 100,  // might be too restrictive
     messageWindow = 60000
@@ -1554,7 +1554,7 @@ logging.level.net.damero.kafka=debug
 3. **create minimal reproduction** - try to reproduce with minimal code
 
 4. **open github issue** with:
-   - your @CustomKafkaListener configuration
+   - your @DameroKafkaListener configuration
    - relevant application.properties
    - error logs and stack traces
    - damero version

@@ -1,6 +1,6 @@
 package net.damero.Kafka.BatchOrchestrator;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,7 @@ public class BatchOrchestrator {
     private final ConcurrentHashMap<String, AtomicBoolean> processingFlags = new ConcurrentHashMap<>();
 
     // Callback for when window expires (set by KafkaListenerAspect)
-    private volatile BiConsumer<String, CustomKafkaListener> windowExpiryCallback;
+    private volatile BiConsumer<String, DameroKafkaListener> windowExpiryCallback;
 
     public BatchOrchestrator(@Qualifier("kafkaRetryScheduler") TaskScheduler taskScheduler,
                             MetricsRecorder metricsRecorder) {
@@ -60,7 +60,7 @@ public class BatchOrchestrator {
     /**
      * Register a callback to be invoked when a batch window expires.
      */
-    public void setWindowExpiryCallback(BiConsumer<String, CustomKafkaListener> callback) {
+    public void setWindowExpiryCallback(BiConsumer<String, DameroKafkaListener> callback) {
         this.windowExpiryCallback = callback;
     }
 
@@ -79,7 +79,7 @@ public class BatchOrchestrator {
      * @param args The full argument array from the listener method
      * @return BatchStatus indicating whether to continue collecting or process
      */
-    public BatchStatus orchestrate(CustomKafkaListener listener, String topic, Object[] args) {
+    public BatchStatus orchestrate(DameroKafkaListener listener, String topic, Object[] args) {
         ReentrantLock lock = topicLocks.computeIfAbsent(topic, k -> new ReentrantLock());
         lock.lock();
         try {
@@ -155,7 +155,7 @@ public class BatchOrchestrator {
      * Schedule a task to trigger batch processing when the window expires.
      * In fixed window mode, ensures proper spacing from last batch processing.
      */
-    private void scheduleWindowExpiry(String topic, CustomKafkaListener listener) {
+    private void scheduleWindowExpiry(String topic, DameroKafkaListener listener) {
         int windowLengthMs = listener.batchWindowLength();
         boolean fixedWindow = listener.fixedWindow();
 
@@ -194,7 +194,7 @@ public class BatchOrchestrator {
      * Handle window expiry - invoke callback if there are pending messages.
      * Thread-safe: checks processing flag to prevent double-processing.
      */
-    private void handleWindowExpiry(String topic, CustomKafkaListener listener) {
+    private void handleWindowExpiry(String topic, DameroKafkaListener listener) {
         ReentrantLock lock = topicLocks.computeIfAbsent(topic, k -> new ReentrantLock());
         lock.lock();
         try {
@@ -336,7 +336,7 @@ public class BatchOrchestrator {
      * Check if there are pending messages and schedule a new window for them.
      * Should be called after batch processing completes.
      */
-    public void scheduleNextWindowIfNeeded(String topic, CustomKafkaListener listener) {
+    public void scheduleNextWindowIfNeeded(String topic, DameroKafkaListener listener) {
         ReentrantLock lock = topicLocks.computeIfAbsent(topic, k -> new ReentrantLock());
         lock.lock();
         try {

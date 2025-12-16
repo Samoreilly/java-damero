@@ -1,6 +1,6 @@
 package net.damero.Kafka.BatchOrchestrator;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
 import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
@@ -73,7 +73,7 @@ public class BatchProcessor {
      * @return null (batch processing doesn't return a value)
      */
     public Object processBatch(ProceedingJoinPoint pjp,
-                               CustomKafkaListener listener,
+                               DameroKafkaListener listener,
                                KafkaTemplate<?, ?> kafkaTemplate) throws Throwable {
         String topic = listener.topic();
         long batchStartTime = System.currentTimeMillis();
@@ -179,7 +179,7 @@ public class BatchProcessor {
      * Process a single event within a batch.
      */
     private void processEvent(ProceedingJoinPoint pjp,
-                              CustomKafkaListener listener,
+                              DameroKafkaListener listener,
                               KafkaTemplate<?, ?> kafkaTemplate,
                               Object[] args) throws Throwable {
         long processingStartTime = System.currentTimeMillis();
@@ -275,7 +275,7 @@ public class BatchProcessor {
     /**
      * Handle exception for a batch item - retry or send to DLQ.
      */
-    private void handleBatchItemException(CustomKafkaListener listener,
+    private void handleBatchItemException(DameroKafkaListener listener,
                                           KafkaTemplate<?, ?> kafkaTemplate,
                                           Object originalEvent,
                                           String eventId,

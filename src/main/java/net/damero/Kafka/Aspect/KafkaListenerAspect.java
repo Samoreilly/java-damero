@@ -1,5 +1,6 @@
 package net.damero.Kafka.Aspect;
 
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.Utility.AspectHelperMethods;
 import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
 import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
@@ -9,7 +10,6 @@ import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Tracing.TracingContext;
 import net.damero.Kafka.Tracing.TracingScope;
 import net.damero.Kafka.Aspect.Components.*;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.RetryScheduler.RetrySched;
@@ -93,7 +93,7 @@ public class KafkaListenerAspect {
      * Handle batch window expiry callback from BatchOrchestrator.
      * Called asynchronously when the batch window timer expires.
      */
-    private void handleBatchWindowExpiry(String topic, CustomKafkaListener listener) {
+    private void handleBatchWindowExpiry(String topic, DameroKafkaListener listener) {
         ProceedingJoinPoint pjp = topicJoinPoints.get(topic);
         if (pjp == null) {
             logger.warn("No join point stored for topic: {} - cannot process expired batch", topic);
@@ -115,22 +115,22 @@ public class KafkaListenerAspect {
     }
 
 
-    @Around("@annotation(customKafkaListener)")
-    public Object kafkaListener(ProceedingJoinPoint pjp, CustomKafkaListener customKafkaListener) throws Throwable {
+    @Around("@annotation(dameroKafkaListener)")
+    public Object kafkaListener(ProceedingJoinPoint pjp, DameroKafkaListener dameroKafkaListener) throws Throwable {
 
 
         // BATCH PROCESSING: Collect and defer until capacity reached
         // Window expiry is handled asynchronously via BatchOrchestrator callback
-        if (customKafkaListener.batchCapacity() > 0) {
-            String topic = customKafkaListener.topic();
+        if (dameroKafkaListener.batchCapacity() > 0) {
+            String topic = dameroKafkaListener.topic();
 
             // Store join point for async window expiry callback (only if not already stored)
             topicJoinPoints.putIfAbsent(topic, pjp);
 
-            BatchStatus status = batchOrchestrator.orchestrate(customKafkaListener, topic, pjp.getArgs());
+            BatchStatus status = batchOrchestrator.orchestrate(dameroKafkaListener, topic, pjp.getArgs());
 
             //checks if batch should still collect or capacity reached
-            BatchCheckResult batchCheck = batchUtility.checkBatchStatus(status, context, defaultKafkaTemplate, pjp, customKafkaListener, topicJoinPoints, topic);
+            BatchCheckResult batchCheck = batchUtility.checkBatchStatus(status, context, defaultKafkaTemplate, pjp, dameroKafkaListener, topicJoinPoints, topic);
 
             if(batchCheck.status() == BatchStatus.PROCESSING) {
                 return null;
@@ -140,7 +140,7 @@ public class KafkaListenerAspect {
 
         }
 
-        logger.debug("aspect triggered for topic: {}", customKafkaListener.topic());
+        logger.debug("aspect triggered for topic: {}", dameroKafkaListener.topic());
         long processingStartTime = System.currentTimeMillis();
 
         Acknowledgment acknowledgment = AspectHelperMethods.extractAcknowledgment(pjp.getArgs());
@@ -157,10 +157,10 @@ public class KafkaListenerAspect {
         
         Object event = EventUnwrapper.unwrapEvent(arg0);
 
-        KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(customKafkaListener, context, defaultKafkaTemplate);
+        KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(dameroKafkaListener, context, defaultKafkaTemplate);
 
         if (event == null) {
-            logger.warn("no event found in listener arguments for topic: {}", customKafkaListener.topic());
+            logger.warn("no event found in listener arguments for topic: {}", dameroKafkaListener.topic());
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
             }
@@ -173,7 +173,7 @@ public class KafkaListenerAspect {
         // Start main processing span if tracing is enabled
         TracingSpan processingSpan = null;
         TracingScope scope = null;
-        if (customKafkaListener.openTelemetry()) {
+        if (dameroKafkaListener.openTelemetry()) {
             // Extract parent context from Kafka headers if available
             TracingContext parentContext = consumerRecord != null
                 ? tracingService.extractContext(consumerRecord.headers())
@@ -181,16 +181,16 @@ public class KafkaListenerAspect {
 
             processingSpan = tracingService.startProcessingSpan(
                 "damero.kafka.process",
-                customKafkaListener.topic(),
+                dameroKafkaListener.topic(),
                 eventId
             );
 
             // Add additional attributes
-            processingSpan.setAttribute("damero.retry.enabled", customKafkaListener.retryable());
-            processingSpan.setAttribute("damero.retry.max_attempts", customKafkaListener.maxAttempts());
-            processingSpan.setAttribute("damero.dlq.topic", customKafkaListener.dlqTopic());
-            processingSpan.setAttribute("damero.circuit_breaker.enabled", customKafkaListener.enableCircuitBreaker());
-            processingSpan.setAttribute("damero.deduplication.enabled", customKafkaListener.deDuplication());
+            processingSpan.setAttribute("damero.retry.enabled", dameroKafkaListener.retryable());
+            processingSpan.setAttribute("damero.retry.max_attempts", dameroKafkaListener.maxAttempts());
+            processingSpan.setAttribute("damero.dlq.topic", dameroKafkaListener.dlqTopic());
+            processingSpan.setAttribute("damero.circuit_breaker.enabled", dameroKafkaListener.enableCircuitBreaker());
+            processingSpan.setAttribute("damero.deduplication.enabled", dameroKafkaListener.deDuplication());
 
             // Make this span the current context
             scope = parentContext.with(processingSpan);
@@ -198,26 +198,26 @@ public class KafkaListenerAspect {
 
         try {
         // Check circuit breaker if enabled
-        Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(customKafkaListener);
+        Object circuitBreaker = circuitBreakerWrapper.getCircuitBreaker(dameroKafkaListener);
         
         if (circuitBreaker != null && circuitBreakerWrapper.isOpen(circuitBreaker)) {
-            logger.warn("circuit breaker open for topic: {} - sending directly to dlq", customKafkaListener.topic());
+            logger.warn("circuit breaker open for topic: {} - sending directly to dlq", dameroKafkaListener.topic());
             
             // Add circuit breaker span
-            if (customKafkaListener.openTelemetry()) {
-                TracingSpan cbSpan = tracingService.startCircuitBreakerSpan(customKafkaListener.topic(), "OPEN");
+            if (dameroKafkaListener.openTelemetry()) {
+                TracingSpan cbSpan = tracingService.startCircuitBreakerSpan(dameroKafkaListener.topic(), "OPEN");
                 cbSpan.setAttribute("damero.circuit_breaker.action", "send_to_dlq");
                 cbSpan.setSuccess();
                 cbSpan.end();
             }
 
-            dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, customKafkaListener);
+            dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, dameroKafkaListener);
             
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
             }
 
-            if (customKafkaListener.openTelemetry()) {
+            if (dameroKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.circuit_breaker.open", true);
                 processingSpan.setAttribute("damero.outcome", "dlq_circuit_breaker");
                 processingSpan.setSuccess();
@@ -227,11 +227,11 @@ public class KafkaListenerAspect {
         }
 
         // Check for duplicate BEFORE processing
-        if (customKafkaListener.deDuplication() && duplicationManager.isDuplicate(eventId)) {
+        if (dameroKafkaListener.deDuplication() && duplicationManager.isDuplicate(eventId)) {
             logger.warn("duplicate message detected for eventId: {} - message was ignored", eventId);
 
             // Add deduplication span
-            if (customKafkaListener.openTelemetry()) {
+            if (dameroKafkaListener.openTelemetry()) {
                 TracingSpan dedupSpan = tracingService.startDeduplicationSpan(eventId, true);
                 dedupSpan.setAttribute("damero.deduplication.action", "ignored");
                 dedupSpan.setSuccess();
@@ -256,18 +256,18 @@ public class KafkaListenerAspect {
                 result = pjp.proceed();
             }
 
-            metricsRecorder.recordSuccess(customKafkaListener.topic(), processingStartTime);
+            metricsRecorder.recordSuccess(dameroKafkaListener.topic(), processingStartTime);
 
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
-                logger.debug("message processed successfully and acknowledged for topic: {}", customKafkaListener.topic());
+                logger.debug("message processed successfully and acknowledged for topic: {}", dameroKafkaListener.topic());
             }
 
             // Mark as seen AFTER successful processing to prevent future duplicates
-            if (customKafkaListener.deDuplication()) {
+            if (dameroKafkaListener.deDuplication()) {
                 duplicationManager.markAsSeen(eventId);
 
-                if (customKafkaListener.openTelemetry()) {
+                if (dameroKafkaListener.openTelemetry()) {
                     TracingSpan dedupSpan = tracingService.startDeduplicationSpan(eventId, false);
                     dedupSpan.setAttribute("damero.deduplication.action", "marked_as_seen");
                     dedupSpan.setSuccess();
@@ -279,7 +279,7 @@ public class KafkaListenerAspect {
             retryOrchestrator.clearAttempts(eventId);
             retrySched.clearFibonacciState(event);
 
-            if (customKafkaListener.openTelemetry()) {
+            if (dameroKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.outcome", "success");
                 processingSpan.setSuccess();
             }
@@ -288,15 +288,15 @@ public class KafkaListenerAspect {
 
         } catch (Exception e) {
 
-            if (customKafkaListener.openTelemetry()) {
+            if (dameroKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.exception.type", e.getClass().getSimpleName());
                 processingSpan.setAttribute("damero.exception.message", e.getMessage());
             }
 
-            if(!customKafkaListener.retryable()){
-                logger.info("retryable is false for topic: {} - sending directly to dlq", customKafkaListener.topic());
+            if(!dameroKafkaListener.retryable()){
+                logger.info("retryable is false for topic: {} - sending directly to dlq", dameroKafkaListener.topic());
 
-                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
+                metricsRecorder.recordFailure(dameroKafkaListener.topic(), e, 1, processingStartTime);
 
                 dlqRouter.sendToDLQAfterMaxAttempts(
                         kafkaTemplate,
@@ -304,10 +304,10 @@ public class KafkaListenerAspect {
                         e,
                         1,
                         existingMetadata,
-                        customKafkaListener
+                        dameroKafkaListener
                 );
 
-                if (customKafkaListener.openTelemetry()) {
+                if (dameroKafkaListener.openTelemetry()) {
                     processingSpan.setAttribute("damero.outcome", "dlq_non_retryable");
                     processingSpan.recordException(e);
                 }
@@ -317,27 +317,27 @@ public class KafkaListenerAspect {
             }
 
             logger.debug("exception caught during processing for topic: {}: {}",
-                customKafkaListener.topic(), e.getMessage());
+                dameroKafkaListener.topic(), e.getMessage());
             
             if (acknowledgment != null) {
                 acknowledgment.acknowledge();
-                logger.debug("acknowledged message after exception for topic: {}", customKafkaListener.topic());
+                logger.debug("acknowledged message after exception for topic: {}", dameroKafkaListener.topic());
             }
 
             /*
              * Check for conditional DLQ routing with skipRetry=true
              * If match found and skipRetry=true, send to DLQ immediately without retry
              */
-            if(customKafkaListener.dlqRoutes().length > 0){
+            if(dameroKafkaListener.dlqRoutes().length > 0){
 
                 boolean routedToDLQ = dlqExceptionRoutingManager.routeToDLQIfSkipRetry(
-                    customKafkaListener, kafkaTemplate, originalEvent, e, existingMetadata);
+                        dameroKafkaListener, kafkaTemplate, originalEvent, e, existingMetadata);
 
                 if(routedToDLQ) {
                     // Message sent to conditional DLQ, stop processing
-                    metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
+                    metricsRecorder.recordFailure(dameroKafkaListener.topic(), e, 1, processingStartTime);
 
-                    if (customKafkaListener.openTelemetry()) {
+                    if (dameroKafkaListener.openTelemetry()) {
                         processingSpan.setAttribute("damero.outcome", "dlq_conditional_skip_retry");
                         processingSpan.recordException(e);
                     }
@@ -353,11 +353,11 @@ public class KafkaListenerAspect {
              *  This does not retry events with these exceptions
              */
 
-            if (AspectHelperMethods.isNonRetryableException(e, customKafkaListener)) {
+            if (AspectHelperMethods.isNonRetryableException(e, dameroKafkaListener)) {
                 logger.info("exception {} is non-retryable for topic: {} - sending directly to dlq", 
-                    e.getClass().getSimpleName(), customKafkaListener.topic());
+                    e.getClass().getSimpleName(), dameroKafkaListener.topic());
                 
-                metricsRecorder.recordFailure(customKafkaListener.topic(), e, 1, processingStartTime);
+                metricsRecorder.recordFailure(dameroKafkaListener.topic(), e, 1, processingStartTime);
                 
                 dlqRouter.sendToDLQAfterMaxAttempts(
                     kafkaTemplate,
@@ -365,10 +365,10 @@ public class KafkaListenerAspect {
                     e,
                     1,
                     existingMetadata,
-                    customKafkaListener
+                        dameroKafkaListener
                 );
                 
-                if (customKafkaListener.openTelemetry()) {
+                if (dameroKafkaListener.openTelemetry()) {
                     processingSpan.setAttribute("damero.outcome", "dlq_non_retryable_exception");
                     processingSpan.setAttribute("damero.non_retryable", true);
                     processingSpan.recordException(e);
@@ -380,18 +380,18 @@ public class KafkaListenerAspect {
 
             //increment by event id to track events across retries
             int currentAttempts = retryOrchestrator.incrementAttempts(eventId);
-            metricsRecorder.recordFailure(customKafkaListener.topic(), e, currentAttempts, processingStartTime);
+            metricsRecorder.recordFailure(dameroKafkaListener.topic(), e, currentAttempts, processingStartTime);
 
-            if (retryOrchestrator.hasReachedMaxAttempts(eventId, customKafkaListener.maxAttempts())) {
+            if (retryOrchestrator.hasReachedMaxAttempts(eventId, dameroKafkaListener.maxAttempts())) {
                 logger.info("max attempts reached ({}) for event in topic: {}",
-                    currentAttempts, customKafkaListener.topic());
+                    currentAttempts, dameroKafkaListener.topic());
 
                 // Check for conditional DLQ routing (skipRetry=false routes)
-                if(customKafkaListener.dlqRoutes().length > 0) {
+                if(dameroKafkaListener.dlqRoutes().length > 0) {
                     // This method handles routing to conditional DLQ or default DLQ as fallback
                     // It also clears attempts internally
                     dlqExceptionRoutingManager.routeToDLQAfterMaxAttempts(
-                        customKafkaListener, kafkaTemplate, originalEvent, e, eventId, currentAttempts, existingMetadata);
+                            dameroKafkaListener, kafkaTemplate, originalEvent, e, eventId, currentAttempts, existingMetadata);
                 } else {
                     // No conditional routing, send to default DLQ
                     dlqRouter.sendToDLQAfterMaxAttempts(
@@ -400,12 +400,12 @@ public class KafkaListenerAspect {
                         e,
                         currentAttempts,
                         existingMetadata,
-                        customKafkaListener
+                            dameroKafkaListener
                     );
                     retryOrchestrator.clearAttempts(eventId);
                 }
 
-                if (customKafkaListener.openTelemetry()) {
+                if (dameroKafkaListener.openTelemetry()) {
                     processingSpan.setAttribute("damero.outcome", "dlq_max_attempts");
                     processingSpan.setAttribute("damero.retry.exhausted", true);
                     processingSpan.recordException(e);
@@ -415,9 +415,9 @@ public class KafkaListenerAspect {
             }
 
             // Schedule retry with existing metadata from headers
-            retryOrchestrator.scheduleRetry(customKafkaListener, originalEvent, e, currentAttempts, existingMetadata, kafkaTemplate);
+            retryOrchestrator.scheduleRetry(dameroKafkaListener, originalEvent, e, currentAttempts, existingMetadata, kafkaTemplate);
 
-            if (customKafkaListener.openTelemetry()) {
+            if (dameroKafkaListener.openTelemetry()) {
                 processingSpan.setAttribute("damero.outcome", "retry_scheduled");
                 processingSpan.setAttribute("damero.retry.current_attempt", currentAttempts);
                 processingSpan.recordException(e);
@@ -427,7 +427,7 @@ public class KafkaListenerAspect {
         }
         } finally {
             // Close the span and scope
-            if (customKafkaListener.openTelemetry() && processingSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && processingSpan != null) {
                 processingSpan.end();
                 if (scope != null) {
                     scope.close();

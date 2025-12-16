@@ -1,7 +1,6 @@
 package net.damero;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Config.CustomKafkaAutoConfiguration;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.CustomObject.EventWrapper;

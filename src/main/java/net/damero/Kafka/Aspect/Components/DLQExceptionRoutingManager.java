@@ -1,9 +1,9 @@
 package net.damero.Kafka.Aspect.Components;
 
 
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
 import net.damero.Kafka.Tracing.TracingSpan;
-import net.damero.Kafka.Annotations.CustomKafkaListener;
 import net.damero.Kafka.Annotations.DlqExceptionRoutes;
 import net.damero.Kafka.CustomObject.EventMetadata;
 import net.damero.Kafka.Tracing.TracingService;
@@ -39,13 +39,13 @@ public class DLQExceptionRoutingManager {
      *
      * @return true if message was routed to DLQ (skipRetry=true), false if should retry
      */
-    public boolean routeToDLQIfSkipRetry(CustomKafkaListener customKafkaListener,
+    public boolean routeToDLQIfSkipRetry(DameroKafkaListener dameroKafkaListener,
                                          KafkaTemplate<?, ?> kafkaTemplate,
                                          Object originalEvent,
                                          Exception e,
                                          EventMetadata existingMetadata){
 
-        DlqExceptionRoutes matchedRoute = findMatchingRoute(customKafkaListener, e);
+        DlqExceptionRoutes matchedRoute = findMatchingRoute(dameroKafkaListener, e);
 
         if(matchedRoute != null && matchedRoute.skipRetry()){
 
@@ -55,10 +55,10 @@ public class DLQExceptionRoutingManager {
                 e.getClass().getSimpleName(), dlqTopic);
 
             TracingSpan routingSpan = null;
-            if (customKafkaListener.openTelemetry()) {
+            if (dameroKafkaListener.openTelemetry()) {
                 String eventId = EventUnwrapper.extractEventId(originalEvent);
                 routingSpan = tracingService.startDLQSpan(
-                    customKafkaListener.topic(),
+                    dameroKafkaListener.topic(),
                     dlqTopic,
                     eventId,
                     1,
@@ -76,21 +76,21 @@ public class DLQExceptionRoutingManager {
                         1,  // First attempt, no retries
                         existingMetadata,
                         dlqTopic,
-                        customKafkaListener
+                        dameroKafkaListener
                 );
 
-                if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                if (dameroKafkaListener.openTelemetry() && routingSpan != null) {
                     routingSpan.setSuccess();
                 }
 
                 return true;  // Message handled, stop processing
             } catch (Exception routingException) {
-                if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                if (dameroKafkaListener.openTelemetry() && routingSpan != null) {
                     routingSpan.recordException(routingException);
                 }
                 throw routingException;
             } finally {
-                if (customKafkaListener.openTelemetry() && routingSpan != null) {
+                if (dameroKafkaListener.openTelemetry() && routingSpan != null) {
                     routingSpan.end();
                 }
             }
@@ -103,7 +103,7 @@ public class DLQExceptionRoutingManager {
      * Routes exception to conditional DLQ after max retry attempts.
      * If no matching route found, falls back to default DLQ.
      */
-    public void routeToDLQAfterMaxAttempts(CustomKafkaListener customKafkaListener,
+    public void routeToDLQAfterMaxAttempts(DameroKafkaListener dameroKafkaListener,
                                            KafkaTemplate<?, ?> kafkaTemplate,
                                            Object originalEvent,
                                            Exception e,
@@ -111,7 +111,7 @@ public class DLQExceptionRoutingManager {
                                            int currentAttempts,
                                            EventMetadata existingMetadata){
 
-        DlqExceptionRoutes matchedRoute = findMatchingRoute(customKafkaListener, e);
+        DlqExceptionRoutes matchedRoute = findMatchingRoute(dameroKafkaListener, e);
         String targetDlq;
         boolean isConditionalRoute = false;
 
@@ -122,14 +122,14 @@ public class DLQExceptionRoutingManager {
             logger.info("Routing to conditional DLQ '{}' after {} attempts", targetDlq, currentAttempts);
         } else {
             // Fallback to default DLQ
-            targetDlq = customKafkaListener.dlqTopic();
+            targetDlq = dameroKafkaListener.dlqTopic();
             logger.info("Routing to default DLQ '{}' after {} attempts", targetDlq, currentAttempts);
         }
 
         TracingSpan routingSpan = null;
-        if (customKafkaListener.openTelemetry()) {
+        if (dameroKafkaListener.openTelemetry()) {
             routingSpan = tracingService.startDLQSpan(
-                customKafkaListener.topic(),
+                dameroKafkaListener.topic(),
                 targetDlq,
                 eventId,
                 currentAttempts,
@@ -147,21 +147,21 @@ public class DLQExceptionRoutingManager {
                     currentAttempts,
                     existingMetadata,
                     targetDlq,
-                    customKafkaListener
+                    dameroKafkaListener
             );
 
             retryOrchestrator.clearAttempts(eventId);
 
-            if (customKafkaListener.openTelemetry() && routingSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && routingSpan != null) {
                 routingSpan.setSuccess();
             }
         } catch (Exception routingException) {
-            if (customKafkaListener.openTelemetry() && routingSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && routingSpan != null) {
                 routingSpan.recordException(routingException);
             }
             throw routingException;
         } finally {
-            if (customKafkaListener.openTelemetry() && routingSpan != null) {
+            if (dameroKafkaListener.openTelemetry() && routingSpan != null) {
                 routingSpan.end();
             }
         }
@@ -173,8 +173,8 @@ public class DLQExceptionRoutingManager {
      *
      * @return matched route or null if no match found
      */
-    private DlqExceptionRoutes findMatchingRoute(CustomKafkaListener customKafkaListener, Exception e) {
-        DlqExceptionRoutes[] routes = customKafkaListener.dlqRoutes();
+    private DlqExceptionRoutes findMatchingRoute(DameroKafkaListener dameroKafkaListener, Exception e) {
+        DlqExceptionRoutes[] routes = dameroKafkaListener.dlqRoutes();
 
         if(routes == null || routes.length == 0) {
             return null;

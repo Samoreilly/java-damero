@@ -1,6 +1,6 @@
 package net.damero;
 
-import net.damero.Kafka.Annotations.CustomKafkaListener;
+import net.damero.Kafka.Annotations.DameroKafkaListener;
 import net.damero.Kafka.Annotations.DlqExceptionRoutes;
 import net.damero.Kafka.Aspect.Components.DLQExceptionRoutingManager;
 import net.damero.Kafka.Aspect.Components.DLQRouter;
@@ -34,7 +34,7 @@ class DLQExceptionRoutingManagerTest {
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     @Mock
-    private CustomKafkaListener customKafkaListener;
+    private DameroKafkaListener dameroKafkaListener;
 
     @Mock
     private DlqExceptionRoutes route1;
@@ -51,11 +51,11 @@ class DLQExceptionRoutingManagerTest {
         manager = new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator, tracingService);
 
         // Setup common listener mocks
-        lenient().when(customKafkaListener.topic()).thenReturn("test-topic");
-        lenient().when(customKafkaListener.dlqTopic()).thenReturn("default-dlq");
-        lenient().when(customKafkaListener.delay()).thenReturn(1000.0);
-        lenient().when(customKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
-        lenient().when(customKafkaListener.maxAttempts()).thenReturn(3);
+        lenient().when(dameroKafkaListener.topic()).thenReturn("test-topic");
+        lenient().when(dameroKafkaListener.dlqTopic()).thenReturn("default-dlq");
+        lenient().when(dameroKafkaListener.delay()).thenReturn(1000.0);
+        lenient().when(dameroKafkaListener.delayMethod()).thenReturn(DelayMethod.EXPO);
+        lenient().when(dameroKafkaListener.maxAttempts()).thenReturn(3);
     }
 
     @Test
@@ -69,11 +69,11 @@ class DLQExceptionRoutingManagerTest {
         when(route1.dlqExceptionTopic()).thenReturn("validation-dlq");
         when(route1.skipRetry()).thenReturn(true);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, existingMetadata);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, existingMetadata);
 
         // Then
         assertTrue(result, "Should return true when skipRetry=true");
@@ -85,7 +85,7 @@ class DLQExceptionRoutingManagerTest {
             eq(1),
             eq(existingMetadata),
             eq("validation-dlq"),
-            eq(customKafkaListener)
+            eq(dameroKafkaListener)
         );
     }
 
@@ -99,11 +99,11 @@ class DLQExceptionRoutingManagerTest {
         when(route1.dlqExceptionTopic()).thenReturn("timeout-dlq");
         when(route1.skipRetry()).thenReturn(false);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then
         assertFalse(result, "Should return false when skipRetry=false");
@@ -122,11 +122,11 @@ class DLQExceptionRoutingManagerTest {
         lenient().when(route1.dlqExceptionTopic()).thenReturn("validation-dlq");
         lenient().when(route1.skipRetry()).thenReturn(true);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then
         assertFalse(result, "Should return false when no route matches");
@@ -140,11 +140,11 @@ class DLQExceptionRoutingManagerTest {
         RuntimeException exception = new RuntimeException("Error");
         String originalEvent = "test-event";
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then
         assertFalse(result, "Should return false when no routes configured");
@@ -162,11 +162,11 @@ class DLQExceptionRoutingManagerTest {
         when(route1.dlqExceptionTopic()).thenReturn("error-dlq");
         when(route1.skipRetry()).thenReturn(true);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then
         assertTrue(result, "Should match parent exception class");
@@ -188,11 +188,11 @@ class DLQExceptionRoutingManagerTest {
         when(route1.dlqExceptionTopic()).thenReturn("timeout-dlq");
         when(route1.skipRetry()).thenReturn(false);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         manager.routeToDLQAfterMaxAttempts(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, eventId, currentAttempts, metadata);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, eventId, currentAttempts, metadata);
 
         // Then
         verify(dlqRouter).sendToDLQAfterMaxAttempts(
@@ -202,7 +202,7 @@ class DLQExceptionRoutingManagerTest {
             eq(currentAttempts),
             eq(metadata),
             eq("timeout-dlq"),  // Should use conditional DLQ
-            eq(customKafkaListener)
+            eq(dameroKafkaListener)
         );
 
         verify(retryOrchestrator).clearAttempts(eventId);
@@ -220,11 +220,11 @@ class DLQExceptionRoutingManagerTest {
         lenient().when(route1.dlqExceptionTopic()).thenReturn("validation-dlq");
         lenient().when(route1.skipRetry()).thenReturn(false);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         manager.routeToDLQAfterMaxAttempts(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, eventId, currentAttempts, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, eventId, currentAttempts, null);
 
         // Then - should fallback to default DLQ
         verify(dlqRouter).sendToDLQAfterMaxAttempts(
@@ -234,7 +234,7 @@ class DLQExceptionRoutingManagerTest {
             eq(currentAttempts),
             isNull(),
             eq("default-dlq"),  // Should use default DLQ
-            eq(customKafkaListener)
+            eq(dameroKafkaListener)
         );
 
         verify(retryOrchestrator).clearAttempts(eventId);
@@ -252,11 +252,11 @@ class DLQExceptionRoutingManagerTest {
         when(route1.dlqExceptionTopic()).thenReturn("validation-dlq");
         when(route1.skipRetry()).thenReturn(true);  // This route should be skipped
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         manager.routeToDLQAfterMaxAttempts(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, eventId, currentAttempts, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, eventId, currentAttempts, null);
 
         // Then - should fallback to default DLQ (skipRetry=true routes only apply in routeToDLQIfSkipRetry)
         verify(dlqRouter).sendToDLQAfterMaxAttempts(
@@ -283,11 +283,11 @@ class DLQExceptionRoutingManagerTest {
         lenient().when(route2.dlqExceptionTopic()).thenReturn("second-dlq");
         lenient().when(route2.skipRetry()).thenReturn(false);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1, route2});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1, route2});
 
         // When
         manager.routeToDLQAfterMaxAttempts(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, eventId, 3, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, eventId, 3, null);
 
         // Then - should use first matching route
         verify(dlqRouter).sendToDLQAfterMaxAttempts(
@@ -304,11 +304,11 @@ class DLQExceptionRoutingManagerTest {
         when(route1.dlqExceptionTopic()).thenReturn("");  // Empty topic
         lenient().when(route1.skipRetry()).thenReturn(true);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then - should skip invalid route
         assertFalse(result, "Should return false for route with empty DLQ topic");
@@ -326,11 +326,11 @@ class DLQExceptionRoutingManagerTest {
         lenient().when(route1.dlqExceptionTopic()).thenReturn("validation-dlq");
         lenient().when(route1.skipRetry()).thenReturn(true);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then - should skip invalid route
         assertFalse(result, "Should return false for route with null exception class");
@@ -352,11 +352,11 @@ class DLQExceptionRoutingManagerTest {
         when(route2.dlqExceptionTopic()).thenReturn("validation-dlq");
         when(route2.skipRetry()).thenReturn(true);
 
-        when(customKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1, route2});
+        when(dameroKafkaListener.dlqRoutes()).thenReturn(new DlqExceptionRoutes[]{route1, route2});
 
         // When
         boolean result = manager.routeToDLQIfSkipRetry(
-            customKafkaListener, kafkaTemplate, originalEvent, exception, null);
+                dameroKafkaListener, kafkaTemplate, originalEvent, exception, null);
 
         // Then
         assertTrue(result);
