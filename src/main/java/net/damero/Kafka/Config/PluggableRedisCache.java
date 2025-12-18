@@ -9,9 +9,11 @@ import org.springframework.lang.Nullable;
 import java.time.Duration;
 
 /**
- * Cache implementation that uses Redis when available and falls back to Caffeine.
+ * Cache implementation that uses Redis when available and falls back to
+ * Caffeine.
  *
- * CRITICAL WARNING: In multi-instance deployments, if Redis fails and strictMode=false,
+ * CRITICAL WARNING: In multi-instance deployments, if Redis fails and
+ * strictMode=false,
  * different instances will use separate Caffeine caches causing:
  * - Duplicate message processing (deduplication breaks)
  * - Incorrect retry counts (each instance tracks separately)
@@ -30,10 +32,9 @@ public class PluggableRedisCache {
     private final String cacheKeyPrefix = "internal_cache:";
     private final boolean strictMode;
 
-    private static final String STRICT_MODE_ERROR =
-        "Redis is unavailable and strict mode is enabled. " +
-        "This prevents split-brain scenarios in multi-instance deployments. " +
-        "Set damero.cache.strict-mode=false to allow degradation to Caffeine (NOT recommended for production).";
+    private static final String STRICT_MODE_ERROR = "Redis is unavailable and strict mode is enabled. " +
+            "This prevents split-brain scenarios in multi-instance deployments. " +
+            "Set damero.cache.strict-mode=false to allow degradation to Caffeine (NOT recommended for production).";
 
     // ==================== Constructors ====================
 
@@ -41,9 +42,9 @@ public class PluggableRedisCache {
      * Primary constructor with all options.
      */
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate,
-                              CaffeineCache caffeineCache,
-                              @Nullable RedisHealthCheck healthCheck,
-                              boolean strictMode) {
+            CaffeineCache caffeineCache,
+            @Nullable RedisHealthCheck healthCheck,
+            boolean strictMode) {
         this.redisTemplate = redisTemplate;
         this.caffeineCache = caffeineCache;
         this.healthCheck = healthCheck;
@@ -53,8 +54,10 @@ public class PluggableRedisCache {
             logger.info("=== PluggableRedisCache initialized with Redis + Caffeine failover (STRICT MODE ENABLED) ===");
             logger.info("=== Redis failures will throw exceptions to prevent split-brain scenarios ===");
         } else {
-            logger.warn("=== PluggableRedisCache initialized with Redis + Caffeine failover (STRICT MODE DISABLED) ===");
-            logger.warn("=== WARNING: Redis failures will silently degrade to Caffeine - this can cause data inconsistency ===");
+            logger.warn(
+                    "=== PluggableRedisCache initialized with Redis + Caffeine failover (STRICT MODE DISABLED) ===");
+            logger.warn(
+                    "=== WARNING: Redis failures will silently degrade to Caffeine - this can cause data inconsistency ===");
         }
     }
 
@@ -62,8 +65,8 @@ public class PluggableRedisCache {
      * Constructor with Redis + Caffeine, strict mode enabled by default.
      */
     public PluggableRedisCache(RedisTemplate<String, Object> redisTemplate,
-                              CaffeineCache caffeineCache,
-                              @Nullable RedisHealthCheck healthCheck) {
+            CaffeineCache caffeineCache,
+            @Nullable RedisHealthCheck healthCheck) {
         this(redisTemplate, caffeineCache, healthCheck, true);
     }
 
@@ -351,7 +354,7 @@ public class PluggableRedisCache {
      * Gets the next Fibonacci delay value for an event and advances the state.
      * This is atomic across distributed instances when using Redis.
      *
-     * @param eventId the event identifier
+     * @param eventId        the event identifier
      * @param fibonacciLimit the maximum fibonacci sequence index
      * @return the next fibonacci delay value in the sequence
      */
@@ -401,8 +404,10 @@ public class PluggableRedisCache {
      * Uses iterative approach to avoid stack overflow for large indices.
      */
     private long calculateFibonacci(int index) {
-        if (index <= 0) return 0;
-        if (index == 1) return 1;
+        if (index <= 0)
+            return 0;
+        if (index == 1)
+            return 1;
 
         long prev = 0;
         long curr = 1;
@@ -421,11 +426,12 @@ public class PluggableRedisCache {
      * @param eventId the event identifier
      */
     public void clearFibonacciState(String eventId) {
-        if (eventId == null) return;
+        if (eventId == null)
+            return;
 
         String key = FIBONACCI_PREFIX + eventId;
         remove(key);
-        logger.debug("Cleared fibonacci state for event: {}", eventId);
+        // logger.debug("Cleared fibonacci state for event: {}", eventId);
     }
 
     // ==================== Error Handling ====================
@@ -456,4 +462,3 @@ public class PluggableRedisCache {
         }
     }
 }
-

@@ -25,41 +25,44 @@ import java.time.Duration;
  *
  * setup instructions:
  * 1. add to application.properties:
- *    otel.tracing.enabled=true
- *    otel.service.name=your-service-name
- *    otel.exporter.otlp.endpoint=http://localhost:4317
- *    otel.traces.sampler.ratio=0.1  (sample 10% in production, 1.0 for dev)
+ * otel.tracing.enabled=true
+ * otel.service.name=your-service-name
+ * otel.exporter.otlp.endpoint=http://localhost:4317
+ * otel.traces.sampler.ratio=0.1 (sample 10% in production, 1.0 for dev)
  *
  * 2. start jaeger locally (for development):
- *    docker run -d --name jaeger -e COLLECTOR_OTLP_ENABLED=true -p 16686:16686 -p 4317:4317 jaegertracing/all-in-one:latest
+ * docker run -d --name jaeger -e COLLECTOR_OTLP_ENABLED=true -p 16686:16686 -p
+ * 4317:4317 jaegertracing/all-in-one:latest
  *
  * 3. verify dependencies in pom.xml:
- *    - opentelemetry-sdk
- *    - opentelemetry-exporter-otlp
- *    - opentelemetry-semconv
+ * - opentelemetry-sdk
+ * - opentelemetry-exporter-otlp
+ * - opentelemetry-semconv
  *
  * 4. enable tracing in kafka listeners:
- *    @CustomKafkaListener(topic = "my-topic", openTelemetry = true)
+ * 
+ * @CustomKafkaListener(topic = "my-topic", openTelemetry = true)
  *
- * 5. view traces at http://localhost:16686 (jaeger) or your configured backend
+ *                            5. view traces at http://localhost:16686 (jaeger)
+ *                            or your configured backend
  *
- * production notes:
- * - set otel.traces.sampler.ratio to low value like 0.01 (1%) or 0.1 (10%)
- * - use environment-specific endpoints via spring profiles
- * - consider using spring cloud sleuth for automatic instrumentation
- * - monitor exporter health and handle failures gracefully
+ *                            production notes:
+ *                            - set otel.traces.sampler.ratio to low value like
+ *                            0.01 (1%) or 0.1 (10%)
+ *                            - use environment-specific endpoints via spring
+ *                            profiles
+ *                            - consider using spring cloud sleuth for automatic
+ *                            instrumentation
+ *                            - monitor exporter health and handle failures
+ *                            gracefully
  */
 @Configuration
-@ConditionalOnProperty(
-    name = "otel.tracing.enabled",
-    havingValue = "true",
-    matchIfMissing = false
-)
+@ConditionalOnProperty(name = "otel.tracing.enabled", havingValue = "true", matchIfMissing = false)
 public class OpenTelemetryConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(OpenTelemetryConfig.class);
 
-    //port 4317 is where traces are sent by default
+    // port 4317 is where traces are sent by default
     @Value("${otel.exporter.otlp.endpoint:http://localhost:4317}")
     private String otlpEndpoint;
 
@@ -81,22 +84,21 @@ public class OpenTelemetryConfig {
     @Bean
     public OpenTelemetry openTelemetry() {
         logger.info("initializing opentelemetry - endpoint: {}, service: {}, environment: {}, sampling: {}%",
-            otlpEndpoint, serviceName, deploymentEnvironment, samplerRatio * 100);
+                otlpEndpoint, serviceName, deploymentEnvironment, samplerRatio * 100);
 
         try {
             // define resource attributes to identify your service in traces
             Resource resource = Resource.getDefault()
-                .merge(Resource.create(Attributes.of(
-                    ResourceAttributes.SERVICE_NAME, serviceName,
-                    ResourceAttributes.SERVICE_VERSION, serviceVersion,
-                    ResourceAttributes.DEPLOYMENT_ENVIRONMENT, deploymentEnvironment
-                )));
+                    .merge(Resource.create(Attributes.of(
+                            ResourceAttributes.SERVICE_NAME, serviceName,
+                            ResourceAttributes.SERVICE_VERSION, serviceVersion,
+                            ResourceAttributes.DEPLOYMENT_ENVIRONMENT, deploymentEnvironment)));
 
             // configure otlp exporter with timeout and error handling
             OtlpGrpcSpanExporter spanExporter = OtlpGrpcSpanExporter.builder()
-                .setEndpoint(otlpEndpoint)
-                .setTimeout(Duration.ofMillis(exporterTimeoutMs))
-                .build();
+                    .setEndpoint(otlpEndpoint)
+                    .setTimeout(Duration.ofMillis(exporterTimeoutMs))
+                    .build();
 
             // configure sampling for production efficiency
             // ratio of 1.0 = 100% (development), 0.1 = 10%, 0.01 = 1% (production)
@@ -105,24 +107,23 @@ public class OpenTelemetryConfig {
             // configure tracer provider with batch processing for efficiency
             // increased limits for high-throughput scenarios (50k+ messages)
             SdkTracerProvider sdkTracerProvider = SdkTracerProvider.builder()
-                .setSampler(sampler)
-                .addSpanProcessor(BatchSpanProcessor.builder(spanExporter)
-                    .setMaxExportBatchSize(2048)      // increased from 512 for high throughput
-                    .setMaxQueueSize(65536)           // increased from 2048 to prevent span drops
-                    .setExporterTimeout(Duration.ofMillis(exporterTimeoutMs))
-                    .setScheduleDelay(Duration.ofMillis(1000))  // reduced from 5000ms for faster export
-                    .build())
-                .setResource(resource)
-                .build();
+                    .setSampler(sampler)
+                    .addSpanProcessor(BatchSpanProcessor.builder(spanExporter)
+                            .setMaxExportBatchSize(512) // restore to 512 to avoid gRPC message size limits
+                            .setMaxQueueSize(65536) // keep high to prevent drops during bursts
+                            .setExporterTimeout(Duration.ofMillis(exporterTimeoutMs))
+                            .setScheduleDelay(Duration.ofMillis(100)) // export frequently
+                            .build())
+                    .setResource(resource)
+                    .build();
 
             // build and register global opentelemetry instance
             // the damero library automatically uses this via GlobalOpenTelemetry
             OpenTelemetry openTelemetry = OpenTelemetrySdk.builder()
-                .setTracerProvider(sdkTracerProvider)
-                .setPropagators(ContextPropagators.create(
-                    W3CTraceContextPropagator.getInstance()
-                ))
-                .buildAndRegisterGlobal();
+                    .setTracerProvider(sdkTracerProvider)
+                    .setPropagators(ContextPropagators.create(
+                            W3CTraceContextPropagator.getInstance()))
+                    .buildAndRegisterGlobal();
 
             // ensure proper shutdown to flush remaining spans
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -147,4 +148,3 @@ public class OpenTelemetryConfig {
         }
     }
 }
-

@@ -8,7 +8,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 
-
 /*
     METHODS USED BY KafkaListenerAspect
  */
@@ -17,8 +16,8 @@ public class AspectHelperMethods {
 
     private static final Logger logger = org.slf4j.LoggerFactory.getLogger(AspectHelperMethods.class);
 
-
-    public KafkaTemplate<?, ?> resolveKafkaTemplate(DameroKafkaListener dameroKafkaListener, ApplicationContext context, KafkaTemplate<?, ?> defaultKafkaTemplate) {
+    public KafkaTemplate<?, ?> resolveKafkaTemplate(DameroKafkaListener dameroKafkaListener, ApplicationContext context,
+            KafkaTemplate<?, ?> defaultKafkaTemplate) {
         Class<?> templateClass = dameroKafkaListener.kafkaTemplate();
 
         if (templateClass.equals(void.class)) {
@@ -44,26 +43,40 @@ public class AspectHelperMethods {
     }
 
     /**
-     * Extracts ConsumerRecord from method arguments if present.
+     * Extracts ConsumerRecord from method arguments if present by scanning all
+     * arguments.
      *
-     * @param arg the first argument from the join point
+     * @param args the arguments from the join point
+     * @return ConsumerRecord if present, null otherwise
+     */
+    /**
+     * Extracts ConsumerRecord from method arguments if present by scanning all
+     * arguments. Falls back to KafkaUtils.getConsumerRecord() if not in arguments.
+     *
+     * @param args the arguments from the join point
      * @return ConsumerRecord if present, null otherwise
      */
     @SuppressWarnings("unchecked")
-    public ConsumerRecord<?, ?> extractConsumerRecord(Object arg) {
-        if (arg instanceof ConsumerRecord<?, ?>) {
-            return (ConsumerRecord<?, ?>) arg;
+    public ConsumerRecord<?, ?> extractConsumerRecord(Object[] args) {
+        if (args != null) {
+            for (Object arg : args) {
+                if (arg instanceof ConsumerRecord<?, ?>) {
+                    return (ConsumerRecord<?, ?>) arg;
+                }
+            }
         }
         return null;
     }
 
     /**
-     * Checks if an exception is non-retryable based on the configured nonRetryableExceptions.
+     * Checks if an exception is non-retryable based on the configured
+     * nonRetryableExceptions.
      * If nonRetryableExceptions is empty, all exceptions are retryable.
      *
-     * @param exception the exception to check
+     * @param exception           the exception to check
      * @param dameroKafkaListener the listener configuration
-     * @return true if the exception is non-retryable (should go to DLQ), false if it should be retried
+     * @return true if the exception is non-retryable (should go to DLQ), false if
+     *         it should be retried
      */
 
     public boolean isNonRetryableException(Exception exception, DameroKafkaListener dameroKafkaListener) {

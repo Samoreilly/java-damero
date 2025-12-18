@@ -8,25 +8,37 @@
 		<version>3.5.7</version>
 		<relativePath/>
 	</parent>
-	<groupId>java.damero</groupId>
-	<artifactId>kafka-damero</artifactId>
-	<version>0.1.0-SNAPSHOT</version>
+	<groupId>io.github.samoreilly</groupId>
+	<artifactId>java-damero</artifactId>
+	<version>1.0.1</version>
 	<packaging>jar</packaging>
-	<name>kafka-damero</name>
-	<description>Spring Boot library for Kafka retry logic, dead letter queue handling, circuit breaker support, and metrics tracking</description>
-	<url/>
+	<name>java-damero</name>
+	<description>Spring Boot library for Kafka retry logic, retries, batch processing, dead letter queue handling, circuit breaker support, tracing with OpenTelemetry and api for metrics</description>
+	<url>https://github.com/Samoreilly/java-damero</url>
+
 	<licenses>
-		<license/>
+		<license>
+			<name>MIT License</name>
+			<url>https://opensource.org/licenses/MIT</url>
+			<distribution>repo</distribution>
+		</license>
 	</licenses>
+
+
 	<developers>
-		<developer/>
+		<developer>
+			<id>samoreilly</id>
+			<name>Sam O'Reilly</name>
+			<email>samore123ash@gmail.com</email>
+		</developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:git://github.com/Samoreilly/java-damero.git</connection>
+		<developerConnection>scm:git:ssh://github.com/Samoreilly/java-damero.git</developerConnection>
+		<url>https://github.com/Samoreilly/java-damero</url>
+		<tag>HEAD</tag>
 	</scm>
+
 	<properties>
 		<java.version>21</java.version>
 	</properties>
@@ -130,6 +142,7 @@
 
 	<build>
 		<plugins>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -160,6 +173,93 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>repackage</id>
+						<phase>none</phase>
+					</execution>
+				</executions>
+				<configuration>
+					<skip>true</skip>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.sonatype.central</groupId>
+				<artifactId>central-publishing-maven-plugin</artifactId>
+				<version>0.9.0</version> <!-- latest as of now -->
+				<extensions>true</extensions>
+				<configuration>
+					<serverId>central</serverId> <!-- matches your settings.xml server id -->
+					<autoPublishSnapshots>true</autoPublishSnapshots>
+				</configuration>
+			</plugin>
+
+			<!-- Generate Sources JAR -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>3.4.0</version>
+				<executions>
+					<execution>
+						<id>attach-sources</id>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Generate Javadoc JAR -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>3.4.0</version>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- GPG Sign Artifacts -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-gpg-plugin</artifactId>
+				<version>3.0.1</version>
+				<executions>
+					<execution>
+						<id>sign-artifacts</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>sign</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

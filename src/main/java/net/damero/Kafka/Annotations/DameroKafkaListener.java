@@ -11,21 +11,8 @@ import java.lang.annotation.Target;
  * Annotation to enhance Kafka listeners with automatic retry logic, DLQ routing,
  * circuit breaker support, deduplication, and distributed tracing.
  *
- * <p>Must be used alongside Spring's {@code @KafkaListener} annotation.</p>
+ * Must be used alongside Spring's {@code @KafkaListener} annotation.
  *
- * <p>Example usage:</p>
- * <pre>
- * &#64;CustomKafkaListener(
- *     topic = "orders",
- *     dlqTopic = "orders-dlq",
- *     maxAttempts = 3,
- *     delay = 1000,
- *     delayMethod = DelayMethod.EXPO,
- *     nonRetryableExceptions = {ValidationException.class}
- * )
- * &#64;KafkaListener(topics = "orders", groupId = "order-processor")
- * public void process(OrderEvent event, Acknowledgment ack) { ... }
- * </pre>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
@@ -112,23 +99,23 @@ public @interface DameroKafkaListener {
     /**
      * Batch processing configuration. Set batchCapacity > 0 to enable.
      *
-     * <p><b>Two batch modes available (controlled by fixedWindow):</b></p>
+     * Two batch modes available (controlled by fixedWindow):
      *
-     * <p><b>Mode 1: Capacity-First (fixedWindow = false, default)</b></p>
-     * <ul>
-     *   <li>Batch processes IMMEDIATELY when batchCapacity is reached</li>
-     *   <li>batchWindowLength is a fallback timer for slow periods</li>
-     *   <li>Use case: Maximum throughput, process as fast as possible</li>
-     * </ul>
+     * Mode 1: Capacity-First (fixedWindow = false, default)
      *
-     * <p><b>Mode 2: Fixed Window (fixedWindow = true)</b></p>
-     * <ul>
-     *   <li>Batch processes ONLY when the window timer expires</li>
-     *   <li>batchCapacity is the maximum messages collected per window</li>
-     *   <li>Use case: Predictable intervals, rate-controlled processing</li>
-     * </ul>
+     *   Batch processes IMMEDIATELY when batchCapacity is reached
+     *   batchWindowLength is a fallback timer for slow periods
+     *   Use case: Maximum throughput, process as fast as possible
      *
-     * <p>IT'S RECOMMENDED TO NOT MIX BATCH PROCESSING WITH messagesPerWindow/messageWindow</p>
+     *
+     * Mode 2: Fixed Window (fixedWindow = true)
+     *
+     *   Batch processes ONLY when the window timer expires
+     *   batchCapacity is the maximum messages collected per window
+     *   Use case: Predictable intervals, rate-controlled processing
+     *
+     *
+     * IT'S RECOMMENDED TO NOT MIX BATCH PROCESSING WITH messagesPerWindow/messageWindow
      */
 
     /** Maximum messages per batch. Set to 0 to disable batch processing. */
@@ -142,10 +129,10 @@ public @interface DameroKafkaListener {
 
     /**
      * Enable fixed window mode for predictable batch timing.
-     * <
-     *   false: Process immediately when capacity reached, window is fallback</li>
-     *   true: Process ONLY when window expires, capacity is just a limit</li>
-     * </ul>
+     *
+     *   false: Process immediately when capacity reached, window is fallback
+     *   true: Process ONLY when window expires, capacity is just a limit
+     *
      */
     boolean fixedWindow() default false;
 

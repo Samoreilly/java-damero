@@ -45,11 +45,10 @@
 		
 		<!-- Kafka Damero Library -->
 		<dependency>
-			<groupId>java.damero</groupId>
-			<artifactId>kafka-damero</artifactId>
-			<version>0.1.0-SNAPSHOT</version>
+			<groupId>io.github.samoreilly</groupId>
+			<artifactId>java-damero</artifactId>
+			<version>1.0.1</version>
 		</dependency>
-
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>

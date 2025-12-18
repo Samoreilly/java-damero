@@ -13,9 +13,18 @@ import java.security.SecureRandom;
 public class TestController {
 
     @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private KafkaTemplate<String, OrderEvent> kafkaTemplate;
 
     private final Random random = new Random();
+
+    // @GetMapping("/string")
+    // public String testString() {
+
+    // kafkaTemplate.send("orders", "stringy");
+    // return "sent order with negative amount - should go directly to dlq
+    // (non-retryable)";
+    // }
+    //
 
     @PostMapping("/order/non-retryable/illegal-argument")
     public String testIllegalArgumentException() {
@@ -64,11 +73,10 @@ public class TestController {
         order.setCustomerId("customer-123");
         order.setPaymentMethod("credit-card");
         order.setStatus("FAIL"); // This will trigger RuntimeException (retryable)
-        
+
         kafkaTemplate.send("orders", order);
         return "sent order with fail status - should retry 3 times then go to dlq";
     }
-
 
     @PostMapping("/order/success")
     public String testSuccess() {

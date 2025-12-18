@@ -8,11 +8,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+// import java.util.concurrent.atomic.AtomicLong; // REMOVED
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
@@ -20,8 +18,10 @@ import java.util.function.BiConsumer;
  * Orchestrates batch collection and processing for Kafka messages.
  * Supports both capacity-based and time-window-based batch triggering.
  *
- * <p>Thread-safety: Uses per-topic locks to prevent race conditions between
- * capacity-triggered and window-triggered batch processing.</p>
+ * <p>
+ * Thread-safety: Uses per-topic locks to prevent race conditions between
+ * capacity-triggered and window-triggered batch processing.
+ * </p>
  */
 @Component
 public class BatchOrchestrator {
@@ -31,9 +31,9 @@ public class BatchOrchestrator {
     private final TaskScheduler taskScheduler;
     private final MetricsRecorder metricsRecorder;
 
-    // Core batch state per topic
-    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<Object[]>> batchQueues = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, AtomicLong> batchCounters = new ConcurrentHashMap<>();
+    // Core batch state per topic - encapsulated in TopicState to keep counter/queue
+    // consistent
+    private final ConcurrentHashMap<String, TopicState> topicStates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> batchWindowStartTimes = new ConcurrentHashMap<>();
 
     // Track last batch processing time for fixed window spacing
@@ -48,13 +48,30 @@ public class BatchOrchestrator {
     // Flag to prevent double-processing (capacity vs window race)
     private final ConcurrentHashMap<String, AtomicBoolean> processingFlags = new ConcurrentHashMap<>();
 
+    // Maximum per-topic queued items to protect against unbounded growth
+    private static final int DEFAULT_MAX_QUEUE_SIZE = 10000; // reasonable default
+
     // Callback for when window expires (set by KafkaListenerAspect)
     private volatile BiConsumer<String, DameroKafkaListener> windowExpiryCallback;
 
     public BatchOrchestrator(@Qualifier("kafkaRetryScheduler") TaskScheduler taskScheduler,
-                            MetricsRecorder metricsRecorder) {
+            MetricsRecorder metricsRecorder) {
         this.taskScheduler = taskScheduler;
         this.metricsRecorder = metricsRecorder;
+    }
+
+    private static class TopicState {
+        // Bounded deque for atomic offer/poll behaviour
+        final LinkedBlockingDeque<Object[]> queue;
+        // final AtomicLong counter = new AtomicLong(0); // REMOVED (using queue.size())
+
+        TopicState(int capacity) {
+            this.queue = new LinkedBlockingDeque<>(capacity);
+        }
+    }
+
+    private TopicState getOrCreateState(String topic) {
+        return topicStates.computeIfAbsent(topic, k -> new TopicState(DEFAULT_MAX_QUEUE_SIZE));
     }
 
     /**
@@ -68,50 +85,53 @@ public class BatchOrchestrator {
      * Orchestrates batch collection for a given topic.
      * Thread-safe: uses per-topic locking to prevent race conditions.
      *
-     * <p>Supports two modes:</p>
+     * <p>
+     * Supports two modes:
+     * </p>
      * <ul>
-     *   <li>Capacity-First (fixedWindow=false): Process immediately when capacity reached</li>
-     *   <li>Fixed Window (fixedWindow=true): Process only when window timer expires</li>
+     * <li>Capacity-First (fixedWindow=false): Process immediately when capacity
+     * reached</li>
+     * <li>Fixed Window (fixedWindow=true): Process only when window timer
+     * expires</li>
      * </ul>
      *
      * @param listener The listener annotation with batch config
-     * @param topic The topic being consumed
-     * @param args The full argument array from the listener method
+     * @param topic    The topic being consumed
+     * @param args     The full argument array from the listener method
      * @return BatchStatus indicating whether to continue collecting or process
      */
     public BatchStatus orchestrate(DameroKafkaListener listener, String topic, Object[] args) {
+        // Implement Backpressure: Add to queue strictly BEFORE acquiring lock
+        // This ensures consumer thread blocks here if queue is full, without holding
+        // the lock
+        TopicState state = getOrCreateState(topic);
+        try {
+            state.queue.put(args);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("Interrupted while waiting to queue batch item for topic: {}", topic);
+            return BatchStatus.PROCESSING; // Fallback
+        }
+
         ReentrantLock lock = topicLocks.computeIfAbsent(topic, k -> new ReentrantLock());
         lock.lock();
         try {
             // Check if already being processed
             AtomicBoolean processing = processingFlags.get(topic);
-            if (processing != null && processing.get()) {
-                // Another thread is processing - queue for NEXT batch
-                ConcurrentLinkedQueue<Object[]> queue = batchQueues.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>());
-                queue.add(args);
-                batchCounters.computeIfAbsent(topic, k -> new AtomicLong(0)).incrementAndGet();
 
-                // Mark that we need to schedule a new window after processing completes
-                // This is handled in drainBatch -> the next message will trigger window scheduling
-                logger.debug("Message queued during batch processing for topic: {} - will be included in next batch", topic);
+            if (processing != null && processing.get()) {
+                // Another thread is processing - since we already added to queue, just log and
+                // return
+                logger.debug("Message queued during batch processing for topic: {} - will be included in next batch",
+                        topic);
                 return BatchStatus.PROCESSING;
             }
 
             int batchCapacity = listener.batchCapacity();
             boolean fixedWindow = listener.fixedWindow();
 
-            // In fixed window mode, enforce capacity as a hard limit
-            ConcurrentLinkedQueue<Object[]> queue = batchQueues.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>());
-            long currentCount = batchCounters.computeIfAbsent(topic, k -> new AtomicLong(0)).get();
-
-            // In fixed window mode, we still queue messages even beyond capacity
-            // This ensures all messages in the poll batch are captured
-            // The batch processor will drain only batchCapacity items at a time
-            // Remaining items will be processed in subsequent batches
-
-            // Add to queue
-            queue.add(args);
-            currentCount = batchCounters.get(topic).incrementAndGet();
+            // Use actual queue size as the source of truth
+            int currentCount = state.queue.size();
 
             // Start window timer on first message (or if no active window)
             boolean needsWindowSchedule = batchWindowStartTimes.putIfAbsent(topic, System.currentTimeMillis()) == null;
@@ -121,7 +141,8 @@ public class BatchOrchestrator {
 
             int minimumCapacity = listener.minimumCapacity();
 
-            logger.debug("Batch for topic: {}, count: {}/{}, fixedWindow: {}", topic, currentCount, batchCapacity, fixedWindow);
+            logger.debug("Batch for topic: {}, count: {}/{}, fixedWindow: {}", topic, currentCount, batchCapacity,
+                    fixedWindow);
 
             // FIXED WINDOW MODE: Only process when window expires, capacity is just a limit
             if (fixedWindow) {
@@ -133,15 +154,16 @@ public class BatchOrchestrator {
                 // Set processing flag to prevent window callback from also processing
                 processingFlags.computeIfAbsent(topic, k -> new AtomicBoolean(false)).set(true);
                 cancelWindowExpiryTask(topic);
-                logger.info("Batch capacity reached for topic: {} ({}/{})", topic, currentCount, batchCapacity);
+                logger.debug("Batch capacity reached for topic: {} ({}/{})", topic, currentCount, batchCapacity);
                 metricsRecorder.recordBatchCapacityReached(topic);
                 return BatchStatus.CAPACITY_REACHED;
             }
 
-            // Check minimum capacity threshold (optional early trigger, only in capacity-first mode)
+            // Check minimum capacity threshold (optional early trigger, only in
+            // capacity-first mode)
             if (minimumCapacity > 0 && currentCount >= minimumCapacity) {
                 logger.debug("Minimum capacity threshold reached for topic: {} ({}/{})",
-                    topic, currentCount, minimumCapacity);
+                        topic, currentCount, minimumCapacity);
                 // Could add MINIMUM_REACHED status if needed for future use
             }
 
@@ -171,15 +193,14 @@ public class BatchOrchestrator {
                     // Not enough time has passed, schedule for remaining time
                     delayMs = windowLengthMs - timeSinceLastBatch;
                     logger.debug("Fixed window: {}ms since last batch, scheduling in {}ms for topic: {}",
-                        timeSinceLastBatch, delayMs, topic);
+                            timeSinceLastBatch, delayMs, topic);
                 }
             }
         }
 
         ScheduledFuture<?> task = taskScheduler.schedule(
-            () -> handleWindowExpiry(topic, listener),
-            Instant.now().plusMillis(delayMs)
-        );
+                () -> handleWindowExpiry(topic, listener),
+                Instant.now().plusMillis(delayMs));
 
         // Cancel any existing task and store the new one
         ScheduledFuture<?> existingTask = windowExpiryTasks.put(topic, task);
@@ -187,7 +208,8 @@ public class BatchOrchestrator {
             existingTask.cancel(false);
         }
 
-        logger.debug("Scheduled batch window expiry for topic: {} in {}ms (fixedWindow: {})", topic, delayMs, fixedWindow);
+        logger.debug("Scheduled batch window expiry for topic: {} in {}ms (fixedWindow: {})", topic, delayMs,
+                fixedWindow);
     }
 
     /**
@@ -216,8 +238,8 @@ public class BatchOrchestrator {
             processingFlags.computeIfAbsent(topic, k -> new AtomicBoolean(false)).set(true);
 
             long messageCount = getBatchCount(topic);
-            logger.info("Batch window expired for topic: {} - triggering processing ({} messages)",
-                topic, messageCount);
+            logger.debug("Batch window expired for topic: {} - triggering processing ({} messages)",
+                    topic, messageCount);
 
             metricsRecorder.recordBatchWindowExpiry(topic, messageCount);
 
@@ -248,18 +270,20 @@ public class BatchOrchestrator {
      * Drain and return up to maxItems from the batch queue for a topic.
      * Thread-safe: uses per-topic locking.
      *
-     * @param topic The topic to drain
-     * @param maxItems Maximum items to drain (0 or negative means drain all)
-     * @param recordProcessingTime If true, records current time for fixed window spacing
+     * @param topic                The topic to drain
+     * @param maxItems             Maximum items to drain (0 or negative means drain
+     *                             all)
+     * @param recordProcessingTime If true, records current time for fixed window
+     *                             spacing
      * @return Queue containing drained items (up to maxItems)
      */
     public ConcurrentLinkedQueue<Object[]> drainBatch(String topic, int maxItems, boolean recordProcessingTime) {
         ReentrantLock lock = topicLocks.computeIfAbsent(topic, k -> new ReentrantLock());
         lock.lock();
         try {
-            ConcurrentLinkedQueue<Object[]> sourceQueue = batchQueues.get(topic);
+            TopicState state = topicStates.get(topic);
 
-            if (sourceQueue == null || sourceQueue.isEmpty()) {
+            if (state == null || state.queue.isEmpty()) {
                 // Nothing to drain
                 batchWindowStartTimes.remove(topic);
                 cancelWindowExpiryTask(topic);
@@ -271,34 +295,20 @@ public class BatchOrchestrator {
                 return null;
             }
 
-            ConcurrentLinkedQueue<Object[]> result;
+            ConcurrentLinkedQueue<Object[]> result = new ConcurrentLinkedQueue<>();
 
-            if (maxItems <= 0 || sourceQueue.size() <= maxItems) {
-                // Drain all - remove the queue entirely
-                result = batchQueues.remove(topic);
-
-                AtomicLong counter = batchCounters.get(topic);
-                if (counter != null) {
-                    counter.set(0);
-                }
+            if (maxItems <= 0 || state.queue.size() <= maxItems) {
+                // Drain all
+                state.queue.drainTo(result);
+                // Do NOT remove the TopicState from topicStates map
+                // This allows consumers to keep blocking on state.queue safely
+                // topicStates.remove(topic); // DELETED
             } else {
                 // Drain only up to maxItems - leave rest for next batch
-                result = new ConcurrentLinkedQueue<>();
-                for (int i = 0; i < maxItems && !sourceQueue.isEmpty(); i++) {
-                    Object[] item = sourceQueue.poll();
-                    if (item != null) {
-                        result.add(item);
-                    }
-                }
-
-                // Update counter to reflect remaining items
-                AtomicLong counter = batchCounters.get(topic);
-                if (counter != null) {
-                    counter.set(sourceQueue.size());
-                }
+                state.queue.drainTo(result, maxItems);
 
                 logger.debug("Drained {} items from topic: {}, {} remaining for next batch",
-                    result.size(), topic, sourceQueue.size());
+                        result.size(), topic, state.queue.size());
             }
 
             batchWindowStartTimes.remove(topic);
@@ -325,8 +335,9 @@ public class BatchOrchestrator {
      * Drain and return the batch queue for a topic, resetting all state atomically.
      * Thread-safe: uses per-topic locking.
      *
-     * @param topic The topic to drain
-     * @param recordProcessingTime If true, records current time for fixed window spacing
+     * @param topic                The topic to drain
+     * @param recordProcessingTime If true, records current time for fixed window
+     *                             spacing
      */
     public ConcurrentLinkedQueue<Object[]> drainBatch(String topic, boolean recordProcessingTime) {
         return drainBatch(topic, 0, recordProcessingTime); // 0 means drain all
@@ -345,7 +356,7 @@ public class BatchOrchestrator {
                 batchWindowStartTimes.put(topic, System.currentTimeMillis());
                 scheduleWindowExpiry(topic, listener);
                 logger.debug("Scheduled new window for {} pending messages on topic: {}",
-                    getBatchCount(topic), topic);
+                        getBatchCount(topic), topic);
             }
         } finally {
             lock.unlock();
@@ -364,16 +375,16 @@ public class BatchOrchestrator {
      * Get current batch count for a topic.
      */
     public long getBatchCount(String topic) {
-        AtomicLong counter = batchCounters.get(topic);
-        return counter != null ? counter.get() : 0;
+        TopicState state = topicStates.get(topic);
+        return state != null ? state.queue.size() : 0;
     }
 
     /**
      * Check if there are pending messages in the batch queue.
      */
     public boolean hasPendingMessages(String topic) {
-        ConcurrentLinkedQueue<Object[]> queue = batchQueues.get(topic);
-        return queue != null && !queue.isEmpty();
+        TopicState state = topicStates.get(topic);
+        return state != null && !state.queue.isEmpty();
     }
 
     /**

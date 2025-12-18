@@ -44,6 +44,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.lang.Nullable;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -69,12 +70,7 @@ import java.util.Map;
 @AutoConfigureBefore(JacksonAutoConfiguration.class)
 @AutoConfigureAfter(RedisAutoConfiguration.class)
 @EnableAspectJAutoProxy
-@ConditionalOnProperty(
-        prefix = "custom.kafka.auto-config",
-        name = "enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
+@ConditionalOnProperty(prefix = "custom.kafka.auto-config", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class CustomKafkaAutoConfiguration {
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
@@ -95,18 +91,19 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ReadFromDLQConsumer readFromDLQConsumer(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
-                                                   ObjectMapper kafkaObjectMapper) {
+            ObjectMapper kafkaObjectMapper) {
         return new ReadFromDLQConsumer(dlqConsumerFactory, kafkaObjectMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public ListenerSetup listenerSetup(){
+    public ListenerSetup listenerSetup() {
         return new ListenerSetup();
     }
 
     /**
-     * Creates the OpenTelemetry-based TracingService when OpenTelemetry is on the classpath.
+     * Creates the OpenTelemetry-based TracingService when OpenTelemetry is on the
+     * classpath.
      * This provides real distributed tracing functionality.
      * Users can override by providing their own TracingService bean.
      */
@@ -119,8 +116,10 @@ public class CustomKafkaAutoConfiguration {
 
     /**
      * Creates the No-Op TracingService when OpenTelemetry is NOT on the classpath.
-     * This allows the library to function without tracing - all trace operations become no-ops.
-     * Only creates this bean if OpenTelemetry is NOT available (no TracingService bean exists).
+     * This allows the library to function without tracing - all trace operations
+     * become no-ops.
+     * Only creates this bean if OpenTelemetry is NOT available (no TracingService
+     * bean exists).
      */
     @Bean("noOpTracingService")
     @ConditionalOnMissingClass("io.opentelemetry.api.OpenTelemetry")
@@ -149,10 +148,10 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ReplayDLQ replayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
-                               KafkaTemplate<String, Object> kafkaTemplate,
-                               ObjectMapper kafkaObjectMapper,
-                               KafkaAdmin kafkaAdmin,
-                               TracingService tracingService) {
+            KafkaTemplate<String, Object> kafkaTemplate,
+            ObjectMapper kafkaObjectMapper,
+            KafkaAdmin kafkaAdmin,
+            TracingService tracingService) {
         return new ReplayDLQ(dlqConsumerFactory, kafkaTemplate, kafkaObjectMapper, kafkaAdmin, tracingService);
     }
 
@@ -165,9 +164,12 @@ public class CustomKafkaAutoConfiguration {
     private static final Logger logger = LoggerFactory.getLogger(CustomKafkaAutoConfiguration.class);
 
     /**
-     * Creates a RedisTemplate bean specifically for kafka-damero library's distributed cache.
-     * This bean is automatically created when the user adds spring-boot-starter-data-redis dependency.
-     * Spring Boot's auto-configuration will create a RedisConnectionFactory bean, which we use here.
+     * Creates a RedisTemplate bean specifically for kafka-damero library's
+     * distributed cache.
+     * This bean is automatically created when the user adds
+     * spring-boot-starter-data-redis dependency.
+     * Spring Boot's auto-configuration will create a RedisConnectionFactory bean,
+     * which we use here.
      */
     @Bean(name = "kafkaDameroRedisTemplate")
     @ConditionalOnClass(name = "org.springframework.data.redis.connection.RedisConnectionFactory")
@@ -185,14 +187,12 @@ public class CustomKafkaAutoConfiguration {
         com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.activateDefaultTyping(
-            BasicPolymorphicTypeValidator.builder()
-                .allowIfBaseType(Object.class)
-                .build(),
-            com.fasterxml.jackson.databind.ObjectMapper.DefaultTyping.NON_FINAL
-        );
+                BasicPolymorphicTypeValidator.builder()
+                        .allowIfBaseType(Object.class)
+                        .build(),
+                com.fasterxml.jackson.databind.ObjectMapper.DefaultTyping.NON_FINAL);
 
-        GenericJackson2JsonRedisSerializer jsonSerializer =
-            new GenericJackson2JsonRedisSerializer(objectMapper);
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
 
         // Set serializers for different types
         template.setKeySerializer(stringSerializer);
@@ -209,21 +209,25 @@ public class CustomKafkaAutoConfiguration {
 
     /**
      * Creates RedisHealthCheck when Redis is configured.
-     * Monitors Redis health every 20 seconds and automatically switches between Redis and Caffeine.
+     * Monitors Redis health every 20 seconds and automatically switches between
+     * Redis and Caffeine.
      */
     @Bean
     @ConditionalOnBean(name = "kafkaDameroRedisTemplate")
     @ConditionalOnMissingBean(RedisHealthCheck.class)
     public RedisHealthCheck redisHealthCheck(RedisTemplate<String, Object> kafkaDameroRedisTemplate,
-                                             CaffeineCache caffeineCache) {
+            CaffeineCache caffeineCache) {
         return new RedisHealthCheck(kafkaDameroRedisTemplate, caffeineCache);
     }
 
     /**
-     * Creates a PluggableRedisCache with both Redis and Caffeine backends and health monitoring.
-     * This provides distributed caching across multiple application instances with automatic failover.
+     * Creates a PluggableRedisCache with both Redis and Caffeine backends and
+     * health monitoring.
+     * This provides distributed caching across multiple application instances with
+     * automatic failover.
      *
-     * This bean depends on kafkaDameroRedisTemplate and RedisHealthCheck, which will only exist if:
+     * This bean depends on kafkaDameroRedisTemplate and RedisHealthCheck, which
+     * will only exist if:
      * 1. spring-boot-starter-data-redis is on the classpath
      * 2. Spring Boot created a RedisConnectionFactory bean
      * 3. Redis is configured in application.properties
@@ -232,9 +236,9 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnBean(name = "kafkaDameroRedisTemplate")
     @ConditionalOnMissingBean(PluggableRedisCache.class)
     public PluggableRedisCache redisBackedCacheWithHealthCheck(RedisTemplate<String, Object> kafkaDameroRedisTemplate,
-                                                               CaffeineCache caffeineCache,
-                                                               RedisHealthCheck redisHealthCheck,
-                                                               @Value("${damero.cache.strict-mode:true}") boolean strictMode) {
+            CaffeineCache caffeineCache,
+            RedisHealthCheck redisHealthCheck,
+            @Value("${damero.cache.strict-mode:true}") boolean strictMode) {
         if (strictMode) {
             logger.info("==> PluggableRedisCache configured with Redis + Caffeine failover (STRICT MODE ENABLED)");
             logger.info("==> Redis failures will throw exceptions to prevent split-brain scenarios");
@@ -252,7 +256,8 @@ public class CustomKafkaAutoConfiguration {
      * 2. RedisConnectionFactory bean doesn't exist, OR
      * 3. No PluggableRedisCache bean was created above
      *
-     * Note: Caffeine is in-memory only and NOT suitable for multi-instance deployments.
+     * Note: Caffeine is in-memory only and NOT suitable for multi-instance
+     * deployments.
      */
     @Bean
     @ConditionalOnMissingBean(PluggableRedisCache.class)
@@ -263,20 +268,19 @@ public class CustomKafkaAutoConfiguration {
         return new PluggableRedisCache(caffeineCache);
     }
 
-
     @Bean
     @ConditionalOnMissingBean
     public RetryOrchestrator retryOrchestrator(RetrySched retrySched,
-                                               PluggableRedisCache pluggableRedisCache,
-                                               TracingService tracingService) {
+            PluggableRedisCache pluggableRedisCache,
+            TracingService tracingService) {
         return new RetryOrchestrator(retrySched, pluggableRedisCache, tracingService);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public DLQExceptionRoutingManager dlqExceptionRoutingManager(DLQRouter dlqRouter,
-                                                                  RetryOrchestrator retryOrchestrator,
-                                                                  TracingService tracingService) {
+            RetryOrchestrator retryOrchestrator,
+            TracingService tracingService) {
         return new DLQExceptionRoutingManager(dlqRouter, retryOrchestrator, tracingService);
     }
 
@@ -294,7 +298,8 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DuplicationManager duplicationManager(DeduplicationProperties deduplicationProperties, PluggableRedisCache pluggableRedisCache) {
+    public DuplicationManager duplicationManager(DeduplicationProperties deduplicationProperties,
+            PluggableRedisCache pluggableRedisCache) {
         return new DuplicationManager(deduplicationProperties, pluggableRedisCache);
     }
 
@@ -307,37 +312,37 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public BatchProcessor batchProcessor(BatchOrchestrator batchOrchestrator,
-                                         DuplicationManager duplicationManager,
-                                         CircuitBreakerWrapper circuitBreakerWrapper,
-                                         DLQRouter dlqRouter,
-                                         MetricsRecorder metricsRecorder,
-                                         RetryOrchestrator retryOrchestrator,
-                                         RetrySched retrySched,
-                                         TracingService tracingService) {
+            DuplicationManager duplicationManager,
+            CircuitBreakerWrapper circuitBreakerWrapper,
+            DLQRouter dlqRouter,
+            MetricsRecorder metricsRecorder,
+            RetryOrchestrator retryOrchestrator,
+            RetrySched retrySched,
+            TracingService tracingService) {
         return new BatchProcessor(batchOrchestrator, duplicationManager, circuitBreakerWrapper,
-                                  dlqRouter, metricsRecorder, retryOrchestrator, retrySched, tracingService);
+                dlqRouter, metricsRecorder, retryOrchestrator, retrySched, tracingService);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public KafkaListenerAspect kafkaListenerAspect(DLQRouter dlqRouter,
-                                                   ApplicationContext context,
-                                                   KafkaTemplate<?, ?> defaultKafkaTemplate,
-                                                   RetryOrchestrator retryOrchestrator,
-                                                   MetricsRecorder metricsRecorder,
-                                                   CircuitBreakerWrapper circuitBreakerWrapper,
-                                                   RetrySched retrySched,
-                                                   DLQExceptionRoutingManager dlqExceptionRoutingManager,
-                                                   DuplicationManager duplicationManager,
-                                                   TracingService tracingService,
-                                                   PluggableRedisCache pluggableRedisCache,
-                                                   BatchOrchestrator batchOrchestrator,
-                                                   BatchProcessor batchProcessor,
-                                                   BatchUtility batchUtility) {
+            ApplicationContext context,
+            KafkaTemplate<?, ?> defaultKafkaTemplate,
+            RetryOrchestrator retryOrchestrator,
+            MetricsRecorder metricsRecorder,
+            CircuitBreakerWrapper circuitBreakerWrapper,
+            RetrySched retrySched,
+            DLQExceptionRoutingManager dlqExceptionRoutingManager,
+            DuplicationManager duplicationManager,
+            TracingService tracingService,
+            PluggableRedisCache pluggableRedisCache,
+            BatchOrchestrator batchOrchestrator,
+            BatchProcessor batchProcessor,
+            BatchUtility batchUtility) {
         return new KafkaListenerAspect(dlqRouter, context, defaultKafkaTemplate,
-                                       retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
-                                       retrySched, dlqExceptionRoutingManager, duplicationManager,
-                                       tracingService, pluggableRedisCache, batchOrchestrator, batchProcessor, batchUtility);
+                retryOrchestrator, metricsRecorder, circuitBreakerWrapper,
+                retrySched, dlqExceptionRoutingManager, duplicationManager,
+                tracingService, pluggableRedisCache, batchOrchestrator, batchProcessor, batchUtility);
     }
 
     /*
@@ -350,14 +355,14 @@ public class CustomKafkaAutoConfiguration {
         scheduler.setPoolSize(20);
         scheduler.setThreadNamePrefix("kafka-retry-scheduler-");
         // Don't wait for tasks to complete on shutdown - interrupt them instead
-        // This prevents test hangs when embedded Kafka shuts down before scheduled retries execute
-        // In production, this is acceptable as retries will be rescheduled if the application restarts
+        // This prevents test hangs when embedded Kafka shuts down before scheduled
+        // retries execute
+        // In production, this is acceptable as retries will be rescheduled if the
+        // application restarts
         scheduler.setWaitForTasksToCompleteOnShutdown(false);
         scheduler.setAwaitTerminationSeconds(1);
-        scheduler.setErrorHandler(t ->
-                org.slf4j.LoggerFactory.getLogger("kafka-retry-scheduler")
-                    .error("scheduler error: {}", t.getMessage(), t)
-        );
+        scheduler.setErrorHandler(t -> org.slf4j.LoggerFactory.getLogger("kafka-retry-scheduler")
+                .error("scheduler error: {}", t.getMessage(), t));
         scheduler.initialize();
         return scheduler;
     }
@@ -375,7 +380,7 @@ public class CustomKafkaAutoConfiguration {
     }
 
     /*
-     Circuit Breaker Registry for Resilience4j (optional) for the user
+     * Circuit Breaker Registry for Resilience4j (optional) for the user
      */
     @Bean
     @ConditionalOnMissingBean(name = "circuitBreakerRegistry")
@@ -406,7 +411,7 @@ public class CustomKafkaAutoConfiguration {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
 
-        //enable polymorphic type handling for EventWrapper
+        // enable polymorphic type handling for EventWrapper
         BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(Object.class)
                 .build();
@@ -416,9 +421,12 @@ public class CustomKafkaAutoConfiguration {
     }
 
     /**
-     * Provides a standard ObjectMapper for REST controllers if Spring Boot hasn't created one.
-     * This ensures REST JSON serialization/deserialization works without polymorphic typing,
-     * preventing conflicts with the kafkaObjectMapper which has polymorphic typing enabled.
+     * Provides a standard ObjectMapper for REST controllers if Spring Boot hasn't
+     * created one.
+     * This ensures REST JSON serialization/deserialization works without
+     * polymorphic typing,
+     * preventing conflicts with the kafkaObjectMapper which has polymorphic typing
+     * enabled.
      * 
      * Users can override this bean if they need custom REST JSON configuration.
      */
@@ -433,13 +441,18 @@ public class CustomKafkaAutoConfiguration {
     }
 
     /**
-     * Configures HttpMessageConverters to use the @Primary ObjectMapper (without polymorphic typing)
-     * for REST controllers, ensuring that REST JSON serialization/deserialization works correctly
+     * Configures HttpMessageConverters to use the @Primary ObjectMapper (without
+     * polymorphic typing)
+     * for REST controllers, ensuring that REST JSON serialization/deserialization
+     * works correctly
      * even if the kafkaObjectMapper exists.
      * 
-     * Uses extendMessageConverters so it runs after Spring Boot's Jackson auto-configuration,
-     * allowing us to replace any MappingJackson2HttpMessageConverter that was created with
-     * the wrong ObjectMapper. Spring will automatically inject the @Primary ObjectMapper.
+     * Uses extendMessageConverters so it runs after Spring Boot's Jackson
+     * auto-configuration,
+     * allowing us to replace any MappingJackson2HttpMessageConverter that was
+     * created with
+     * the wrong ObjectMapper. Spring will automatically inject the @Primary
+     * ObjectMapper.
      */
     @Bean
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -448,16 +461,18 @@ public class CustomKafkaAutoConfiguration {
     public WebMvcConfigurer customKafkaWebMvcConfigurer(ObjectMapper objectMapper) {
         return new WebMvcConfigurer() {
             @Override
-            public void extendMessageConverters(java.util.List<org.springframework.http.converter.HttpMessageConverter<?>> converters) {
-                // Remove any existing MappingJackson2HttpMessageConverter and add ours with @Primary ObjectMapper
+            public void extendMessageConverters(
+                    java.util.List<org.springframework.http.converter.HttpMessageConverter<?>> converters) {
+                // Remove any existing MappingJackson2HttpMessageConverter and add ours with
+                // @Primary ObjectMapper
                 converters.removeIf(converter -> converter instanceof MappingJackson2HttpMessageConverter);
-                MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter(objectMapper);
+                MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter(
+                        objectMapper);
                 // Add at the beginning to ensure it's used first
                 converters.add(0, jsonConverter);
             }
         };
     }
-
 
     /**
      * Default KafkaTemplate for sending to DLQ and other internal operations.
@@ -481,7 +496,8 @@ public class CustomKafkaAutoConfiguration {
 
     /**
      * Generic KafkaTemplate for user applications to send messages.
-     * This is the same as defaultKafkaTemplate but with a generic name that users can inject.
+     * This is the same as defaultKafkaTemplate but with a generic name that users
+     * can inject.
      */
     @Bean
     @ConditionalOnMissingBean(name = "kafkaTemplate")
@@ -504,7 +520,8 @@ public class CustomKafkaAutoConfiguration {
      * Marked @Primary to override Spring Boot's auto-configured factory.
      * This factory is configured to work with or without type headers.
      *
-     * Users can override by defining their own ConcurrentKafkaListenerContainerFactory bean.
+     * Users can override by defining their own
+     * ConcurrentKafkaListenerContainerFactory bean.
      */
     @Bean
     @Primary
@@ -515,102 +532,66 @@ public class CustomKafkaAutoConfiguration {
             @Value("${kafka.damero.consumer.default-type:}") @Nullable String defaultType,
             @Value("${kafka.damero.consumer.use-type-headers:true}") boolean useTypeHeaders) {
 
-        // Start with Spring Boot's consumer properties (includes max.poll.records, etc.)
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
-
-        // Override with our specific settings
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
 
-        // Remove ALL JSON deserializer properties from the map since we configure the deserializer programmatically
-        // This prevents "JsonDeserializer must be configured with property setters, or via configuration properties; not both"
-        // Remove both the prefixed and non-prefixed versions
-        props.remove("spring.json.value.default.type");
-        props.remove("spring.json.use.type.headers");
-        props.remove("spring.json.trusted.packages");
-        props.remove("spring.json.type.mapping");
-        props.remove("spring.json.add.type.headers");
-        // Also remove the JsonDeserializer specific config keys
-        props.entrySet().removeIf(entry ->
-            entry.getKey() != null && entry.getKey().toString().startsWith("spring.json."));
-        // Also remove key.deserializer and value.deserializer as we provide them explicitly
-        props.remove(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
-        props.remove(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
-
-        JsonDeserializer<Object> jsonDeserializer;
-
-        // If a default type is specified, use it to create a typed deserializer
-        if (defaultType != null && !defaultType.isEmpty()) {
-            try {
-                Class<?> targetType = Class.forName(defaultType);
-                @SuppressWarnings("unchecked")
-                JsonDeserializer<Object> typedDeserializer = (JsonDeserializer<Object>) new JsonDeserializer<>(targetType, kafkaObjectMapper);
-                jsonDeserializer = typedDeserializer;
-                logger.info("==> Kafka consumer configured with default type: {}", defaultType);
-            } catch (ClassNotFoundException e) {
-                logger.warn("==> Could not find default type class: {}. Falling back to Object deserialization", defaultType);
-                jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
-            }
-        } else {
-            jsonDeserializer = new JsonDeserializer<>(kafkaObjectMapper);
+        // Guard-rail warning for production misconfiguration
+        if (useTypeHeaders && (defaultType == null || defaultType.trim().isEmpty())) {
+            logger.warn(
+                    "==> CONFIGURATION WARNING: kafka.damero.consumer.use-type-headers=true but no default-type set.");
+            logger.warn(
+                    "==> Messages from non-Spring producers (which don't send __TypeId__ headers) will fail with 'No type information in headers'.");
+            logger.warn("==> Please set kafka.damero.consumer.default-type or set use-type-headers=false.");
         }
 
-        jsonDeserializer.addTrustedPackages("*");
-        // Use type headers by default (true) for compatibility with Spring Kafka producers
-        // Set kafka.damero.consumer.use-type-headers=false for non-Spring producers
-        jsonDeserializer.setUseTypeHeaders(useTypeHeaders);
+        // Use ErrorHandlingDeserializer wrapping a FlexibleJsonDeserializer that falls
+        // back to String
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
+        // We will instantiate FlexibleJsonDeserializer below and wrap it in
+        // ErrorHandlingDeserializer when creating the factory
 
-        // GUARD RAIL: If using type headers but no default type provided, warn user about potential deserialization failures
-        if (useTypeHeaders && (defaultType == null || defaultType.isEmpty())) {
-            logger.warn("==> CONFIGURATION WARNING: kafka.damero.consumer.use-type-headers=true but no default-type set.");
-            logger.warn("==> Messages from non-Spring producers (CLI tools, other languages) will fail with 'No type information in headers'");
-            logger.warn("==> Solutions: (1) Set kafka.damero.consumer.default-type=your.package.YourClass");
-            logger.warn("==>            (2) Set kafka.damero.consumer.use-type-headers=false");
-            logger.warn("==> See documentation: https://github.com/yourrepo/kafka-damero#type-headers");
-        }
+        // Build a FlexibleJsonDeserializer instance that tries JSON then String
+        net.damero.Kafka.Aspect.Components.Utility.FlexibleJsonDeserializer flexible = new net.damero.Kafka.Aspect.Components.Utility.FlexibleJsonDeserializer(
+                kafkaObjectMapper, useTypeHeaders, defaultType);
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                 props,
-                new StringDeserializer(),
-                jsonDeserializer
-        );
+                new org.apache.kafka.common.serialization.StringDeserializer(),
+                new org.springframework.kafka.support.serializer.ErrorHandlingDeserializer<>(flexible));
 
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
-
-        // lets the aspect handle retries
-        factory.setCommonErrorHandler(null);
-
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+        factory.setCommonErrorHandler(null); // aspect handles retries
 
         return factory;
     }
 
-
     /*
-        USE SAME CONFIG AS DLQ CONSUMER FACTORY BELOW
+     * USE SAME CONFIG AS DLQ CONSUMER FACTORY BELOW
      */
-//    @Bean
-//    @ConditionalOnMissingBean(name = "dlqReaderFactory")
-//    public ConsumerFactory<String, EventWrapper<?>> dlqReaderFactory(ObjectMapper kafkaObjectMapper) {
-//        Map<String, Object> props = new HashMap<>();
-//        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-//        props.put(ConsumerConfig.GROUP_ID_CONFIG, "custom-kafka-dlq-group");
-//        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-//
-//        JsonDeserializer<EventWrapper<?>> deserializer =
-//                new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
-//        deserializer.addTrustedPackages("*");
-//        deserializer.setUseTypeHeaders(false);
-//
-//        return new DefaultKafkaConsumerFactory<>(
-//                props,
-//                new StringDeserializer(),
-//                deserializer
-//        );
-//    }
+    // @Bean
+    // @ConditionalOnMissingBean(name = "dlqReaderFactory")
+    // public ConsumerFactory<String, EventWrapper<?>> dlqReaderFactory(ObjectMapper
+    // kafkaObjectMapper) {
+    // Map<String, Object> props = new HashMap<>();
+    // props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    // props.put(ConsumerConfig.GROUP_ID_CONFIG, "custom-kafka-dlq-group");
+    // props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    //
+    // JsonDeserializer<EventWrapper<?>> deserializer =
+    // new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
+    // deserializer.addTrustedPackages("*");
+    // deserializer.setUseTypeHeaders(false);
+    //
+    // return new DefaultKafkaConsumerFactory<>(
+    // props,
+    // new StringDeserializer(),
+    // deserializer
+    // );
+    // }
 
     /**
      * Consumer factory for DLQ messages (EventWrapper).
@@ -624,31 +605,26 @@ public class CustomKafkaAutoConfiguration {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "custom-kafka-dlq-group");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        JsonDeserializer<EventWrapper<?>> deserializer =
-                new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
+        JsonDeserializer<EventWrapper<?>> deserializer = new JsonDeserializer<>(EventWrapper.class, kafkaObjectMapper);
         deserializer.addTrustedPackages("*");
         deserializer.setUseTypeHeaders(true);
 
         return new DefaultKafkaConsumerFactory<>(
                 props,
                 new StringDeserializer(),
-                deserializer
-        );
+                deserializer);
     }
 
     /**
      * Container factory for DLQ listeners.
      * Use this factory in your @KafkaListener for DLQ topics:
-     * @KafkaListener(topics = "my-dlq", containerFactory = "dlqKafkaListenerContainerFactory")
      */
     @Bean
     @ConditionalOnMissingBean(name = "dlqKafkaListenerContainerFactory")
     public ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> dlqKafkaListenerContainerFactory(
             ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory) {
-        ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
+        ConcurrentKafkaListenerContainerFactory<String, EventWrapper<?>> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(dlqConsumerFactory);
         return factory;
     }
 }
-

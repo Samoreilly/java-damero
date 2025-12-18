@@ -10,10 +10,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 @Component
 public class BatchUtility {
-
 
     private static final Logger logger = LoggerFactory.getLogger(BatchUtility.class);
     private final BatchProcessor batchProcessor;
@@ -22,12 +20,13 @@ public class BatchUtility {
         this.batchProcessor = batchProcessor;
     }
 
-
     /**
      * Handle batch window expiry callback from BatchOrchestrator.
      * Called asynchronously when the batch window timer expires.
      */
-    public BatchCheckResult checkBatchStatus(BatchStatus status, ApplicationContext context, KafkaTemplate<?, ?> defaultKafkaTemplate, ProceedingJoinPoint pjp, DameroKafkaListener dameroKafkaListener, ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints, String topic) throws Throwable {
+    public BatchCheckResult checkBatchStatus(BatchStatus status, ApplicationContext context,
+            KafkaTemplate<?, ?> defaultKafkaTemplate, ProceedingJoinPoint pjp, DameroKafkaListener dameroKafkaListener,
+            ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints, String topic) throws Throwable {
 
         if (status == BatchStatus.PROCESSING) {
             // Still collecting - DO NOT acknowledge yet
@@ -40,8 +39,9 @@ public class BatchUtility {
 
         if (status == BatchStatus.CAPACITY_REACHED) {
             // Capacity reached - process the batch immediately
-            logger.info("Batch capacity reached for topic: {} - processing batch", topic);
-            KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(dameroKafkaListener, context, defaultKafkaTemplate);
+            logger.debug("Batch capacity reached for topic: {} - processing batch", topic);
+            KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(dameroKafkaListener, context,
+                    defaultKafkaTemplate);
             Object result = batchProcessor.processBatch(pjp, dameroKafkaListener, kafkaTemplate);
 
             // Clean up join point if no more pending messages

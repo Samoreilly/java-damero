@@ -1,6 +1,5 @@
 package net.damero.Kafka.Aspect.Components;
 
-import net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper;
 import net.damero.Kafka.Aspect.Components.Utility.HeaderUtils;
 import net.damero.Kafka.Tracing.TracingSpan;
 import net.damero.Kafka.Config.PluggableRedisCache;
@@ -17,12 +16,13 @@ import java.time.LocalDateTime;
 
 /**
  * Component responsible for orchestrating retry logic and attempt tracking.
- * Supports automatic failover between Redis and Caffeine via PluggableRedisCache.
+ * Supports automatic failover between Redis and Caffeine via
+ * PluggableRedisCache.
  */
 public class RetryOrchestrator {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(RetryOrchestrator.class);
-    
+
     private final RetrySched retrySched;
     private final PluggableRedisCache cache;
     private final TracingService tracingService;
@@ -35,7 +35,8 @@ public class RetryOrchestrator {
 
     /**
      * Increments the attempt count for an event and returns the new count.
-     * Uses atomic increment to prevent race conditions in high-throughput scenarios.
+     * Uses atomic increment to prevent race conditions in high-throughput
+     * scenarios.
      *
      * @param eventId the event ID
      * @return the new attempt count
@@ -68,7 +69,7 @@ public class RetryOrchestrator {
     /**
      * Checks if max attempts have been reached.
      * 
-     * @param eventId the event ID
+     * @param eventId     the event ID
      * @param maxAttempts the maximum number of attempts
      * @return true if max attempts reached
      */
@@ -80,28 +81,28 @@ public class RetryOrchestrator {
      * Schedules a retry for the given event with headers-based metadata.
      * 
      * @param dameroKafkaListener the listener configuration
-     * @param originalEvent the original event
-     * @param exception the exception that occurred
-     * @param currentAttempts the current attempt count
-     * @param existingMetadata existing metadata from headers (if any)
-     * @param kafkaTemplate the Kafka template to use
+     * @param eventId             the canonical event ID
+     * @param originalEvent       the original event
+     * @param exception           the exception that occurred
+     * @param currentAttempts     the current attempt count
+     * @param existingMetadata    existing metadata from headers (if any)
+     * @param kafkaTemplate       the Kafka template to use
      */
     public void scheduleRetry(DameroKafkaListener dameroKafkaListener,
-                              Object originalEvent,
-                              Exception exception,
-                              int currentAttempts,
-                              EventMetadata existingMetadata,
-                              KafkaTemplate<?, ?> kafkaTemplate) {
+            String eventId,
+            Object originalEvent,
+            Exception exception,
+            int currentAttempts,
+            EventMetadata existingMetadata,
+            KafkaTemplate<?, ?> kafkaTemplate) {
         TracingSpan retrySpan = null;
         if (dameroKafkaListener.openTelemetry()) {
-            String eventId = EventUnwrapper.extractEventId(originalEvent);
             double delayMs = dameroKafkaListener.delay();
             retrySpan = tracingService.startRetrySpan(
-                dameroKafkaListener.topic(),
-                eventId,
-                currentAttempts,
-                (long)delayMs
-            );
+                    dameroKafkaListener.topic(),
+                    eventId,
+                    currentAttempts,
+                    (long) delayMs);
             retrySpan.setAttribute("damero.retry.delay_method", dameroKafkaListener.delayMethod().name());
             retrySpan.setAttribute("damero.retry.max_attempts", dameroKafkaListener.maxAttempts());
             retrySpan.setAttribute("damero.exception.type", exception.getClass().getSimpleName());
@@ -110,32 +111,32 @@ public class RetryOrchestrator {
         try {
             // Build metadata for the retry
             EventMetadata configMetadata = new EventMetadata(
-                existingMetadata != null && existingMetadata.getFirstFailureDateTime() != null
-                    ? existingMetadata.getFirstFailureDateTime()
-                    : LocalDateTime.now(),
-                LocalDateTime.now(),
-                existingMetadata != null && existingMetadata.getFirstFailureException() != null
-                    ? existingMetadata.getFirstFailureException()
-                    : exception,
-                exception,
-                currentAttempts,
-                dameroKafkaListener.topic(),
-                dameroKafkaListener.dlqTopic(),
-                (long) dameroKafkaListener.delay(),
-                dameroKafkaListener.delayMethod(),
-                dameroKafkaListener.maxAttempts()
-            );
+                    existingMetadata != null && existingMetadata.getFirstFailureDateTime() != null
+                            ? existingMetadata.getFirstFailureDateTime()
+                            : LocalDateTime.now(),
+                    LocalDateTime.now(),
+                    existingMetadata != null && existingMetadata.getFirstFailureException() != null
+                            ? existingMetadata.getFirstFailureException()
+                            : exception,
+                    exception,
+                    currentAttempts,
+                    dameroKafkaListener.topic(),
+                    dameroKafkaListener.dlqTopic(),
+                    (long) dameroKafkaListener.delay(),
+                    dameroKafkaListener.delayMethod(),
+                    dameroKafkaListener.maxAttempts());
 
             // Build headers from metadata
             RecordHeaders headers = HeaderUtils.buildHeadersFromMetadata(
-                existingMetadata,
-                configMetadata,
-                currentAttempts,
-                exception
-            );
+                    existingMetadata,
+                    configMetadata,
+                    currentAttempts,
+                    exception);
 
-            // Ensure type header is present so consumers using JsonDeserializer with type headers
-            // can deserialize the message back into the correct type. Priority: annotation eventType -> event class
+            // Ensure type header is present so consumers using JsonDeserializer with type
+            // headers
+            // can deserialize the message back into the correct type. Priority: annotation
+            // eventType -> event class
             HeaderUtils.ensureTypeHeader(headers, dameroKafkaListener.eventType(), originalEvent);
 
             // Inject trace context into headers if tracing is enabled
@@ -147,7 +148,7 @@ public class RetryOrchestrator {
             retrySched.scheduleRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate);
 
             logger.debug("scheduled retry attempt {} for event in topic: {}",
-                currentAttempts, dameroKafkaListener.topic());
+                    currentAttempts, dameroKafkaListener.topic());
 
             if (dameroKafkaListener.openTelemetry() && retrySpan != null) {
                 retrySpan.setSuccess();

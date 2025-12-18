@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import static net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper.extractEventId;
 
-
 @Component
 public class RetrySched {
 
@@ -27,7 +26,6 @@ public class RetrySched {
 
     private final TaskScheduler taskScheduler;
     private final PluggableRedisCache cache;
-
 
     public RetrySched(TaskScheduler taskScheduler, PluggableRedisCache cache) {
         this.taskScheduler = taskScheduler;
@@ -38,54 +36,57 @@ public class RetrySched {
      * Schedules a retry for the given event with headers-based metadata.
      * 
      * @param dameroKafkaListener the listener configuration
-     * @param originalEvent the original event to retry
-     * @param headers headers containing retry metadata
-     * @param kafkaTemplate the Kafka template to use
+     * @param originalEvent       the original event to retry
+     * @param headers             headers containing retry metadata
+     * @param kafkaTemplate       the Kafka template to use
      */
     public void scheduleRetry(DameroKafkaListener dameroKafkaListener,
-                              Object originalEvent,
-                              Headers headers,
-                              KafkaTemplate<?, ?> kafkaTemplate) {
+            Object originalEvent,
+            Headers headers,
+            KafkaTemplate<?, ?> kafkaTemplate) {
 
         // Extract current attempts from headers
         EventMetadata metadata = HeaderUtils.extractMetadataFromHeaders(headers);
         int currentAttempts = metadata != null ? metadata.getAttempts() : 0;
 
         long delay = getBackOffDelay(dameroKafkaListener, originalEvent,
-                                     dameroKafkaListener.delayMethod(), currentAttempts);
+                dameroKafkaListener.delayMethod(), currentAttempts);
 
         taskScheduler.schedule(() -> executeRetry(dameroKafkaListener, originalEvent, headers, kafkaTemplate),
-                Instant.now().plusMillis(delay)
-        );
+                Instant.now().plusMillis(delay));
 
-        logger.info("scheduled retry for event: {} to topic: {}", originalEvent.toString(), dameroKafkaListener.topic());
+        logger.info("scheduled retry for event: {} to topic: {}", originalEvent.toString(),
+                dameroKafkaListener.topic());
     }
 
     /**
      * Executes the retry by sending the event with headers to the topic.
      */
     public void executeRetry(DameroKafkaListener dameroKafkaListener,
-                             Object originalEvent,
-                             Headers headers,
-                             KafkaTemplate<?, ?> kafkaTemplate) {
+            Object originalEvent,
+            Headers headers,
+            KafkaTemplate<?, ?> kafkaTemplate) {
         try {
             // Send the original event with headers attached
             sendToTopicWithHeaders(kafkaTemplate, dameroKafkaListener.topic(), originalEvent, headers);
             logger.info("retried event: {} to topic: {}", originalEvent.toString(), dameroKafkaListener.topic());
         } catch (Exception e) {
-            // Log error but don't throw - allows scheduled task to complete even if Kafka is unavailable
-            // This prevents test hangs when embedded Kafka shuts down before scheduled retries execute
-            logger.error("failed to execute retry for event: {} to topic: {} - {}", 
-                originalEvent != null ? originalEvent.toString() : "null", 
-                dameroKafkaListener.topic(),
-                e.getMessage(), 
-                e);
+            // Log error but don't throw - allows scheduled task to complete even if Kafka
+            // is unavailable
+            // This prevents test hangs when embedded Kafka shuts down before scheduled
+            // retries execute
+            logger.error("failed to execute retry for event: {} to topic: {} - {}",
+                    originalEvent != null ? originalEvent.toString() : "null",
+                    dameroKafkaListener.topic(),
+                    e.getMessage(),
+                    e);
         }
 
     }
 
-    private long getBackOffDelay(DameroKafkaListener dameroKafkaListener, Object object, DelayMethod delayMethod, int attempts) {
-        if(delayMethod == DelayMethod.FIBONACCI && object == null){
+    private long getBackOffDelay(DameroKafkaListener dameroKafkaListener, Object object, DelayMethod delayMethod,
+            int attempts) {
+        if (delayMethod == DelayMethod.FIBONACCI && object == null) {
             logger.warn("Object cannot be null for FIBONACCI delay method");
             throw new IllegalArgumentException("Object cannot be null for FIBONACCI delay method");
         }
@@ -97,7 +98,7 @@ public class RetrySched {
 
                 long expoDelay = (long) (base * Math.pow(2, attempts));
 
-                //max 5 seconds delay
+                // max 5 seconds delay
                 yield Math.min(expoDelay, 5000);
             }
 
@@ -110,7 +111,7 @@ public class RetrySched {
     }
 
     private long getFibonacciDelay(DameroKafkaListener dameroKafkaListener, Object object) {
-        String eventId = extractEventId(object);
+        String eventId = extractEventId(object, null);
         if (eventId == null) {
             logger.warn("Cannot get fibonacci delay - eventId is null, using default");
             return (long) dameroKafkaListener.delay();
@@ -124,7 +125,7 @@ public class RetrySched {
      */
     public void clearFibonacciState(Object event) {
         if (event != null) {
-            String eventId = extractEventId(event);
+            String eventId = extractEventId(event, null);
             cache.clearFibonacciState(eventId);
         }
     }
@@ -135,8 +136,7 @@ public class RetrySched {
     @SuppressWarnings("unchecked")
     private <K, V> void sendToTopicWithHeaders(KafkaTemplate<?, ?> template, String topic, V message, Headers headers) {
         try {
-            ProducerRecord<K, V> record =
-                new ProducerRecord<>(topic, null, null, null, message, headers);
+            ProducerRecord<K, V> record = new ProducerRecord<>(topic, null, null, null, message, headers);
             ((KafkaTemplate<K, V>) template).send(record);
         } catch (Exception e) {
             throw new RuntimeException("failed to send to kafka topic: " + topic, e);

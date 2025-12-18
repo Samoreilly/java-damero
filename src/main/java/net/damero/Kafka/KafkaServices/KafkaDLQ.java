@@ -13,23 +13,23 @@ import java.nio.charset.StandardCharsets;
 public class KafkaDLQ {
 
     private static final Logger logger = LoggerFactory.getLogger(KafkaDLQ.class);
-    //static method to call it avoid uneccessary injections
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper){
+
+    // static method to call it avoid uneccessary injections
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public static void sendToDLQ(KafkaTemplate<?, ?> kafkaTemplate, String topic, EventWrapper<?> eventWrapper) {
 
         logger.debug("sending to dlq topic: {}", topic);
         try {
             logger.debug("sending to dlq topic: {}", topic);
 
-            // Create headers and include __TypeId__ for the wrapped event's type to help Spring Kafka JsonDeserializer
+            // Create headers and include __TypeId__ for the EventWrapper to help Spring
+            // Kafka JsonDeserializer
             RecordHeaders headers = new RecordHeaders();
-            if (eventWrapper != null && eventWrapper.getEvent() != null) {
-                String innerType = eventWrapper.getEvent().getClass().getName();
-                headers.add("__TypeId__", innerType.getBytes(StandardCharsets.UTF_8));
-                logger.debug("added __TypeId__ header for DLQ with value: {}", innerType);
-            }
+            headers.add("__TypeId__", EventWrapper.class.getName().getBytes(StandardCharsets.UTF_8));
+            logger.debug("added __TypeId__ header for DLQ with value: {}", EventWrapper.class.getName());
 
-            ProducerRecord<String, Object> record = new ProducerRecord<>(topic, null, null, null, eventWrapper, headers);
+            ProducerRecord<String, Object> record = new ProducerRecord<>(topic, null, null, null, eventWrapper,
+                    headers);
             ((KafkaTemplate) kafkaTemplate).send(record);
             logger.info("successfully sent to dlq topic: {}", topic);
         } catch (Exception e) {

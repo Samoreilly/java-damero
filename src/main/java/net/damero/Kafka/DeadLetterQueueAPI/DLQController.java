@@ -37,8 +37,6 @@ public class DLQController {
 
     /**
      * Replay DLQ messages back to the original topic.
-     * Endpoint: POST /dlq/replay/{topic}?forceReplay=true&skipValidation=true
-     *
      * @param topic the DLQ topic to replay from
      * @param forceReplay if true, replays all messages from beginning; if false (default), only replays unprocessed messages
      * @param skipValidation if true, adds X-Replay-Mode header to skip validation (for testing with invalid data)

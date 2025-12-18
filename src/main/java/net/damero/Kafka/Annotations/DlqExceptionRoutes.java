@@ -3,25 +3,6 @@ package net.damero.Kafka.Annotations;
 /**
  * Defines a conditional DLQ route for specific exception types.
  * Allows different exceptions to be routed to different DLQ topics.
- *
- * Example:
- * <pre>
- * @CustomKafkaListener(
- *     topic = "orders",
- *     dlqRoutes = {
- *         @DlqExceptionRoutes(
- *             exception = {ValidationException.class},
- *             dlqExceptionTopic = "orders-validation",
- *             skipRetry = true  // Send directly to DLQ, no retries
- *         ),
- *         @DlqExceptionRoutes(
- *             exception = {TimeoutException.class},
- *             dlqExceptionTopic = "orders-timeout",
- *             skipRetry = false  // Retry first, then send to DLQ
- *         )
- *     }
- * )
- * </pre>
  */
 public @interface DlqExceptionRoutes {
 
