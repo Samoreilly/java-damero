@@ -18,11 +18,20 @@ public class OrderProcessingService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderProcessingService.class);
 
-    @DameroKafkaListener(topic = "orders", dlqTopic = "test-dlq", eventType = com.example.kafkaexample.model.OrderEvent.class, maxAttempts = 3, delay = 1000, delayMethod = DelayMethod.FIBONACCI, fibonacciLimit = 15, nonRetryableExceptions = {
-            IllegalArgumentException.class,
-            ValidationException.class
-    }, deDuplication = false, openTelemetry = true, batchCapacity = 4000, batchWindowLength = 1000, fixedWindow = true
-
+    @DameroKafkaListener(
+            topic = "orders",
+            dlqTopic = "test-dlq",
+            eventType = com.example.kafkaexample.model.OrderEvent.class,
+            maxAttempts = 3,
+            delay = 1000,
+            delayMethod = DelayMethod.FIBONACCI,
+            fibonacciLimit = 15,
+            nonRetryableExceptions = {IllegalArgumentException.class, ValidationException.class },
+            deDuplication = false,
+            openTelemetry = true,
+            batchCapacity = 6000,
+            batchWindowLength = 2000,
+            fixedWindow = true
     )
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, String> record, Acknowledgment ack) {
