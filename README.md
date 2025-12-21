@@ -8,6 +8,12 @@ A Spring Boot library that adds automatic retry logic, dead letter queue handlin
 
 Beta release. All core features are implemented and tested. The library is functional and ready for testing in development environments. Use in production at your own discretion.
 
+## Library Metrics
+Ive benchmarked under loads of 200k messages (batch size 4,000, 1s window), 
+the library adds ~0.11–0.15 ms per message of processing overhead (measured via OpenTelemetry/Jaeger).
+Initial startup batches may be slightly higher due to JVM warm-up.
+See peformancescreenshots further down and also in /peformancescreenshots in the main codebase
+
 ## Features
 
 - **batch processing** with two modes: capacity-first (max throughput) and fixed window (predictable timing) - see [BATCH_PROCESSING_GUIDE.md](BatchProcessingLogic.md)
