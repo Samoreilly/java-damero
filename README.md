@@ -13,6 +13,7 @@ Ive benchmarked under loads of 200k messages (batch size 4,000, 1s window),
 the library adds ~0.11–0.15 ms per message of processing overhead (measured via OpenTelemetry/Jaeger).
 Initial startup batches may be slightly higher due to JVM warm-up.
 See peformancescreenshots further down and also in /peformancescreenshots in the main codebase
+[https://github.com/Samoreilly/java-damero/blob/main/src/main/java/net/damero/PerformanceScreenshots/500000Messages%7C6000Batch%7C2000msWindow%7CAverageResponseTime15msPerMessage.png]
 
 ## Features
 
