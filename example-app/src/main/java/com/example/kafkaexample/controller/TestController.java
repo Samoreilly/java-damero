@@ -160,4 +160,29 @@ public class TestController {
         kafkaTemplate.send("orders", order);
         return "sent custom order: " + order.getOrderId();
     }
+
+    @Autowired
+    private KafkaTemplate<String, Boolean> booleanKafkaTemplate;
+
+    @Autowired
+    private KafkaTemplate<String, Integer> integerKafkaTemplate;
+
+    @Autowired
+    private KafkaTemplate<String, Long> longKafkaTemplate;
+
+    @Autowired
+    private KafkaTemplate<String, Double> doubleKafkaTemplate;
+
+    @Autowired
+    private KafkaTemplate<String, Float> floatKafkaTemplate;
+
+    @GetMapping("/primitives")
+    public String testPrimitives() {
+        booleanKafkaTemplate.send("test-bool", true);
+        integerKafkaTemplate.send("test-int", 42);
+        longKafkaTemplate.send("test-long", 123456789L);
+        doubleKafkaTemplate.send("test-double", 7.89d);
+        floatKafkaTemplate.send("test-float", 4.56f);
+        return "sent primitives: bool, int, long, double: 7.89, float: 4.56";
+    }
 }

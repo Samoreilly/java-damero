@@ -85,4 +85,39 @@ public class OrderProcessingService {
 
         ack.acknowledge();
     }
+
+    @DameroKafkaListener(topic = "test-bool", dlqTopic = "bool-dlq")
+    @KafkaListener(topics = "test-bool", groupId = "bool-processor")
+    public void handleBoolean(Boolean value, Acknowledgment ack) {
+        logger.info("Received Boolean: {}", value);
+        ack.acknowledge();
+    }
+
+    @DameroKafkaListener(topic = "test-int", dlqTopic = "int-dlq")
+    @KafkaListener(topics = "test-int", groupId = "int-processor")
+    public void handleInteger(Integer value, Acknowledgment ack) {
+        logger.info("Received Integer: {}", value);
+        ack.acknowledge();
+    }
+
+    @DameroKafkaListener(topic = "test-long", dlqTopic = "long-dlq")
+    @KafkaListener(topics = "test-long", groupId = "long-processor")
+    public void handleLong(Long value, Acknowledgment ack) {
+        logger.info("Received Long: {}", value);
+        ack.acknowledge();
+    }
+
+    @DameroKafkaListener(topic = "test-double", dlqTopic = "double-dlq")
+    @KafkaListener(topics = "test-double", groupId = "double-processor")
+    public void handleDouble(Double value, Acknowledgment ack) {
+        logger.info("Received Double: {}", value);
+        ack.acknowledge();
+    }
+
+    @DameroKafkaListener(topic = "test-float", dlqTopic = "float-dlq")
+    @KafkaListener(topics = "test-float", groupId = "float-processor")
+    public void handleFloat(Float value, Acknowledgment ack) {
+        logger.info("Received Float: {}", value);
+        ack.acknowledge();
+    }
 }

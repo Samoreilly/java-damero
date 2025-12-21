@@ -7,6 +7,7 @@ import net.damero.Kafka.CustomObject.EventWrapper;
 import net.damero.Kafka.KafkaServices.KafkaDLQ;
 import net.damero.Kafka.Tracing.TracingService;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,9 +23,12 @@ public class DLQRouter {
     private static final Logger logger = LoggerFactory.getLogger(DLQRouter.class);
 
     private final TracingService tracingService;
+    private final KafkaTemplate<String, Object> safeKafkaTemplate;
 
-    public DLQRouter(TracingService tracingService) {
+    public DLQRouter(TracingService tracingService,
+            @Qualifier("dameroInternalKafkaTemplate") KafkaTemplate<String, Object> safeKafkaTemplate) {
         this.tracingService = tracingService;
+        this.safeKafkaTemplate = safeKafkaTemplate;
     }
 
     /**
@@ -68,7 +72,7 @@ public class DLQRouter {
                     dlqMetadata);
 
             KafkaDLQ.sendToDLQ(
-                    kafkaTemplate,
+                    safeKafkaTemplate,
                     dameroKafkaListener.dlqTopic(),
                     dlqWrapper);
 
@@ -177,7 +181,7 @@ public class DLQRouter {
                     dlqMetadata);
 
             KafkaDLQ.sendToDLQ(
-                    kafkaTemplate,
+                    safeKafkaTemplate,
                     customDlqTopic, // Send to the custom DLQ topic
                     dlqWrapper);
 

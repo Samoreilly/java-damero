@@ -17,6 +17,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -41,7 +42,7 @@ public class ReplayDLQ {
     private final TracingService tracingService;
 
     public ReplayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
-                     KafkaTemplate<String, Object> kafkaTemplate,
+                     @Qualifier("dameroInternalKafkaTemplate") KafkaTemplate<String, Object> kafkaTemplate,
                      ObjectMapper kafkaObjectMapper,
                      KafkaAdmin kafkaAdmin,
                      TracingService tracingService) {

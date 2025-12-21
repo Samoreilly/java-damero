@@ -5,12 +5,10 @@ import java.util.Map;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import com.example.kafkaexample.model.OrderEvent;
@@ -18,18 +16,54 @@ import com.example.kafkaexample.model.OrderEvent;
 @Configuration
 public class KafkaConfig {
 
-    @Bean
-    public ProducerFactory<String, OrderEvent> producerFactory() {
+    private Map<String, Object> baseProps() {
         Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9094");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        // Add JSON type info headers
         props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, true);
-        return new DefaultKafkaProducerFactory<>(props);
+        return props;
     }
 
     @Bean
     public KafkaTemplate<String, OrderEvent> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
+
+    @Bean
+    public KafkaTemplate<String, Boolean> booleanKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
+
+    @Bean
+    public KafkaTemplate<String, Integer> integerKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
+
+    @Bean
+    public KafkaTemplate<String, Long> longKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
+
+    @Bean
+    public KafkaTemplate<String, Double> doubleKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
+
+    @Bean
+    public KafkaTemplate<String, Float> floatKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
     }
 }

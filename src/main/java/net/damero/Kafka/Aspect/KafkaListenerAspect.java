@@ -14,10 +14,13 @@ import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Config.PluggableRedisCache;
 import net.damero.Kafka.RetryScheduler.RetrySched;
 import net.damero.Kafka.Tracing.TracingService;
+import net.damero.Kafka.Aspect.Components.Utility.RawBinaryWrapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
@@ -25,6 +28,7 @@ import net.damero.Kafka.CustomObject.EventMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -102,6 +106,7 @@ public class KafkaListenerAspect {
 
     @Around("@annotation(dameroKafkaListener)")
     public Object kafkaListener(ProceedingJoinPoint pjp, DameroKafkaListener dameroKafkaListener) throws Throwable {
+
         if (dameroKafkaListener.batchCapacity() > 0) {
             String topic = dameroKafkaListener.topic();
             topicJoinPoints.putIfAbsent(topic, pjp);
@@ -115,12 +120,14 @@ public class KafkaListenerAspect {
         }
 
         long processingStartTime = System.currentTimeMillis();
-        Acknowledgment acknowledgment = AspectHelperMethods.extractAcknowledgment(pjp.getArgs());
-        ConsumerRecord<?, ?> consumerRecord = AspectHelperMethods.extractConsumerRecord(pjp.getArgs());
+        Object[] args = pjp.getArgs();
+        Acknowledgment acknowledgment = AspectHelperMethods.extractAcknowledgment(args);
+        ConsumerRecord<?, ?> consumerRecord = AspectHelperMethods.extractConsumerRecord(args);
+
         EventMetadata existingMetadata = consumerRecord != null
                 ? HeaderUtils.extractMetadataFromHeaders(consumerRecord.headers())
                 : null;
-        Object event = EventUnwrapper.unwrapEvent(pjp.getArgs().length > 0 ? pjp.getArgs()[0] : null);
+        Object event = EventUnwrapper.unwrapEvent(args.length > 0 ? args[0] : null);
         KafkaTemplate<?, ?> kafkaTemplate = AspectHelperMethods.resolveKafkaTemplate(dameroKafkaListener, context,
                 defaultKafkaTemplate);
 
@@ -131,6 +138,8 @@ public class KafkaListenerAspect {
         }
 
         Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
+
+
         String eventId = EventUnwrapper.extractEventId(originalEvent, consumerRecord);
 
         TracingSpan processingSpan = null;
@@ -164,8 +173,9 @@ public class KafkaListenerAspect {
             }
 
             try {
-                Object result = (circuitBreaker != null) ? circuitBreakerWrapper.execute(circuitBreaker, pjp)
-                        : pjp.proceed();
+                Object result = (circuitBreaker != null)
+                        ? circuitBreakerWrapper.executeWithArgs(circuitBreaker, pjp, args)
+                        : pjp.proceed(args);
                 metricsRecorder.recordSuccess(dameroKafkaListener.topic(), processingStartTime);
                 if (acknowledgment != null)
                     acknowledgment.acknowledge();

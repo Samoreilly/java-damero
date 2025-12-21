@@ -38,7 +38,7 @@ class DLQRouterTest {
 
     @BeforeEach
     void setUp() {
-        dlqRouter = new DLQRouter(tracingService);
+        dlqRouter = new DLQRouter(tracingService, kafkaTemplate);
         lenient().when(dameroKafkaListener.topic()).thenReturn("test-topic");
         lenient().when(dameroKafkaListener.dlqTopic()).thenReturn("test-dlq");
         lenient().when(dameroKafkaListener.delay()).thenReturn(1000.0);

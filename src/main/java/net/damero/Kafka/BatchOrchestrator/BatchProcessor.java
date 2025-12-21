@@ -13,12 +13,16 @@ import net.damero.Kafka.Tracing.TracingScope;
 import net.damero.Kafka.Tracing.TracingService;
 import net.damero.Kafka.Tracing.TracingSpan;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import net.damero.Kafka.Aspect.Components.Utility.RawBinaryWrapper;
 import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
+
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -129,7 +133,56 @@ public class BatchProcessor {
         Object event = EventUnwrapper.unwrapEvent(args.length > 0 ? args[0] : null);
         if (event == null)
             return;
+
         Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
+
+        // Handle RawBinaryWrapper (primitive ambiguity resolution)
+        if (originalEvent instanceof RawBinaryWrapper) {
+            byte[] data = ((RawBinaryWrapper) originalEvent).getData();
+            MethodSignature signature = (MethodSignature) pjp.getSignature();
+            Class<?>[] parameterTypes = signature.getParameterTypes();
+            Class<?> targetType = null;
+            int targetIndex = -1;
+
+            // Find the parameter that is NOT an Acknowledgment or ConsumerRecord
+            for (int i = 0; i < parameterTypes.length; i++) {
+                Class<?> type = parameterTypes[i];
+                if (type != Acknowledgment.class && type != ConsumerRecord.class) {
+                    targetType = type;
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            if (targetType != null) {
+                StringBuilder hex = new StringBuilder();
+                for (byte b : data)
+                    hex.append(String.format("%02X ", b));
+                logger.info("DEBUG: Converting RawBinaryWrapper data: [{}] to targetType: {}", hex.toString().trim(),
+                        targetType.getName());
+
+                if (data.length == 4) {
+                    if (targetType == Float.class || targetType == float.class) {
+                        originalEvent = ByteBuffer.wrap(data).getFloat();
+                    } else {
+                        originalEvent = ByteBuffer.wrap(data).getInt();
+                    }
+                } else if (data.length == 8) {
+                    if (targetType == Double.class || targetType == double.class) {
+                        originalEvent = ByteBuffer.wrap(data).getDouble();
+                    } else {
+                        originalEvent = ByteBuffer.wrap(data).getLong();
+                    }
+                }
+            }
+
+            // Update the event and args for the rest of the pipeline
+            originalEvent = originalEvent != null ? originalEvent : event;
+            if (targetIndex != -1 && args.length > targetIndex) {
+                args[targetIndex] = originalEvent;
+            }
+        }
+
         String eventId = EventUnwrapper.extractEventId(originalEvent, consumerRecord);
 
         TracingSpan eventSpan = null;

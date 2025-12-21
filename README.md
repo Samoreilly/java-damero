@@ -2,7 +2,7 @@
 
 A Spring Boot library that adds automatic retry logic, dead letter queue handling, and circuit breaker support to Kafka listeners. The library reduces boilerplate code and provides production-ready error handling with minimal configuration.
 
-**📘 [View Troubleshooting Guide](TROUBLESHOOTING.md)** - Solutions for common issues (deserialization errors, type headers, Redis warnings)
+**View Troubleshooting Guide**: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Solutions for common issues (deserialization errors, type headers, Redis warnings)
 
 ## Status
 
@@ -39,7 +39,7 @@ add the library to your project:
 <dependency>
     <groupId>java.damero</groupId>
     <artifactId>kafka-damero</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
@@ -91,6 +91,81 @@ If using Redis:
 spring.data.redis.host=localhost
 spring.data.redis.port=6379
 ```
+
+## Producer requirements
+
+This library provides a consumer-side wrapper. You still need to provide and configure the Kafka producer in your application. The consumer code provided by this library expects to receive the original event object as the message value. To make that work reliably follow these rules:
+
+Checklist for your producer
+
+- Use a JSON value serializer for message bodies. The recommended option is Spring Kafka's JsonSerializer (org.springframework.kafka.support.serializer.JsonSerializer) or any serializer that writes plain JSON bytes.
+- Use a string serializer for message keys (org.apache.kafka.common.serialization.StringSerializer) unless you have a specific reason to use another key type.
+- Send the raw domain object as the value. Do not wrap the event in a custom envelope unless you also update your consumer to unwrap it.
+- Optionally supply a configured Jackson ObjectMapper to the JsonSerializer if you need custom serialization features (timestamps, custom modules, naming strategies).
+
+Why this matters
+
+The library delivers the original event object to your listener method (ConsumerRecord.value()). If the producer sends non-JSON bytes or a custom wrapper, the consumer may not be able to reconstruct the original event type and casting at the listener will fail. Using a standard JsonSerializer ensures the message payload is readable by the consumer and keeps behavior predictable.
+
+Quick examples
+
+1) Spring Boot Java configuration (recommended)
+
+```java
+@Configuration
+public class KafkaProducerConfig {
+
+    @Bean
+    public ProducerFactory<String, Object> producerFactory(ObjectMapper objectMapper) {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "${spring.kafka.bootstrap-servers}");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+
+        DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
+        // If you want to use a custom ObjectMapper, provide it to the JsonSerializer
+        factory.setValueSerializer(new JsonSerializer<>(objectMapper));
+        return factory;
+    }
+
+    @Bean
+    public KafkaTemplate<String, Object> kafkaTemplate(ProducerFactory<String, Object> producerFactory) {
+        return new KafkaTemplate<>(producerFactory);
+    }
+}
+```
+
+Sending a message from your application:
+
+```java
+@Service
+public class OrderProducer {
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    public OrderProducer(KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+    }
+
+    public void sendOrder(String key, OrderEvent order) {
+        kafkaTemplate.send("orders", key, order);
+    }
+}
+```
+
+2) application.properties example
+
+```properties
+spring.kafka.producer.bootstrap-servers=localhost:9092
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
+```
+
+Notes and advanced tips
+
+- If you need to send messages to the library's DLQ topics manually, send the same domain object as the original producer would. The library expects DLQ entries to contain the original event when replaying or manual inspection is needed.
+- If you use custom headers or type information, make sure they are compatible with your serializer and with any consumer configuration you use outside of this library.
+- The example-app subproject contains a working producer and consumer setup. Use it as a reference if you want a full working example.
 
 ## Quick Start
 
@@ -557,7 +632,7 @@ Protect downstream services:
 )
 ```
 
-When the circuit opens, messages go directly to DLQ without retries.
+When the circuit opens, messages go to directly to DLQ without retries.
 
 ### Distributed Tracing with OpenTelemetry
 
@@ -1559,6 +1634,3 @@ logging.level.net.damero.kafka=debug
    - error logs and stack traces
    - damero version
    - spring boot version
-
----
-

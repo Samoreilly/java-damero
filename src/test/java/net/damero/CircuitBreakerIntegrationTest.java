@@ -14,6 +14,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.*;
@@ -23,6 +24,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
@@ -54,7 +56,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class CircuitBreakerIntegrationTest {
 
     @Autowired
-    private KafkaTemplate<?, Object> kafkaTemplate;
+    @Qualifier("kafkaTemplate")
+    private KafkaTemplate<String, TestEvent> kafkaTemplate;
 
     @Autowired
     private CircuitBreakerTestListener circuitBreakerTestListener;
@@ -70,29 +73,30 @@ class CircuitBreakerIntegrationTest {
         circuitBreakerTestListener.reset();
         dlqCollector.reset();
         
-        // Reset circuit breaker state between tests by getting a fresh instance
-        // or using a different topic per test, or manually resetting
-        // Since circuit breakers are cached per topic, we'll use unique group IDs
-        // to ensure isolation, but we still need to clear circuit breaker state
+        // Reset circuit breaker state between tests
+        // Use the same parameters as the listener (3, 2000, 2000) to get the same instance
         if (circuitBreakerService != null && circuitBreakerService.isAvailable()) {
             Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
                 "circuit-breaker-topic",
-                10,
-                60000,
-                60000
+                3,   // failure threshold (matches listener)
+                2000,  // window duration (matches listener)
+                2000   // wait duration (matches listener)
             );
             if (circuitBreaker != null) {
                 // Try to reset the circuit breaker using reflection
                 try {
-                    // Use reset() method to reset all metrics
+                    // Use reset() method to reset all metrics and state
                     Method resetMethod = circuitBreaker.getClass().getMethod("reset");
                     resetMethod.invoke(circuitBreaker);
+                    // Wait a bit for reset to take effect
+                    Thread.sleep(100);
                 } catch (Exception e) {
                     // If reset fails, try transitionToClosedState
                     try {
                         Method transitionToClosedStateMethod = circuitBreaker.getClass()
                             .getMethod("transitionToClosedState");
                         transitionToClosedStateMethod.invoke(circuitBreaker);
+                        Thread.sleep(100);
                     } catch (Exception e2) {
                         // If both fail, that's okay - we'll handle it in tests
                     }
@@ -109,6 +113,7 @@ class CircuitBreakerIntegrationTest {
             TestEvent event = new TestEvent("fail-" + i, "data", true);
             kafkaTemplate.send("circuit-breaker-topic", event);
         }
+        kafkaTemplate.flush();
 
         // Wait for circuit to open and subsequent messages to go to DLQ
         await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -142,6 +147,7 @@ class CircuitBreakerIntegrationTest {
         // When: Sending successful messages
         TestEvent successEvent = new TestEvent("success-cb-1", "data", false);
         kafkaTemplate.send("circuit-breaker-topic", successEvent);
+        kafkaTemplate.flush();
 
         // Then: Message should be processed successfully (not go to DLQ)
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -160,7 +166,7 @@ class CircuitBreakerIntegrationTest {
         
         // Verify circuit breaker is CLOSED before sending message
         Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
-            "circuit-breaker-topic", 10, 60000, 60000);
+            "circuit-breaker-topic", 3, 2000, 2000);
         if (circuitBreaker != null) {
             String state = getCircuitBreakerState(circuitBreaker);
             // Circuit should be CLOSED after reset, but if it's OPEN from previous test, reset again
@@ -173,6 +179,7 @@ class CircuitBreakerIntegrationTest {
         // Send a failing message
         TestEvent failEvent = new TestEvent("retry-cb-1", "data", true);
         kafkaTemplate.send("circuit-breaker-topic", failEvent);
+        kafkaTemplate.flush();
 
         // Then: Message should retry (not go directly to DLQ due to circuit breaker)
         await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -206,6 +213,7 @@ class CircuitBreakerIntegrationTest {
             TestEvent event = new TestEvent("open-circuit-" + i, "data", true);
             kafkaTemplate.send("circuit-breaker-topic", event);
         }
+        kafkaTemplate.flush();
 
         // Wait for circuit to open
         await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -225,6 +233,7 @@ class CircuitBreakerIntegrationTest {
         // (Note: This is a simplified test - in practice you'd wait for the waitDuration)
         TestEvent recoveryEvent = new TestEvent("recovery-1", "data", false);
         kafkaTemplate.send("circuit-breaker-topic", recoveryEvent);
+        kafkaTemplate.flush();
 
         // Then: Circuit should allow the message through (may still be OPEN or transitioning)
         // This test verifies the circuit breaker mechanism doesn't block when HALF_OPEN
@@ -246,9 +255,9 @@ class CircuitBreakerIntegrationTest {
         // Get the circuit breaker instance
         Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
             "circuit-breaker-topic",
-            10,  // failure threshold
-            60000,  // window duration
-            60000   // wait duration
+            3,   // failure threshold
+            2000,  // window duration
+            2000   // wait duration
         );
 
         assertNotNull(circuitBreaker, "Circuit breaker should be created");
@@ -271,6 +280,7 @@ class CircuitBreakerIntegrationTest {
             TestEvent event = new TestEvent("state-test-" + i, "data", true);
             kafkaTemplate.send("circuit-breaker-topic", event);
         }
+        kafkaTemplate.flush();
 
         // Wait for circuit to potentially open
         await().atMost(20, TimeUnit.SECONDS).until(() -> {
@@ -308,6 +318,7 @@ class CircuitBreakerIntegrationTest {
             TestEvent event = new TestEvent("threshold-test-" + i, "data", true);
             kafkaTemplate.send("circuit-breaker-topic", event);
         }
+        kafkaTemplate.flush();
 
         // Then: Circuit should open after threshold
         await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -324,99 +335,59 @@ class CircuitBreakerIntegrationTest {
         resetCircuitBreaker("circuit-breaker-topic");
         circuitBreakerTestListener.reset();
         
-        // Wait a bit and verify circuit breaker is CLOSED before sending messages
-        Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
-            "circuit-breaker-topic", 10, 60000, 60000);
+        // Wait a bit for reset to take effect
+        Thread.sleep(200);
         
-        // If circuit is OPEN, wait a bit for it to potentially transition, or force reset again
+        // Verify circuit breaker is CLOSED before sending messages
+        Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
+            "circuit-breaker-topic", 3, 2000, 2000);
+        
+        // Ensure circuit is CLOSED - if OPEN, reset again and wait
         String state = getCircuitBreakerState(circuitBreaker);
-        if ("OPEN".equals(state)) {
-            // Wait a moment and reset again
-            Thread.sleep(1000);
+        int resetAttempts = 0;
+        while ("OPEN".equals(state) && resetAttempts < 3) {
             resetCircuitBreaker("circuit-breaker-topic");
+            Thread.sleep(500);
             state = getCircuitBreakerState(circuitBreaker);
+            resetAttempts++;
         }
+        
+        // Verify circuit is CLOSED before proceeding
+        assertTrue("CLOSED".equals(state) || "HALF_OPEN".equals(state), 
+            "Circuit breaker should be CLOSED or HALF_OPEN before sending successful messages, but was: " + state);
         
         // Use unique IDs with timestamp to track our messages
         long timestamp = System.currentTimeMillis();
         String messagePrefix = "success-cb-msg-" + timestamp;
-        
-        // Capture initial counts
-        int initialSuccessCount = circuitBreakerTestListener.getSuccessfulEvents().size();
-        int initialDLQCount = circuitBreakerTestListener.getCircuitBreakerDLQMessages().size();
         
         // When: Sending multiple successful messages
         for (int i = 0; i < 5; i++) {
             TestEvent event = new TestEvent(messagePrefix + "-" + i, "data", false);
             kafkaTemplate.send("circuit-breaker-topic", event);
         }
+        kafkaTemplate.flush();
 
-        // Then: All messages should be handled (either processed successfully or sent to DLQ if circuit is OPEN)
-        // The key is that successful messages should not trigger circuit opening or failures
+        // Then: All messages should be handled successfully (not sent to circuit-breaker DLQ)
+        // The key is that successful messages should NOT be routed to circuit-breaker DLQ
         await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
-            // Count messages that were processed (either successful or went to DLQ due to OPEN circuit)
-            int processedSuccess = (int) circuitBreakerTestListener.getSuccessfulEvents().stream()
-                .filter(e -> e.getId() != null && e.getId().startsWith(messagePrefix))
-                .count();
+            // Wait for messages to be processed
+            assertTrue(circuitBreakerTestListener.getSuccessfulEvents().size() >= 5 ||
+                      circuitBreakerTestListener.getTotalDLQMessages() >= 5,
+                "All 5 messages should be processed or sent to DLQ");
             
-            int sentToDLQ = (int) circuitBreakerTestListener.getCircuitBreakerDLQMessages().stream()
+            // Filter circuit breaker DLQ messages to only those with our test event ID
+            long circuitBreakerDLQ = circuitBreakerTestListener.getCircuitBreakerDLQMessages().stream()
                 .filter(wrapper -> {
                     if (wrapper.getEvent() instanceof TestEvent) {
                         TestEvent event = (TestEvent) wrapper.getEvent();
                         return event.getId() != null && event.getId().startsWith(messagePrefix);
                     }
                     return false;
-                })
-                .count();
-            
-            assertTrue(processedSuccess + sentToDLQ >= 5,
-                "All 5 messages should be handled. Processed: " + processedSuccess + 
-                ", Sent to DLQ (if circuit OPEN): " + sentToDLQ);
+                }).count();
+            assertEquals(0, circuitBreakerDLQ, 
+                "Successful messages should not hit circuit-breaker DLQ. Found " + circuitBreakerDLQ + 
+                " messages with prefix " + messagePrefix + " in circuit-breaker DLQ");
         });
-        
-        // If circuit was CLOSED, all messages should be processed successfully
-        // If circuit was OPEN, messages go to DLQ but that's acceptable behavior
-        // The important thing is messages don't cause failures
-        long messagesInDLQ = circuitBreakerTestListener.getCircuitBreakerDLQMessages().stream()
-            .filter(wrapper -> {
-                if (wrapper.getEvent() instanceof TestEvent) {
-                    TestEvent event = (TestEvent) wrapper.getEvent();
-                    return event.getId() != null && event.getId().startsWith(messagePrefix);
-                }
-                return false;
-            })
-            .count();
-        
-        // Verify that if messages went to DLQ, it's only because circuit was OPEN (not because of failures)
-        if (messagesInDLQ > 0) {
-            // Circuit was OPEN, messages went to DLQ - this is expected behavior
-            // Verify the DLQ messages indicate circuit breaker OPEN, not actual failures
-            boolean allCircuitBreakerDLQ = circuitBreakerTestListener.getCircuitBreakerDLQMessages().stream()
-                .filter(wrapper -> {
-                    if (wrapper.getEvent() instanceof TestEvent) {
-                        TestEvent event = (TestEvent) wrapper.getEvent();
-                        return event.getId() != null && event.getId().startsWith(messagePrefix);
-                    }
-                    return false;
-                })
-                .allMatch(wrapper -> {
-                    if (wrapper.getMetadata() != null && wrapper.getMetadata().getLastFailureException() != null) {
-                        String message = wrapper.getMetadata().getLastFailureException().getMessage();
-                        return message != null && message.contains("Circuit breaker OPEN");
-                    }
-                    return false;
-                });
-            
-            assertTrue(allCircuitBreakerDLQ,
-                "If messages went to DLQ, they should indicate circuit breaker OPEN, not actual failures");
-        } else {
-            // Circuit was CLOSED, all messages should be processed successfully
-            int processedSuccess = (int) circuitBreakerTestListener.getSuccessfulEvents().stream()
-                .filter(e -> e.getId() != null && e.getId().startsWith(messagePrefix))
-                .count();
-            assertEquals(5, processedSuccess,
-                "If circuit was CLOSED, all 5 messages should be processed successfully");
-        }
     }
 
     // Helper method to get circuit breaker state using reflection
@@ -436,9 +407,9 @@ class CircuitBreakerIntegrationTest {
         if (circuitBreakerService != null && circuitBreakerService.isAvailable()) {
             Object circuitBreaker = circuitBreakerService.getCircuitBreaker(
                 topic,
-                10,  // failure threshold
-                60000,  // window duration
-                60000   // wait duration
+                3,   // failure threshold (matches listener)
+                2000,  // window duration
+                2000   // wait duration
             );
             if (circuitBreaker != null) {
                 try {
@@ -499,23 +470,28 @@ class CircuitBreakerIntegrationTest {
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, embeddedKafka.getBrokersAsString());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "circuit-breaker-test-group");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
-            JsonDeserializer<Object> jsonDeserializer =
-                    new JsonDeserializer<>(kafkaObjectMapper);
-            jsonDeserializer.addTrustedPackages("*");
-            jsonDeserializer.setUseTypeHeaders(true);
+            JsonDeserializer<Object> deserializer = new JsonDeserializer<>(kafkaObjectMapper);
+            deserializer.addTrustedPackages("*");
+            deserializer.setUseTypeHeaders(true);
+
+            ErrorHandlingDeserializer<Object> errorHandlingDeserializer =
+                    new ErrorHandlingDeserializer<>(deserializer);
+
 
             ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                     props,
                     new StringDeserializer(),
-                    jsonDeserializer
+                    errorHandlingDeserializer
             );
 
-            ConcurrentKafkaListenerContainerFactory<String, Object> factory = 
+            ConcurrentKafkaListenerContainerFactory<String, Object> factory =
                     new ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory(consumerFactory);
             factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
             factory.setCommonErrorHandler(null);
+            factory.setAutoStartup(true);
             return factory;
         }
 
@@ -557,6 +533,7 @@ class CircuitBreakerIntegrationTest {
                     new ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory(consumerFactory);
             factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+            factory.setAutoStartup(true);
             return factory;
         }
     }
@@ -581,9 +558,10 @@ class CircuitBreakerIntegrationTest {
                 delay = 100,
                 delayMethod = DelayMethod.LINEAR,
                 enableCircuitBreaker = true,
-                circuitBreakerFailureThreshold = 10,  // Low threshold for faster testing
-                circuitBreakerWindowDuration = 60000,
-                circuitBreakerWaitDuration = 60000
+                // Lower thresholds/timeouts so tests open/close quickly
+                circuitBreakerFailureThreshold = 3,
+                circuitBreakerWindowDuration = 2000,
+                circuitBreakerWaitDuration = 2000
         )
         @KafkaListener(topics = "circuit-breaker-topic", groupId = "circuit-breaker-group", 
                 containerFactory = "kafkaListenerContainerFactory")
@@ -599,6 +577,14 @@ class CircuitBreakerIntegrationTest {
             // With header-based approach, payload is always the original event, not EventWrapper
             if (payload instanceof TestEvent te) {
                 event = te;
+            } else if (payload instanceof java.util.Map<?, ?> map) {
+                Object id = map.get("id");
+                Object data = map.get("data");
+                Object shouldFail = map.get("shouldFail");
+                if (id != null) {
+                    event = new TestEvent(id.toString(), data != null ? data.toString() : null,
+                            shouldFail instanceof Boolean b ? b : Boolean.TRUE.equals(shouldFail));
+                }
             }
 
             if (event == null) {

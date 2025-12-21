@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 # Configuration
 TOPIC="orders"
 NUM_MESSAGES=${1:-50000}
-BOOTSTRAP_SERVER="localhost:9092"
+BOOTSTRAP_SERVER="localhost:9094"
 CONSUMER_GROUP="order-processor"
 
 echo -e "${BLUE}==================================================================="

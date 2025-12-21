@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import net.damero.Kafka.Aspect.Components.*;
+import net.damero.Kafka.Aspect.Components.Utility.FlexibleJsonDeserializer;
 import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
@@ -22,6 +23,7 @@ import net.damero.Kafka.Tracing.OpenTelemetryTracingService;
 import net.damero.Kafka.Tracing.TracingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.context.ApplicationContext;
 import net.damero.Kafka.Resilience.CircuitBreakerService;
@@ -83,6 +85,12 @@ public class CustomKafkaAutoConfiguration {
     private String autoOffsetReset;
 
     @Bean
+
+    public org.springframework.kafka.core.KafkaAdmin kafkaAdmin() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        return new org.springframework.kafka.core.KafkaAdmin(configs);
+    }
     @ConditionalOnMissingBean
     public KafkaDLQ kafkaDLQ() {
         return new KafkaDLQ();
@@ -130,8 +138,9 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DLQRouter dlqRouter(TracingService tracingService) {
-        return new DLQRouter(tracingService);
+    public DLQRouter dlqRouter(TracingService tracingService,
+            @Qualifier("dameroInternalKafkaTemplate") KafkaTemplate<String, Object> safeKafkaTemplate) {
+        return new DLQRouter(tracingService, safeKafkaTemplate);
     }
 
     @Bean
@@ -148,7 +157,7 @@ public class CustomKafkaAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ReplayDLQ replayDLQ(ConsumerFactory<String, EventWrapper<?>> dlqConsumerFactory,
-            KafkaTemplate<String, Object> kafkaTemplate,
+            @Qualifier("dameroInternalKafkaTemplate") KafkaTemplate<String, Object> kafkaTemplate,
             ObjectMapper kafkaObjectMapper,
             KafkaAdmin kafkaAdmin,
             TracingService tracingService) {
@@ -327,7 +336,7 @@ public class CustomKafkaAutoConfiguration {
     @ConditionalOnMissingBean
     public KafkaListenerAspect kafkaListenerAspect(DLQRouter dlqRouter,
             ApplicationContext context,
-            KafkaTemplate<?, ?> defaultKafkaTemplate,
+            @Qualifier("dameroInternalKafkaTemplate") KafkaTemplate<?, ?> defaultKafkaTemplate,
             RetryOrchestrator retryOrchestrator,
             MetricsRecorder metricsRecorder,
             CircuitBreakerWrapper circuitBreakerWrapper,
@@ -476,11 +485,12 @@ public class CustomKafkaAutoConfiguration {
 
     /**
      * Default KafkaTemplate for sending to DLQ and other internal operations.
-     * Users typically don't need to override this.
+     * This template is always configured with JsonSerializer to safely handle
+     * EventWrapper.
      */
-    @Bean
-    @ConditionalOnMissingBean(name = "defaultKafkaTemplate")
-    public KafkaTemplate<String, Object> defaultKafkaTemplate(ObjectMapper kafkaObjectMapper) {
+    @Bean(name = "dameroInternalKafkaTemplate")
+    @ConditionalOnMissingBean(name = "dameroInternalKafkaTemplate")
+    public KafkaTemplate<String, Object> dameroInternalKafkaTemplate(ObjectMapper kafkaObjectMapper) {
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -525,7 +535,6 @@ public class CustomKafkaAutoConfiguration {
      */
     @Bean
     @Primary
-    @ConditionalOnMissingBean(ConcurrentKafkaListenerContainerFactory.class)
     public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
             ObjectMapper kafkaObjectMapper,
             KafkaProperties kafkaProperties,
@@ -537,7 +546,6 @@ public class CustomKafkaAutoConfiguration {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
 
-        // Guard-rail warning for production misconfiguration
         if (useTypeHeaders && (defaultType == null || defaultType.trim().isEmpty())) {
             logger.warn(
                     "==> CONFIGURATION WARNING: kafka.damero.consumer.use-type-headers=true but no default-type set.");
@@ -546,20 +554,21 @@ public class CustomKafkaAutoConfiguration {
             logger.warn("==> Please set kafka.damero.consumer.default-type or set use-type-headers=false.");
         }
 
-        // Use ErrorHandlingDeserializer wrapping a FlexibleJsonDeserializer that falls
-        // back to String
+        // Use ErrorHandlingDeserializer wrapping a HeaderAwareFlexibleJsonDeserializer
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
-        // We will instantiate FlexibleJsonDeserializer below and wrap it in
-        // ErrorHandlingDeserializer when creating the factory
 
-        // Build a FlexibleJsonDeserializer instance that tries JSON then String
-        net.damero.Kafka.Aspect.Components.Utility.FlexibleJsonDeserializer flexible = new net.damero.Kafka.Aspect.Components.Utility.FlexibleJsonDeserializer(
-                kafkaObjectMapper, useTypeHeaders, defaultType);
+        // Build a new deserializer that handles type headers + fallback JSON/String
+        FlexibleJsonDeserializer deserializer =
+                new FlexibleJsonDeserializer(kafkaObjectMapper, defaultType);
+
+        ErrorHandlingDeserializer<Object> errorHandlingDeserializer =
+                new ErrorHandlingDeserializer<>(deserializer);
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                 props,
-                new org.apache.kafka.common.serialization.StringDeserializer(),
-                new org.springframework.kafka.support.serializer.ErrorHandlingDeserializer<>(flexible));
+                new StringDeserializer(),
+                errorHandlingDeserializer
+        );
 
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
@@ -568,6 +577,7 @@ public class CustomKafkaAutoConfiguration {
 
         return factory;
     }
+
 
     /*
      * USE SAME CONFIG AS DLQ CONSUMER FACTORY BELOW
