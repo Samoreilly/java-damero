@@ -64,7 +64,6 @@ public class DuplicationManager {
      */
     public boolean isDuplicate(String id) {
         if (id == null || id.isEmpty()) {
-            logger.debug("Cannot deduplicate - eventId is null or empty");
             return false;
         }
 
@@ -74,7 +73,6 @@ public class DuplicationManager {
 
         if (isDupe) {
             duplicateCount.incrementAndGet();
-            logger.debug("Duplicate detected for message ID: {}", id);
         }
         
         return isDupe;
@@ -88,13 +86,11 @@ public class DuplicationManager {
      */
     public void markAsSeen(String id) {
         if (id == null || id.isEmpty()) {
-            logger.debug("Cannot mark as seen - eventId is null or empty");
             return;
         }
         
         String key = getKey(id);
         cache.put(key, SEEN_MARKER, ttl);
-        logger.debug("Marked message ID as seen with TTL {}: {}", ttl, id);
     }
 
     /**

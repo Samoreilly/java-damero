@@ -43,12 +43,13 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		
-		<!-- Kafka Damero Library -->
+		<!-- Kafka Damero Library - use the latest built jar from parent project -->
 		<dependency>
-			<groupId>io.github.samoreilly</groupId>
-			<artifactId>java-damero</artifactId>
-			<version>1.0.1</version>
+		<groupId>io.github.samoreilly</groupId>
+		<artifactId>java-damero</artifactId>
+		<version>1.0.3-SNAPSHOT</version>
 		</dependency>
+		
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>

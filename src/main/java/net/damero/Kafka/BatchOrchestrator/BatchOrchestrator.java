@@ -122,8 +122,6 @@ public class BatchOrchestrator {
             if (processing != null && processing.get()) {
                 // Another thread is processing - since we already added to queue, just log and
                 // return
-                logger.debug("Message queued during batch processing for topic: {} - will be included in next batch",
-                        topic);
                 return BatchStatus.PROCESSING;
             }
 
@@ -141,9 +139,6 @@ public class BatchOrchestrator {
 
             int minimumCapacity = listener.minimumCapacity();
 
-            logger.debug("Batch for topic: {}, count: {}/{}, fixedWindow: {}", topic, currentCount, batchCapacity,
-                    fixedWindow);
-
             // FIXED WINDOW MODE: Only process when window expires, capacity is just a limit
             if (fixedWindow) {
                 return BatchStatus.PROCESSING;
@@ -154,7 +149,6 @@ public class BatchOrchestrator {
                 // Set processing flag to prevent window callback from also processing
                 processingFlags.computeIfAbsent(topic, k -> new AtomicBoolean(false)).set(true);
                 cancelWindowExpiryTask(topic);
-                logger.debug("Batch capacity reached for topic: {} ({}/{})", topic, currentCount, batchCapacity);
                 metricsRecorder.recordBatchCapacityReached(topic);
                 return BatchStatus.CAPACITY_REACHED;
             }
@@ -162,8 +156,6 @@ public class BatchOrchestrator {
             // Check minimum capacity threshold (optional early trigger, only in
             // capacity-first mode)
             if (minimumCapacity > 0 && currentCount >= minimumCapacity) {
-                logger.debug("Minimum capacity threshold reached for topic: {} ({}/{})",
-                        topic, currentCount, minimumCapacity);
                 // Could add MINIMUM_REACHED status if needed for future use
             }
 

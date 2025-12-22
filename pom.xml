@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>io.github.samoreilly</groupId>
 	<artifactId>java-damero</artifactId>
-	<version>1.0.2</version>
+	<version>1.0.3</version>
 	<packaging>jar</packaging>
 	<name>java-damero</name>
 	<description>Spring Boot library for Kafka retry logic, retries, batch processing, dead letter queue handling, circuit breaker support, tracing with OpenTelemetry and api for metrics</description>

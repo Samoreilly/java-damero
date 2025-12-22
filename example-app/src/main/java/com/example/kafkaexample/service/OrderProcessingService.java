@@ -13,6 +13,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.TopicPartition;
 
+
 @Service
 public class OrderProcessingService {
 
@@ -27,9 +28,9 @@ public class OrderProcessingService {
             delayMethod = DelayMethod.FIBONACCI,
             fibonacciLimit = 15,
             nonRetryableExceptions = {IllegalArgumentException.class, ValidationException.class },
-            deDuplication = false,
+            deDuplication = true,
             openTelemetry = true,
-            batchCapacity = 6000,
+            batchCapacity = 0,  // Disable batch processing for functional tests
             batchWindowLength = 2000,
             fixedWindow = true
     )

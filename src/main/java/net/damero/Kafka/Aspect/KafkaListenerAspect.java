@@ -139,7 +139,6 @@ public class KafkaListenerAspect {
 
         Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
 
-
         String eventId = EventUnwrapper.extractEventId(originalEvent, consumerRecord);
 
         TracingSpan processingSpan = null;

@@ -155,12 +155,6 @@ public class BatchProcessor {
             }
 
             if (targetType != null) {
-                StringBuilder hex = new StringBuilder();
-                for (byte b : data)
-                    hex.append(String.format("%02X ", b));
-                logger.info("DEBUG: Converting RawBinaryWrapper data: [{}] to targetType: {}", hex.toString().trim(),
-                        targetType.getName());
-
                 if (data.length == 4) {
                     if (targetType == Float.class || targetType == float.class) {
                         originalEvent = ByteBuffer.wrap(data).getFloat();

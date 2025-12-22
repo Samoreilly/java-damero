@@ -2,8 +2,6 @@ package net.damero.Kafka.Aspect.Components.Utility;
 
 import net.damero.Kafka.CustomObject.EventWrapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -13,8 +11,6 @@ import java.security.NoSuchAlgorithmException;
  * Utility class for unwrapping events from various formats.
  */
 public class EventUnwrapper {
-
-    private static final Logger logger = LoggerFactory.getLogger(EventUnwrapper.class);
 
     // Maximum length for using raw payload as an ID. Longer payloads will be
     // hashed.
@@ -125,14 +121,17 @@ public class EventUnwrapper {
             }
         }
 
-        // 2. Fallback to Kafka coordinates if ConsumerRecord is available
-        // This is the most reliable way to uniquely identify a message even if the
-        // payload is identical
-        if (record != null) {
-            return String.format("%s:%d:%d", record.topic(), record.partition(), record.offset());
+        // 2. Prefer a stable producer-provided key when available
+        if (record != null && record.key() != null) {
+            return canonicalizeStringId(record.key().toString());
         }
 
-        // 3. Last resort: hash of toString()
+        // 3. Fallback to a stable hash of the payload (avoids partition/offset variance)
+        if (record != null && record.value() != null) {
+            return canonicalizeStringId(record.value().toString());
+        }
+
+        // 4. Last resort: hash of toString() on the event object
         return canonicalizeStringId(event.toString());
     }
 

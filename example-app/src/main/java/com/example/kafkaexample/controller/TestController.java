@@ -3,10 +3,16 @@ package com.example.kafkaexample.controller;
 import com.example.kafkaexample.model.OrderEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.web.bind.annotation.*;
 import java.util.Random;
 import java.util.UUID;
 import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.header.Headers;
+
 
 @RestController
 @RequestMapping("/test")
@@ -185,4 +191,68 @@ public class TestController {
         floatKafkaTemplate.send("test-float", 4.56f);
         return "sent primitives: bool, int, long, double: 7.89, float: 4.56";
     }
+
+    @GetMapping("/burst")
+    public String testBurst() {
+        for (int i = 0; i < 75000; i++) {
+            final String uuid = UUID.randomUUID().toString();
+            String orderId = "order-10" + uuid;
+            OrderEvent order = new OrderEvent();
+            order.setOrderId(orderId);
+            order.setAmount(100.0);
+            order.setCustomerId("customer-123");
+            order.setPaymentMethod("credit-card");
+            order.setStatus("PENDING");
+
+            kafkaTemplate.send("orders", order);
+            System.out.println("sent order: " + orderId);
+        }
+        return "sent valid order - should process successfully";
+    }
+
+    @GetMapping("/below")
+    public String testBelowBatchCapacity() {
+        for (int i = 0; i < 1000; i++) {
+            final String uuid = UUID.randomUUID().toString();
+            String orderId = "order-10" + uuid;
+            OrderEvent order = new OrderEvent();
+            order.setOrderId(orderId);
+            order.setAmount(100.0);
+            order.setCustomerId("customer-123");
+            order.setPaymentMethod("credit-card");
+            order.setStatus("PENDING");
+            kafkaTemplate.send("orders", order);
+            System.out.println("sent order: " + orderId);
+        }
+        return "sent valid order - should process successfully";
+    }
+
+    @GetMapping("/duplicates")
+    public String sendDuplicates() {
+        OrderEvent order = new OrderEvent();
+        order.setOrderId("1");
+        order.setAmount(100.0);
+        order.setCustomerId("customer-123");
+        order.setPaymentMethod("credit-card");
+        order.setStatus("PENDING");
+    
+        final String key = "1";
+        final String eventId = UUID.randomUUID().toString();
+    
+        for (int i = 0; i < 1000; i++) {
+            RecordHeaders headers = new RecordHeaders();
+            headers.add("event-type", "1".getBytes(StandardCharsets.UTF_8));
+            headers.add("__TypeId__", OrderEvent.class.getName().getBytes(StandardCharsets.UTF_8));
+            headers.add("event-id", eventId.getBytes(StandardCharsets.UTF_8));
+    
+            ProducerRecord<String, OrderEvent> record = new ProducerRecord<>(
+                "orders", null, key, order, headers
+            );
+    
+            kafkaTemplate.send(record);
+        }
+    
+        return "sent duplicates with consistent event-id";
+    }
+    
 }
