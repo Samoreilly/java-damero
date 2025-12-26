@@ -13,7 +13,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.header.Headers;
 
-
 @RestController
 @RequestMapping("/test")
 public class TestController {
@@ -82,6 +81,19 @@ public class TestController {
 
         kafkaTemplate.send("orders", order);
         return "sent order with fail status - should retry 3 times then go to dlq";
+    }
+
+    @GetMapping("/order/fail-to-dlq")
+    public String testGetFailToDlq() {
+        OrderEvent order = new OrderEvent();
+        order.setOrderId("order-fail-" + UUID.randomUUID().toString());
+        order.setAmount(500.0);
+        order.setCustomerId("customer-999");
+        order.setPaymentMethod("credit-card");
+        order.setStatus("FAIL"); // Triggers retryable RuntimeException
+
+        kafkaTemplate.send("orders", order);
+        return "Sent order " + order.getOrderId() + " that will fail and go to DLQ after 3 retries.";
     }
 
     @PostMapping("/order/success")
@@ -235,24 +247,23 @@ public class TestController {
         order.setCustomerId("customer-123");
         order.setPaymentMethod("credit-card");
         order.setStatus("PENDING");
-    
+
         final String key = "1";
         final String eventId = UUID.randomUUID().toString();
-    
+
         for (int i = 0; i < 1000; i++) {
             RecordHeaders headers = new RecordHeaders();
             headers.add("event-type", "1".getBytes(StandardCharsets.UTF_8));
             headers.add("__TypeId__", OrderEvent.class.getName().getBytes(StandardCharsets.UTF_8));
             headers.add("event-id", eventId.getBytes(StandardCharsets.UTF_8));
-    
+
             ProducerRecord<String, OrderEvent> record = new ProducerRecord<>(
-                "orders", null, key, order, headers
-            );
-    
+                    "orders", null, key, order, headers);
+
             kafkaTemplate.send(record);
         }
-    
+
         return "sent duplicates with consistent event-id";
     }
-    
+
 }

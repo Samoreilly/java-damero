@@ -12,52 +12,43 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 import org.springframework.kafka.annotation.TopicPartition;
-
+import java.util.Map;
 
 @Service
 public class OrderProcessingService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderProcessingService.class);
 
-    @DameroKafkaListener(
-            topic = "orders",
-            dlqTopic = "test-dlq",
-            eventType = com.example.kafkaexample.model.OrderEvent.class,
-            maxAttempts = 3,
-            delay = 1000,
-            delayMethod = DelayMethod.FIBONACCI,
-            fibonacciLimit = 15,
-            nonRetryableExceptions = {IllegalArgumentException.class, ValidationException.class },
-            deDuplication = true,
-            openTelemetry = true,
-            batchCapacity = 0,  // Disable batch processing for functional tests
-            batchWindowLength = 2000,
-            fixedWindow = true
-    )
+    @DameroKafkaListener(topic = "orders", dlqTopic = "test-dlq", eventType = com.example.kafkaexample.model.OrderEvent.class, maxAttempts = 3, delay = 1000, delayMethod = DelayMethod.FIBONACCI, fibonacciLimit = 15, nonRetryableExceptions = {
+            IllegalArgumentException.class,
+            ValidationException.class }, deDuplication = true, openTelemetry = true, batchCapacity = 0, batchWindowLength = 2000, fixedWindow = true)
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, String> record, Acknowledgment ack) {
-        // With header-based approach, value is always the original OrderEvent
-        // Metadata (attempts, failures, etc.) is stored in Kafka headers, not in the
-        // payload
-        Object value = record.value();
-        // if (!(value instanceof OrderEvent order) || !(value instanceof String order)
-        // ) {
-        // logger.error("unexpected event type: {}", value != null ?
-        // value.getClass().getName() : "null");
-        // return;
-        // }
 
-        // Check if this is a replayed message (for testing/demo purposes)
+        Object value = record.value();
+
         boolean isReplay = record.headers().lastHeader("X-Replay-Mode") != null;
 
-        if (value instanceof String) {
+        if (value instanceof String str) {
             if (isReplay) {
-                logger.warn("REPLAY MODE: Skipping validation for order: {} (this is for testing only!)", value);
-                logger.info("order {} processed successfully (validation skipped in replay mode)", value);
+                logger.warn("REPLAY MODE: Skipping validation for order: {} (this is for testing only!)", str);
+                logger.info("order {} processed successfully (validation skipped in replay mode)", str);
+                ack.acknowledge();
+                return;
             }
-            // logger.info("Received message: {}", value);
+            if (str.contains("\"status\":\"FAIL\"") || str.contains("FAIL")) {
+                throw new RuntimeException("simulated processing failure for string message");
+            }
+            logger.info("Received String message: {}", str);
             ack.acknowledge();
             return;
+        }
+
+        if (value instanceof Map map) {
+            String status = String.valueOf(map.get("status"));
+            if ("FAIL".equals(status)) {
+                throw new RuntimeException("simulated processing failure for map message");
+            }
         }
 
         // Validation checks - these exceptions are non-retryable
