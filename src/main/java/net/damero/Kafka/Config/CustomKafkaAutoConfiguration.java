@@ -55,6 +55,7 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.kafka.support.converter.StringJsonMessageConverter;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -586,7 +587,57 @@ public class CustomKafkaAutoConfiguration {
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
         factory.setCommonErrorHandler(null); // aspect handles retries
 
+        // Use a MessageConverter for "Zero-Config" inferred types.
+        // This allows Spring to determine the target type from the @KafkaListener
+        // method signature.
+        factory.setRecordMessageConverter(new LenientJsonMessageConverter(kafkaObjectMapper));
+
         return factory;
+    }
+
+    /**
+     * A MessageConverter that extends StringJsonMessageConverter but tolerates
+     * non-String/non-byte payloads. If the payload is already an Object (e.g.
+     * deserialized
+     * by FlexibleJsonDeserializer), it simply returns it or converts it if
+     * necessary.
+     */
+    public static class LenientJsonMessageConverter extends StringJsonMessageConverter {
+
+        public LenientJsonMessageConverter(ObjectMapper objectMapper) {
+            super(objectMapper);
+        }
+
+        @Override
+        protected Object extractAndConvertValue(org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> record,
+                java.lang.reflect.Type type) {
+            Object value = record.value();
+            if (value == null) {
+                return null;
+            }
+
+            // If it's the raw types we expect (String, Bytes), let super handle it
+            // (Inference)
+            if (value instanceof String || value instanceof byte[]
+                    || value instanceof org.apache.kafka.common.utils.Bytes) {
+                return super.extractAndConvertValue(record, type);
+            }
+
+            // If the payload is already an object, checking compatibility or converting map
+            if (type instanceof Class<?> targetClass && targetClass != Object.class) {
+                if (targetClass.isInstance(value)) {
+                    return value;
+                }
+                // Try converting (e.g. Map -> Object)
+                try {
+                    return this.getObjectMapper().convertValue(value, this.getObjectMapper().constructType(type));
+                } catch (Exception e) {
+                    // Fallback to returning original value if conversion fails
+                }
+            }
+
+            return value;
+        }
     }
 
     /*

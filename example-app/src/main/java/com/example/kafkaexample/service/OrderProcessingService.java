@@ -24,7 +24,7 @@ public class OrderProcessingService {
             ValidationException.class
     }, deDuplication = false, openTelemetry = true, batchCapacity = 6000, batchWindowLength = 2000, fixedWindow = true)
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
-    public void processOrder(ConsumerRecord<String, String> record, Acknowledgment ack) {
+    public void processOrder(ConsumerRecord<String, Object> record, Acknowledgment ack) {
 
         Object value = record.value();
 

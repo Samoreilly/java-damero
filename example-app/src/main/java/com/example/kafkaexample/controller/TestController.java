@@ -274,4 +274,70 @@ public class TestController {
         return "sent duplicates with consistent event-id";
     }
 
+    /**
+     * TEST: OrderEvent with __TypeId__ header
+     */
+    @GetMapping("/flex/order-with-header")
+    public String testOrderWithHeader() {
+        OrderEvent order = new OrderEvent("flex-header-" + UUID.randomUUID(), "cust-1", 10.0, "CC", "NEW");
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("__TypeId__", OrderEvent.class.getName().getBytes(StandardCharsets.UTF_8));
+
+        ProducerRecord<String, OrderEvent> record = new ProducerRecord<String, OrderEvent>("orders", null, null, order,
+                headers);
+        kafkaTemplate.send(record);
+        return "Sent OrderEvent WITH __TypeId__ header";
+    }
+
+    @Autowired
+    private KafkaTemplate<String, Object> noHeaderKafkaTemplate;
+
+    /**
+     * TEST: OrderEvent WITHOUT __TypeId__ header (Zero-Config Inference)
+     */
+    @GetMapping("/flex/order-no-header")
+    public String testOrderNoHeader() {
+        OrderEvent order = new OrderEvent("flex-no-header-" + UUID.randomUUID(), "cust-2", 20.0, "DEBIT", "NEW");
+        // Sending directly via template (no custom headers)
+        noHeaderKafkaTemplate.send("orders", order);
+        return "Sent OrderEvent WITHOUT __TypeId__ header (Zero-Config)";
+    }
+
+    /**
+     * TEST: Primitive Boolean WITHOUT header
+     */
+    @GetMapping("/flex/bool-no-header")
+    public String testBoolNoHeader() {
+        noHeaderKafkaTemplate.send("test-bool", true);
+        return "Sent Boolean WITHOUT header (Zero-Config)";
+    }
+
+    /**
+     * TEST: Primitive Double WITHOUT header
+     */
+    @GetMapping("/flex/double-no-header")
+    public String testDoubleNoHeader() {
+        noHeaderKafkaTemplate.send("test-double", 3.14159);
+        return "Sent Double WITHOUT header (Zero-Config)";
+    }
+
+    /**
+     * TEST: Raw String WITHOUT header
+     */
+    @GetMapping("/flex/string-no-header")
+    public String testStringNoHeader() {
+        stringKafkaTemplate.send("orders", "Just a plain string message");
+        return "Sent String WITHOUT header (Zero-Config)";
+    }
+
+    /**
+     * TEST: Internal EventWrapper JSON (Transparent Unwrapping)
+     */
+    @GetMapping("/flex/wrapped-event")
+    public String testWrappedEvent() {
+        // Constructing a raw JSON string that looks like an EventWrapper
+        String wrappedJson = "{\"event\":{\"orderId\":\"wrapped-123\",\"customerId\":\"cust-wrapped\",\"amount\":99.99,\"paymentMethod\":\"PAYPAL\",\"status\":\"NEW\"},\"timestamp\":\"2023-01-01T00:00:00\",\"metadata\":{\"attempts\":2,\"originalTopic\":\"orders\"}}";
+        stringKafkaTemplate.send("orders", wrappedJson);
+        return "Sent manually WRAPPED EventWrapper JSON (Transparent Unwrapping)";
+    }
 }

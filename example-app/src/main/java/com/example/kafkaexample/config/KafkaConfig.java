@@ -73,4 +73,12 @@ public class KafkaConfig {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
         return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
     }
+
+    @Bean
+    public KafkaTemplate<String, Object> noHeaderKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false); // Explicitly disable headers
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
 }
