@@ -87,17 +87,28 @@ public class BatchProcessor {
         }
 
         try {
+            Object cb = circuitBreakerWrapper.getCircuitBreaker(listener);
+            boolean circuitOpen = (cb != null && circuitBreakerWrapper.isOpen(cb));
+            KafkaTemplate<?, ?> resolvedTemplate = kafkaTemplate;
+
             Object[] eventArgs;
             while ((eventArgs = batchQueue.poll()) != null) {
                 Acknowledgment ack = extractAcknowledgment(eventArgs);
                 if (ack != null)
                     batchAcknowledgments.add(ack);
+
                 try {
-                    processEvent(pjp, listener, kafkaTemplate, eventArgs);
+                    if (circuitOpen) {
+                        handleCircuitOpen(listener, resolvedTemplate, eventArgs);
+                    } else {
+                        processEvent(pjp, listener, resolvedTemplate, eventArgs, cb);
+                    }
                     processed++;
                 } catch (Exception e) {
                     failed++;
-                    logger.error("Batch item failed: {}", e.getMessage());
+                    if (failed < 10) { // Limit error logging to avoid flooding
+                        logger.error("Batch item failed: {}", e.getMessage());
+                    }
                 }
             }
 
@@ -116,15 +127,28 @@ public class BatchProcessor {
                 batchSpan.setAttribute("damero.batch.failed", failed);
                 batchSpan.end();
             }
-            metricsRecorder.recordBatch(topic, batchSize, processed, failed,
-                    System.currentTimeMillis() - batchStartTime, listener.fixedWindow());
+            long duration = System.currentTimeMillis() - batchStartTime;
+            metricsRecorder.recordBatch(topic, batchSize, processed, failed, duration, listener.fixedWindow());
+            logger.info("Batch complete: topic={}, size={}, processed={}, failed={}, time={}ms",
+                    topic, batchSize, processed, failed, duration);
             batchOrchestrator.scheduleNextWindowIfNeeded(topic, listener);
         }
         return null;
     }
 
+    private void handleCircuitOpen(DameroKafkaListener listener, KafkaTemplate<?, ?> kafkaTemplate, Object[] args) {
+        Object event = EventUnwrapper.unwrapEvent(args.length > 0 ? args[0] : null);
+        if (event == null)
+            return;
+        Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
+        ConsumerRecord<?, ?> consumerRecord = extractConsumerRecord(args);
+        String eventId = EventUnwrapper.extractEventId(originalEvent, consumerRecord);
+
+        dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, listener, eventId);
+    }
+
     private void processEvent(ProceedingJoinPoint pjp, DameroKafkaListener listener, KafkaTemplate<?, ?> kafkaTemplate,
-            Object[] args) throws Throwable {
+            Object[] args, Object cb) throws Throwable {
         long startTime = System.currentTimeMillis();
         ConsumerRecord<?, ?> consumerRecord = extractConsumerRecord(args);
         EventMetadata existingMetadata = consumerRecord != null
@@ -136,45 +160,9 @@ public class BatchProcessor {
 
         Object originalEvent = EventUnwrapper.extractOriginalEvent(event);
 
-        // Handle RawBinaryWrapper (primitive ambiguity resolution)
+        // Handle RawBinaryWrapper (minimal overhead check)
         if (originalEvent instanceof RawBinaryWrapper) {
-            byte[] data = ((RawBinaryWrapper) originalEvent).getData();
-            MethodSignature signature = (MethodSignature) pjp.getSignature();
-            Class<?>[] parameterTypes = signature.getParameterTypes();
-            Class<?> targetType = null;
-            int targetIndex = -1;
-
-            // Find the parameter that is NOT an Acknowledgment or ConsumerRecord
-            for (int i = 0; i < parameterTypes.length; i++) {
-                Class<?> type = parameterTypes[i];
-                if (type != Acknowledgment.class && type != ConsumerRecord.class) {
-                    targetType = type;
-                    targetIndex = i;
-                    break;
-                }
-            }
-
-            if (targetType != null) {
-                if (data.length == 4) {
-                    if (targetType == Float.class || targetType == float.class) {
-                        originalEvent = ByteBuffer.wrap(data).getFloat();
-                    } else {
-                        originalEvent = ByteBuffer.wrap(data).getInt();
-                    }
-                } else if (data.length == 8) {
-                    if (targetType == Double.class || targetType == double.class) {
-                        originalEvent = ByteBuffer.wrap(data).getDouble();
-                    } else {
-                        originalEvent = ByteBuffer.wrap(data).getLong();
-                    }
-                }
-            }
-
-            // Update the event and args for the rest of the pipeline
-            originalEvent = originalEvent != null ? originalEvent : event;
-            if (targetIndex != -1 && args.length > targetIndex) {
-                args[targetIndex] = originalEvent;
-            }
+            originalEvent = resolveRawBinary(originalEvent, pjp, args);
         }
 
         String eventId = EventUnwrapper.extractEventId(originalEvent, consumerRecord);
@@ -185,11 +173,6 @@ public class BatchProcessor {
         }
 
         try {
-            Object cb = circuitBreakerWrapper.getCircuitBreaker(listener);
-            if (cb != null && circuitBreakerWrapper.isOpen(cb)) {
-                dlqRouter.sendToDLQForCircuitBreakerOpen(kafkaTemplate, originalEvent, listener, eventId);
-                return;
-            }
             if (listener.deDuplication() && duplicationManager.isDuplicate(eventId))
                 return;
 
@@ -211,6 +194,45 @@ public class BatchProcessor {
             if (eventSpan != null)
                 eventSpan.end();
         }
+    }
+
+    private Object resolveRawBinary(Object originalEvent, ProceedingJoinPoint pjp, Object[] args) {
+        byte[] data = ((RawBinaryWrapper) originalEvent).getData();
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        Class<?>[] parameterTypes = signature.getParameterTypes();
+        Class<?> targetType = null;
+        int targetIndex = -1;
+
+        for (int i = 0; i < parameterTypes.length; i++) {
+            Class<?> type = parameterTypes[i];
+            if (type != Acknowledgment.class && type != ConsumerRecord.class) {
+                targetType = type;
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetType != null) {
+            if (data.length == 4) {
+                if (targetType == Float.class || targetType == float.class) {
+                    originalEvent = ByteBuffer.wrap(data).getFloat();
+                } else {
+                    originalEvent = ByteBuffer.wrap(data).getInt();
+                }
+            } else if (data.length == 8) {
+                if (targetType == Double.class || targetType == double.class) {
+                    originalEvent = ByteBuffer.wrap(data).getDouble();
+                } else {
+                    originalEvent = ByteBuffer.wrap(data).getLong();
+                }
+            }
+        }
+
+        Object resolved = originalEvent != null ? originalEvent : originalEvent;
+        if (targetIndex != -1 && args.length > targetIndex) {
+            args[targetIndex] = resolved;
+        }
+        return resolved;
     }
 
     private void handleBatchItemException(DameroKafkaListener listener, KafkaTemplate<?, ?> kafkaTemplate,

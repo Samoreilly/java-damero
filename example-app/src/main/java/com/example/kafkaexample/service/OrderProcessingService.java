@@ -21,7 +21,8 @@ public class OrderProcessingService {
 
     @DameroKafkaListener(topic = "orders", dlqTopic = "test-dlq", eventType = com.example.kafkaexample.model.OrderEvent.class, maxAttempts = 3, delay = 4000, delayMethod = DelayMethod.FIBONACCI, fibonacciLimit = 15, nonRetryableExceptions = {
             IllegalArgumentException.class,
-            ValidationException.class }, deDuplication = true, openTelemetry = true, batchCapacity = 6000, batchWindowLength = 2000, fixedWindow = true)
+            ValidationException.class
+    }, deDuplication = false, openTelemetry = true, batchCapacity = 6000, batchWindowLength = 2000, fixedWindow = true)
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, String> record, Acknowledgment ack) {
 
@@ -42,7 +43,8 @@ public class OrderProcessingService {
                 throw new RuntimeException("simulated processing failure for string message");
             }
 
-            logger.info("Received String message: {}", str);
+            // logger.info("Received String message: {}", str); // DISABLED FOR PERFORMANCE
+            // TEST
             ack.acknowledge();
             return;
         }
@@ -65,7 +67,8 @@ public class OrderProcessingService {
                 return;
             }
 
-            logger.info("processing order: {}", order.getOrderId());
+            // logger.info("processing order: {}", order.getOrderId()); // DISABLED FOR
+            // PERFORMANCE TEST
 
             if (order.getAmount() == null || order.getAmount() < 0) {
                 throw new IllegalArgumentException("order amount cannot be null or negative:" + order.getAmount());

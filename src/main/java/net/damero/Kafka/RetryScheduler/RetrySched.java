@@ -75,15 +75,12 @@ public class RetrySched {
         } catch (Exception e) {
             // Log error but don't throw - allows scheduled task to complete even if Kafka
             // is unavailable
-            // This prevents test hangs when embedded Kafka shuts down before scheduled
-            // retries execute
             logger.error("failed to execute retry for event: {} to topic: {} - {}",
                     originalEvent != null ? originalEvent.toString() : "null",
                     dameroKafkaListener.topic(),
                     e.getMessage(),
                     e);
         }
-
     }
 
     private long getBackOffDelay(DameroKafkaListener dameroKafkaListener, Object object, DelayMethod delayMethod,

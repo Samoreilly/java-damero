@@ -54,7 +54,7 @@ public class BatchOrchestrator {
     // Callback for when window expires (set by KafkaListenerAspect)
     private volatile BiConsumer<String, DameroKafkaListener> windowExpiryCallback;
 
-    public BatchOrchestrator(@Qualifier("kafkaRetryScheduler") TaskScheduler taskScheduler,
+    public BatchOrchestrator(@Qualifier("dameroBatchScheduler") TaskScheduler taskScheduler,
             MetricsRecorder metricsRecorder) {
         this.taskScheduler = taskScheduler;
         this.metricsRecorder = metricsRecorder;

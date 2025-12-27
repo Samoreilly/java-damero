@@ -57,6 +57,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -355,24 +356,38 @@ public class CustomKafkaAutoConfiguration {
                 tracingService, pluggableRedisCache, batchOrchestrator, batchProcessor, batchUtility);
     }
 
-    /*
-     * TaskScheduler for retrying failed messages using Virtual Threads (Project
-     * Loom)
-     * This allows the library to handle hundreds of thousands of concurrent retries
-     * with minimal memory overhead.
-     */
     @Bean
     @ConditionalOnMissingBean(name = "kafkaRetryScheduler")
-    public TaskScheduler kafkaRetryScheduler() {
-        // SimpleAsyncTaskScheduler (Spring 6.1+) natively supports Virtual Threads
-        // and is highly efficient for high-volume scheduling tasks like retries.
-        SimpleAsyncTaskScheduler scheduler = new SimpleAsyncTaskScheduler();
+    public TaskScheduler kafkaRetryScheduler(
+            @Value("${spring.threads.virtual.enabled:false}") boolean virtualThreadsEnabled) {
+        if (virtualThreadsEnabled) {
+            // SimpleAsyncTaskScheduler (Spring 6.1+) natively supports Virtual Threads
+            // and is highly efficient for high-volume scheduling tasks like retries.
+            SimpleAsyncTaskScheduler scheduler = new SimpleAsyncTaskScheduler();
 
-        scheduler.setVirtualThreads(true);
-        scheduler.setThreadNamePrefix("kafka-retry-scheduler-vthread-");
+            scheduler.setVirtualThreads(true);
+            scheduler.setThreadNamePrefix("kafka-retry-scheduler-vthread-");
 
-        logger.info("Project Loom detected: kafkaRetryScheduler initialized with Virtual Threads support");
-        return scheduler;
+            logger.info("kafkaRetryScheduler initialized with Virtual Threads");
+            return scheduler;
+        } else {
+            // We use ThreadPoolTaskScheduler by default because benchmarks show it is
+            // faster
+            // than a Virtual Thread-per-task model for high-volume batch processing (6k+
+            // messages/batch).
+            ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+            scheduler.setPoolSize(20);
+            scheduler.setThreadNamePrefix("kafka-retry-scheduler-");
+
+            // Don't wait for tasks to complete on shutdown to prevent test hangs
+            scheduler.setWaitForTasksToCompleteOnShutdown(false);
+            scheduler.setAwaitTerminationSeconds(1);
+            scheduler.setErrorHandler(t -> logger.error("kafkaRetryScheduler error: {}", t.getMessage(), t));
+
+            scheduler.initialize();
+            logger.info("kafkaRetryScheduler initialized with ThreadPoolTaskScheduler (size: 20)");
+            return scheduler;
+        }
     }
 
     @Bean
@@ -383,8 +398,8 @@ public class CustomKafkaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public BatchOrchestrator batchOrchestrator(TaskScheduler taskScheduler, MetricsRecorder metricsRecorder) {
-        return new BatchOrchestrator(taskScheduler, metricsRecorder);
+    public BatchOrchestrator batchOrchestrator(TaskScheduler kafkaRetryScheduler, MetricsRecorder metricsRecorder) {
+        return new BatchOrchestrator(kafkaRetryScheduler, metricsRecorder);
     }
 
     /*

@@ -8,9 +8,41 @@ A Spring Boot library that adds automatic retry logic, dead letter queue handlin
 
 Beta release. All core features are implemented and tested. The library is functional and ready for testing in development environments. Use in production at your own discretion.
 
-## Performance
-We tested the library with 500,000 messages. We used a batch size of 6,000 and a 2 second window. The library is very fast. It takes about 420 ms to process a batch of 6,000 messages. This means it only adds a very small amount of time to each message.
-![Performance results](src/main/java/net/damero/PerformanceScreenshots/500000Messages|6000Batcg|2000ms|UpdatedLogic.png)
+## Performance & Scaling
+
+We benchmarked the library with 500,000 messages using a batch size of 6,000 and a 2,000ms window. The results demonstrate the library's extreme efficiency and the subtle trade-offs between threading models tailored for financial-grade systems.
+
+### Choosing your Threading Model
+
+The library allows you to choose between standard **Platform Threads** (default) and **Java 21 Virtual Threads** (opt-in).
+
+| Metric | Platform Threads (Default) | Virtual Threads (Opt-in) |
+| :--- | :--- | :--- |
+| **Batch Time** | **~350ms** | **~380ms** |
+| **Max Scalability** | Limited by OS thread count | Theoretically millions of threads |
+| **Best For** | Ultra-low latency on few topics | Massive scale, hundreds of topics |
+
+# Benchmark Details
+- **Test Environment**: Standard laptop with Intel i7-12650h, 16GB RAM
+- **Messages**: 500,000 messages
+- **Batch Capacity**: 6,000 messages
+- **Window Length**: 2,000ms
+- **Fixed Window**: True
+- **Tracing**: Full OpenTelemetry tracing enabled
+- **Measurement**: Average batch processing time over entire run
+
+
+### Platform Threads
+![Platform Threads: ~350ms](src/main/java/net/damero/PerformanceScreenshots/VirtualThreadsOff6000Batch2000msWindowLength500000Messages.png)
+
+### Virtual Threads
+![Virtual Threads: ~380ms](src/main/java/net/damero/PerformanceScreenshots/VirtualThreadsOn6000Batch2000msWindowLength500000Messages.png)
+
+
+To enable Virtual Threads for massive concurrency (e.g., handling 100k+ concurrent retries or 1,000+ topics), add this to your `application.properties`:
+```properties
+spring.threads.virtual.enabled=true
+```
 
 ## Features
 
@@ -96,20 +128,27 @@ spring.data.redis.host=localhost
 spring.data.redis.port=6379
 ```
 
-## Producer requirements
+## Producer Requirements & Serialization
 
-This library provides a consumer-side wrapper. You still need to provide and configure the Kafka producer in your application. The consumer code provided by this library expects to receive the original event object as the message value. To make that work reliably follow these rules:
+This library provides a high-performance consumer-side wrapper. To ensure reliable deserialization (especially for **primitive types** and **polymorphic events**), you MUST configure your Kafka producer correctly.
 
-Checklist for your producer
+### 1. Mandatory `JsonSerializer`
+You MUST use Spring Kafka's `JsonSerializer` for message bodies. This ensures that type headers (like `__TypeId__`) are correctly attached, allowing the library's `FlexibleJsonDeserializer` to reconstruct your domain objects.
 
-- Use a JSON value serializer for message bodies. The recommended option is Spring Kafka's JsonSerializer (org.springframework.kafka.support.serializer.JsonSerializer) or any serializer that writes plain JSON bytes.
-- Use a string serializer for message keys (org.apache.kafka.common.serialization.StringSerializer) unless you have a specific reason to use another key type.
-- Send the raw domain object as the value. Do not wrap the event in a custom envelope unless you also update your consumer to unwrap it.
-- Optionally supply a configured Jackson ObjectMapper to the JsonSerializer if you need custom serialization features (timestamps, custom modules, naming strategies).
+- **Value Serializer**: `org.springframework.kafka.support.serializer.JsonSerializer`
+- **Key Serializer**: `org.apache.kafka.common.serialization.StringSerializer` (Recommended)
 
-Why this matters
+### 2. Handling Primitive Types (Double, Float, etc.)
+Unlike standard deserializers, Damero's `FlexibleJsonDeserializer` is optimized to handle primitive types automatically. However, this only works if the producer sends plain JSON bytes.
 
-The library delivers the original event object to your listener method (ConsumerRecord.value()). If the producer sends non-JSON bytes or a custom wrapper, the consumer may not be able to reconstruct the original event type and casting at the listener will fail. Using a standard JsonSerializer ensures the message payload is readable by the consumer and keeps behavior predictable.
+### 3. Checklist for your Producer
+- [x] Use `JsonSerializer` for values.
+- [x] Enable `ADD_TYPE_INFO_HEADERS` (Default in Spring's `JsonSerializer`).
+- [x] Send raw domain objects (unwrapped).
+- [x] Supply a configured `ObjectMapper` if you use custom JSR-310 types (dates/times).
+
+#### Why this matters
+The library delivers the original event object directly to your listener (`ConsumerRecord.value()`). If the producer sends non-JSON bytes, the `FlexibleJsonDeserializer` cannot reconstruct the type, and your listener will fail with a `ClassCastException`.
 
 Quick examples
 

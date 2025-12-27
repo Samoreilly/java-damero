@@ -29,10 +29,7 @@ public class BatchUtility {
             ConcurrentHashMap<String, ProceedingJoinPoint> topicJoinPoints, String topic) throws Throwable {
 
         if (status == BatchStatus.PROCESSING) {
-            // Still collecting - DO NOT acknowledge yet
-            // Messages will be redelivered if server crashes before batch completes
-            // Deduplication will handle any reprocessing after recovery
-            logger.debug("Batch collecting for topic: {} - message queued (unacknowledged)", topic);
+            // Still collecting - messages stay unacknowledged in the batch queue
             return new BatchCheckResult(BatchStatus.PROCESSING, null);
 
         }
