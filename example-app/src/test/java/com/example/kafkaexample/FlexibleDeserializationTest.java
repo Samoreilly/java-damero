@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 class FlexibleDeserializationTest {
 
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("noHeaderKafkaTemplate")
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     @SpyBean

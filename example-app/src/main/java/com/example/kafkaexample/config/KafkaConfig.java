@@ -16,9 +16,12 @@ import com.example.kafkaexample.model.OrderEvent;
 @Configuration
 public class KafkaConfig {
 
+    @org.springframework.beans.factory.annotation.Value("${spring.kafka.bootstrap-servers:localhost:9094}")
+    private String bootstrapServers;
+
     private Map<String, Object> baseProps() {
         Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9094");
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         // Add JSON type info headers
         props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, true);
