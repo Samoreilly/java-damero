@@ -19,9 +19,9 @@ public class OrderProcessingService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderProcessingService.class);
 
-    @DameroKafkaListener(topic = "orders", dlqTopic = "test-dlq", eventType = com.example.kafkaexample.model.OrderEvent.class, maxAttempts = 3, delay = 1000, delayMethod = DelayMethod.FIBONACCI, fibonacciLimit = 15, nonRetryableExceptions = {
+    @DameroKafkaListener(topic = "orders", dlqTopic = "test-dlq", eventType = com.example.kafkaexample.model.OrderEvent.class, maxAttempts = 3, delay = 4000, delayMethod = DelayMethod.FIBONACCI, fibonacciLimit = 15, nonRetryableExceptions = {
             IllegalArgumentException.class,
-            ValidationException.class }, deDuplication = true, openTelemetry = true, batchCapacity = 0, batchWindowLength = 2000, fixedWindow = true)
+            ValidationException.class }, deDuplication = true, openTelemetry = true, batchCapacity = 6000, batchWindowLength = 2000, fixedWindow = true)
     @KafkaListener(topics = "orders", groupId = "order-processor", containerFactory = "kafkaListenerContainerFactory")
     public void processOrder(ConsumerRecord<String, String> record, Acknowledgment ack) {
 
@@ -30,15 +30,18 @@ public class OrderProcessingService {
         boolean isReplay = record.headers().lastHeader("X-Replay-Mode") != null;
 
         if (value instanceof String str) {
+
             if (isReplay) {
                 logger.warn("REPLAY MODE: Skipping validation for order: {} (this is for testing only!)", str);
                 logger.info("order {} processed successfully (validation skipped in replay mode)", str);
                 ack.acknowledge();
                 return;
             }
+
             if (str.contains("\"status\":\"FAIL\"") || str.contains("FAIL")) {
                 throw new RuntimeException("simulated processing failure for string message");
             }
+
             logger.info("Received String message: {}", str);
             ack.acknowledge();
             return;

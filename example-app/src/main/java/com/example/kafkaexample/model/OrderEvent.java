@@ -8,8 +8,9 @@ public class OrderEvent {
     private Double amount;
     private String paymentMethod;
     private String status;
-    
-    public OrderEvent() {}
+
+    public OrderEvent() {
+    }
 
     public OrderEvent(String orderId, String customerId, Double amount, String paymentMethod, String status) {
         this.orderId = orderId;
@@ -63,5 +64,5 @@ public class OrderEvent {
     public void setStatus(String status) {
         this.status = status;
     }
-}
 
+}

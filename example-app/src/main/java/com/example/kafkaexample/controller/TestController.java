@@ -20,6 +20,9 @@ public class TestController {
     @Autowired
     private KafkaTemplate<String, OrderEvent> kafkaTemplate;
 
+    @Autowired
+    private KafkaTemplate<String, String> stringKafkaTemplate;
+
     private final Random random = new Random();
 
     // @GetMapping("/string")
@@ -68,6 +71,11 @@ public class TestController {
 
         kafkaTemplate.send("orders", order);
         return "sent order with null payment method - should retry 3 times then go to dlq";
+    }
+
+    @GetMapping("/send-string")
+    public void testSendString() {
+        stringKafkaTemplate.send("orders", "stringyFAIL");
     }
 
     @PostMapping("/order/retryable/runtime")

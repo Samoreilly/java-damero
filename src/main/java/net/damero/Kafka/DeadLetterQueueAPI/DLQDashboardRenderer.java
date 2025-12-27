@@ -1,7 +1,5 @@
 package net.damero.Kafka.DeadLetterQueueAPI;
 
-import java.util.List;
-
 /**
  * Utility class to render the DLQ Dashboard using HTMX and Tailwind CSS.
  */

@@ -56,7 +56,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -91,6 +91,7 @@ public class CustomKafkaAutoConfiguration {
         configs.put(org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         return new org.springframework.kafka.core.KafkaAdmin(configs);
     }
+
     @ConditionalOnMissingBean
     public KafkaDLQ kafkaDLQ() {
         return new KafkaDLQ();
@@ -355,24 +356,22 @@ public class CustomKafkaAutoConfiguration {
     }
 
     /*
-     * TaskScheduler for retrying failed messages
+     * TaskScheduler for retrying failed messages using Virtual Threads (Project
+     * Loom)
+     * This allows the library to handle hundreds of thousands of concurrent retries
+     * with minimal memory overhead.
      */
     @Bean
     @ConditionalOnMissingBean(name = "kafkaRetryScheduler")
     public TaskScheduler kafkaRetryScheduler() {
-        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(20);
-        scheduler.setThreadNamePrefix("kafka-retry-scheduler-");
-        // Don't wait for tasks to complete on shutdown - interrupt them instead
-        // This prevents test hangs when embedded Kafka shuts down before scheduled
-        // retries execute
-        // In production, this is acceptable as retries will be rescheduled if the
-        // application restarts
-        scheduler.setWaitForTasksToCompleteOnShutdown(false);
-        scheduler.setAwaitTerminationSeconds(1);
-        scheduler.setErrorHandler(t -> org.slf4j.LoggerFactory.getLogger("kafka-retry-scheduler")
-                .error("scheduler error: {}", t.getMessage(), t));
-        scheduler.initialize();
+        // SimpleAsyncTaskScheduler (Spring 6.1+) natively supports Virtual Threads
+        // and is highly efficient for high-volume scheduling tasks like retries.
+        SimpleAsyncTaskScheduler scheduler = new SimpleAsyncTaskScheduler();
+
+        scheduler.setVirtualThreads(true);
+        scheduler.setThreadNamePrefix("kafka-retry-scheduler-vthread-");
+
+        logger.info("Project Loom detected: kafkaRetryScheduler initialized with Virtual Threads support");
         return scheduler;
     }
 
@@ -558,17 +557,14 @@ public class CustomKafkaAutoConfiguration {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
 
         // Build a new deserializer that handles type headers + fallback JSON/String
-        FlexibleJsonDeserializer deserializer =
-                new FlexibleJsonDeserializer(kafkaObjectMapper, defaultType);
+        FlexibleJsonDeserializer deserializer = new FlexibleJsonDeserializer(kafkaObjectMapper, defaultType);
 
-        ErrorHandlingDeserializer<Object> errorHandlingDeserializer =
-                new ErrorHandlingDeserializer<>(deserializer);
+        ErrorHandlingDeserializer<Object> errorHandlingDeserializer = new ErrorHandlingDeserializer<>(deserializer);
 
         ConsumerFactory<String, Object> consumerFactory = new DefaultKafkaConsumerFactory<>(
                 props,
                 new StringDeserializer(),
-                errorHandlingDeserializer
-        );
+                errorHandlingDeserializer);
 
         ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
@@ -577,7 +573,6 @@ public class CustomKafkaAutoConfiguration {
 
         return factory;
     }
-
 
     /*
      * USE SAME CONFIG AS DLQ CONSUMER FACTORY BELOW

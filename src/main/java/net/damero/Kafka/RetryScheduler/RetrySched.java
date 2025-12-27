@@ -17,6 +17,8 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import static net.damero.Kafka.Aspect.Components.Utility.EventUnwrapper.extractEventId;
 
 @Component
@@ -104,10 +106,20 @@ public class RetrySched {
 
             case LINEAR -> base * attempts;
             case FIBONACCI -> getFibonacciDelay(dameroKafkaListener, object);
+            case JITTER -> getJitterDelay(base, attempts);
             case CUSTOM -> dameroKafkaListener.delay();
             case MAX -> base;
             default -> base;
         };
+    }
+
+    private long getJitterDelay(double base, int attempts) {
+        // Full Jitter strategy: random(0, base * 2^attempts)
+        // capped at 5000ms to stay consistent with EXPO
+        long maxDelay = (long) (base * Math.pow(2, attempts));
+        long cappedMax = Math.min(maxDelay, 5000);
+
+        return ThreadLocalRandom.current().nextLong(0, cappedMax + 1);
     }
 
     private long getFibonacciDelay(DameroKafkaListener dameroKafkaListener, Object object) {

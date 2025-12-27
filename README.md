@@ -8,17 +8,14 @@ A Spring Boot library that adds automatic retry logic, dead letter queue handlin
 
 Beta release. All core features are implemented and tested. The library is functional and ready for testing in development environments. Use in production at your own discretion.
 
-## Library Metrics
-Ive benchmarked under loads of 500k messages (batch size 6,000, 2s window), 
-the library adds ~0.11–0.15 ms per message of processing overhead (measured via OpenTelemetry/Jaeger).
-Initial startup batches may be slightly higher due to JVM warm-up.
-See peformancescreenshots further down and also in /peformancescreenshots in the main codebase
-![Performance benchmarck in batch processing](src/main/java/net/damero/PerformanceScreenshots/500000Messages|6000Batcg|2000ms|UpdatedLogic.png)
+## Performance
+We tested the library with 500,000 messages. We used a batch size of 6,000 and a 2 second window. The library is very fast. It takes about 420 ms to process a batch of 6,000 messages. This means it only adds a very small amount of time to each message.
+![Performance results](src/main/java/net/damero/PerformanceScreenshots/500000Messages|6000Batcg|2000ms|UpdatedLogic.png)
 
 ## Features
 
 - **batch processing** with two modes: capacity-first (max throughput) and fixed window (predictable timing) - see [BATCH_PROCESSING_GUIDE.md](BatchProcessingLogic.md)
-- automatic retry logic with configurable backoff strategies (exponential, linear, fibonacci, custom)
+- automatic retry logic with backoff strategies (exponential, linear, fibonacci, jitter, custom)
 - dead letter queue routing with complete metadata (attempts, timestamps, exceptions)
 - distributed tracing with opentelemetry for full visibility into message processing
 - circuit breaker integration using resilience4j
@@ -438,11 +435,12 @@ The @DameroKafkaListener annotation supports these parameters:
 
 ### Delay Methods
 
-| Method | Formula | Example (delay=1000ms) |
-|--------|---------|------------------------|
+| Method | How it works | Example (1000ms delay) |
+|--------|--------------|------------------------|
 | EXPO | delay * 2^attempt | 1s, 2s, 4s, 8s |
 | LINEAR | delay * attempt | 1s, 2s, 3s, 4s |
-| FIBONACCI | Fibonacci sequence * delay | 1s, 1s, 2s, 3s, 5s |
+| FIBONACCI | Next number in sequence | 1s, 1s, 2s, 3s, 5s |
+| JITTER | Random time up to max | Random (0 to 1s, 2s, etc) |
 | MAX | Fixed delay | 1s, 1s, 1s, 1s |
 
 ### Redis Configuration
@@ -503,17 +501,30 @@ To disable auto-configuration:
 custom.kafka.auto-config.enabled=false
 ```
 
-## DLQ REST API
+## DLQ Dashboard and API
 
-The library provides REST endpoints to query and replay DLQ messages.
+The library has a web page and an API to help you manage failed messages.
 
-### Available Endpoints
+### Dashboard
+
+Go to this link in your browser to see the dashboard:
+`http://localhost:8080/dlq/dashboard`
+
+What you can do:
+- See all failed messages in a list
+- See why each message failed
+- Copy message IDs easily
+- Refresh to see new failures
+
+### REST API
+
+You can also use these links to manage messages:
 
 ```
-GET  /dlq?topic={dlq-topic}         # Enhanced view with statistics
-GET  /dlq/stats?topic={dlq-topic}   # Statistics only
-GET  /dlq/raw?topic={dlq-topic}     # Raw EventWrapper format
-POST /dlq/replay/{topic}            # Replay messages to original topic
+GET  /dlq?topic={topic}         # See messages and stats
+GET  /dlq/stats?topic={topic}   # See stats only
+GET  /dlq/raw?topic={topic}     # See raw data
+POST /dlq/replay/{topic}        # Send messages back to be processed
 ```
 
 ### Query Parameters for Replay

@@ -26,6 +26,13 @@ public class KafkaConfig {
     }
 
     @Bean
+    public KafkaTemplate<String, String> stringKafkaTemplate() {
+        Map<String, Object> props = baseProps();
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
+    }
+
+    @Bean
     public KafkaTemplate<String, OrderEvent> kafkaTemplate() {
         Map<String, Object> props = baseProps();
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
