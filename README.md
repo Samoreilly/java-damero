@@ -36,7 +36,7 @@ Add the dependency to your `pom.xml`:
 <dependency>
     <groupId>java.damero</groupId>
     <artifactId>kafka-damero</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
 </dependency>
 ```
 
