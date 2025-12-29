@@ -6,6 +6,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import net.damero.Kafka.Aspect.Components.*;
 import net.damero.Kafka.Aspect.Components.Utility.FlexibleJsonDeserializer;
+import net.damero.Kafka.Aspect.Components.Utility.MicrometerMetricsRecorder;
+import net.damero.Kafka.Aspect.Components.Utility.NoOpMetricsRecorder;
 import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
 import net.damero.Kafka.Aspect.Deduplication.DuplicationManager;
 import net.damero.Kafka.Aspect.KafkaListenerAspect;
@@ -297,9 +299,19 @@ public class CustomKafkaAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean
-    public MetricsRecorder metricsRecorder(@Nullable io.micrometer.core.instrument.MeterRegistry meterRegistry) {
-        return new MetricsRecorder(meterRegistry);
+    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnBean(io.micrometer.core.instrument.MeterRegistry.class)
+    @ConditionalOnMissingBean(MetricsRecorder.class)
+    public MetricsRecorder micrometerMetricsRecorder(io.micrometer.core.instrument.MeterRegistry meterRegistry) {
+        logger.info("Micrometer detected - enabling metrics recording");
+        return new MicrometerMetricsRecorder(meterRegistry);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(MetricsRecorder.class)
+    public MetricsRecorder noOpMetricsRecorder() {
+        logger.info("Micrometer NOT detected or MeterRegistry missing - metrics recording disabled (No-Op)");
+        return new NoOpMetricsRecorder();
     }
 
     @Bean

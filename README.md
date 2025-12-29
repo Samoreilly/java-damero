@@ -4,15 +4,18 @@ A Spring Boot library for high-performance, fault-tolerant Kafka message process
 
 ## Performance Benchmark
 
-The library is optimized for high throughput and low latency. Benchmarks with 500,000 messages (6,000 batch size, 2s window) demonstrate its efficiency.
+The library is optimized for high throughput and low latency. The following results were achieved during verification with **500,000 messages** (6,000 batch size, 2s window):
 
 ### Platform Threads (Default)
-**Latency: ~350ms** | Best for: Ultra-low latency, standard workloads
+**Latency: p50: 360ms | p99: 400ms**
 ![Platform Threads](src/main/java/net/damero/PerformanceScreenshots/VirtualThreadsOff6000Batch2000msWindowLength500000Messages.png)
 
 ### Virtual Threads (Opt-in)
-**Latency: ~380ms** | Best for: Massive scale, thousands of concurrent topics (Java 21+)
+**Latency: p50: ~380ms | p99: ~430ms**
 ![Virtual Threads](src/main/java/net/damero/PerformanceScreenshots/VirtualThreadsOn6000Batch2000msWindowLength500000Messages.png)
+
+> [!TIP]
+> Use the built-in [Prometheus metrics](file:///home/sam-o-reilly/Downloads/java-damero/prometheus.yml) to monitor these percentiles in your own production environment.
 
 **Enable Virtual Threads:**
 ```properties

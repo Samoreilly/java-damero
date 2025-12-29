@@ -29,6 +29,7 @@ import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import net.damero.Kafka.Aspect.Components.Utility.NoOpMetricsRecorder;
 import net.damero.Kafka.Aspect.Components.Utility.MetricsRecorder;
 
 import java.util.HashMap;
@@ -53,17 +54,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * - Batch state reset after processing
  */
 @SpringBootTest(classes = BatchProcessingIntegrationTest.TestConfig.class)
-@EmbeddedKafka(
-        partitions = 1,
-        topics = {
-            "batch-capacity-topic", "batch-capacity-dlq",
-            "batch-window-topic", "batch-window-dlq",
-            "batch-mixed-topic", "batch-mixed-dlq"
-        },
-        brokerProperties = {
-                "listeners=PLAINTEXT://localhost:0"
-        }
-)
+@EmbeddedKafka(partitions = 1, topics = {
+        "batch-capacity-topic", "batch-capacity-dlq",
+        "batch-window-topic", "batch-window-dlq",
+        "batch-mixed-topic", "batch-mixed-dlq"
+}, brokerProperties = {
+        "listeners=PLAINTEXT://localhost:0"
+})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class BatchProcessingIntegrationTest {
@@ -204,7 +201,8 @@ class BatchProcessingIntegrationTest {
         }
         kafkaTemplate.flush();
 
-        // Wait a short time - batch should NOT be processed yet (waiting for capacity or window)
+        // Wait a short time - batch should NOT be processed yet (waiting for capacity
+        // or window)
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
@@ -389,7 +387,8 @@ class BatchProcessingIntegrationTest {
     @DisplayName("Should handle mixed capacity and window scenarios")
     void testBatchProcessing_MixedScenarios() {
         // Given: Batch capacity of 5, window of 2000ms
-        // When: Send 7 messages (first batch by capacity, second by window) - invoke listener directly
+        // When: Send 7 messages (first batch by capacity, second by window) - invoke
+        // listener directly
         ensureListenerContainerRunningForTopic("batch-mixed-topic");
         for (int i = 0; i < 7; i++) {
             TestEvent event = new TestEvent("mixed-" + i, "data", false);
@@ -425,22 +424,17 @@ class BatchProcessingIntegrationTest {
         private final AtomicInteger batchProcessingCount = new AtomicInteger(0);
         private final AtomicInteger windowExpiryCount = new AtomicInteger(0);
 
-        @net.damero.Kafka.Annotations.DameroKafkaListener(
-                topic = "batch-capacity-topic",
-                batchCapacity = 5,
-                batchWindowLength = 3000,
-                fixedWindow = false
-        )
-        @KafkaListener(topics = "batch-capacity-topic", groupId = "batch-capacity-group",
-                containerFactory = "kafkaListenerContainerFactory")
+        @net.damero.Kafka.Annotations.DameroKafkaListener(topic = "batch-capacity-topic", batchCapacity = 5, batchWindowLength = 3000, fixedWindow = false)
+        @KafkaListener(topics = "batch-capacity-topic", groupId = "batch-capacity-group", containerFactory = "kafkaListenerContainerFactory")
         public void listen(org.apache.kafka.clients.consumer.ConsumerRecord<String, Object> record,
-                           Acknowledgment acknowledgment) {
+                Acknowledgment acknowledgment) {
             processRecord(record, acknowledgment);
         }
 
         private void processRecord(org.apache.kafka.clients.consumer.ConsumerRecord<String, Object> record,
-                                   Acknowledgment acknowledgment) {
-            if (record == null) return;
+                Acknowledgment acknowledgment) {
+            if (record == null)
+                return;
 
             TestEvent event = extractEvent(record.value());
             if (event != null) {
@@ -482,22 +476,17 @@ class BatchProcessingIntegrationTest {
         private final AtomicInteger batchProcessingCount = new AtomicInteger(0);
         private final AtomicInteger windowExpiryCount = new AtomicInteger(0);
 
-        @net.damero.Kafka.Annotations.DameroKafkaListener(
-                topic = "batch-window-topic",
-                batchCapacity = 10,
-                batchWindowLength = 2000,
-                fixedWindow = false
-        )
-        @KafkaListener(topics = "batch-window-topic", groupId = "batch-window-group",
-                containerFactory = "kafkaListenerContainerFactory")
+        @net.damero.Kafka.Annotations.DameroKafkaListener(topic = "batch-window-topic", batchCapacity = 10, batchWindowLength = 2000, fixedWindow = false)
+        @KafkaListener(topics = "batch-window-topic", groupId = "batch-window-group", containerFactory = "kafkaListenerContainerFactory")
         public void listen(org.apache.kafka.clients.consumer.ConsumerRecord<String, Object> record,
-                           Acknowledgment acknowledgment) {
+                Acknowledgment acknowledgment) {
             processRecord(record, acknowledgment);
         }
 
         private void processRecord(org.apache.kafka.clients.consumer.ConsumerRecord<String, Object> record,
-                                   Acknowledgment acknowledgment) {
-            if (record == null) return;
+                Acknowledgment acknowledgment) {
+            if (record == null)
+                return;
 
             TestEvent event = extractEvent(record.value());
             if (event != null) {
@@ -539,17 +528,12 @@ class BatchProcessingIntegrationTest {
         private final List<TestEvent> processedEvents = new CopyOnWriteArrayList<>();
         private final AtomicInteger batchProcessingCount = new AtomicInteger(0);
 
-        @net.damero.Kafka.Annotations.DameroKafkaListener(
-                topic = "batch-mixed-topic",
-                batchCapacity = 5,
-                batchWindowLength = 2000,
-                fixedWindow = false
-        )
-        @KafkaListener(topics = "batch-mixed-topic", groupId = "batch-mixed-group",
-                containerFactory = "kafkaListenerContainerFactory")
+        @net.damero.Kafka.Annotations.DameroKafkaListener(topic = "batch-mixed-topic", batchCapacity = 5, batchWindowLength = 2000, fixedWindow = false)
+        @KafkaListener(topics = "batch-mixed-topic", groupId = "batch-mixed-group", containerFactory = "kafkaListenerContainerFactory")
         public void listen(org.apache.kafka.clients.consumer.ConsumerRecord<String, Object> record,
-                           Acknowledgment acknowledgment) {
-            if (record == null) return;
+                Acknowledgment acknowledgment) {
+            if (record == null)
+                return;
 
             TestEvent event = extractEvent(record.value());
             if (event != null) {
@@ -602,8 +586,8 @@ class BatchProcessingIntegrationTest {
                     org.springframework.kafka.support.serializer.JsonSerializer.class);
 
             DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(props);
-            org.springframework.kafka.support.serializer.JsonSerializer<Object> serializer =
-                    new org.springframework.kafka.support.serializer.JsonSerializer<>(kafkaObjectMapper);
+            org.springframework.kafka.support.serializer.JsonSerializer<Object> serializer = new org.springframework.kafka.support.serializer.JsonSerializer<>(
+                    kafkaObjectMapper);
             serializer.setAddTypeInfo(true);
             factory.setValueSerializer(serializer);
             return factory;
@@ -616,7 +600,8 @@ class BatchProcessingIntegrationTest {
 
         @Bean
         public ConsumerFactory<String, Object> consumerFactory(ObjectMapper kafkaObjectMapper) {
-            Map<String, Object> props = new HashMap<>(KafkaTestUtils.consumerProps("batch-test-group", "false", embeddedKafka));
+            Map<String, Object> props = new HashMap<>(
+                    KafkaTestUtils.consumerProps("batch-test-group", "false", embeddedKafka));
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
@@ -627,16 +612,14 @@ class BatchProcessingIntegrationTest {
             return new DefaultKafkaConsumerFactory<>(
                     props,
                     new org.apache.kafka.common.serialization.StringDeserializer(),
-                    jsonDeserializer
-            );
+                    jsonDeserializer);
         }
 
         @Bean
         @Primary
         public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
                 ConsumerFactory<String, Object> consumerFactory) {
-            ConcurrentKafkaListenerContainerFactory<String, Object> factory =
-                    new ConcurrentKafkaListenerContainerFactory<>();
+            ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory(consumerFactory);
             factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
             // Ensure containers auto-start
@@ -661,8 +644,7 @@ class BatchProcessingIntegrationTest {
 
         @Bean
         public MetricsRecorder metricsRecorder() {
-            // Tests do not need real metrics, provide a recorder with null registry
-            return new MetricsRecorder(null);
+            return new NoOpMetricsRecorder();
         }
 
         @Bean
@@ -674,20 +656,20 @@ class BatchProcessingIntegrationTest {
     }
 
     // Add static helper so nested listener classes can call it
-     private static TestEvent extractEvent(Object payload) {
-         if (payload instanceof TestEvent) {
-             return (TestEvent) payload;
-         } else if (payload instanceof Map<?, ?> map) {
-             Object id = map.get("id");
-             Object data = map.get("data");
-             Object shouldFail = map.get("shouldFail");
-             if (id instanceof String) {
-                 return new TestEvent((String) id, data != null ? data.toString() : null,
-                         Boolean.TRUE.equals(shouldFail));
-             }
-         }
-         return null;
-     }
+    private static TestEvent extractEvent(Object payload) {
+        if (payload instanceof TestEvent) {
+            return (TestEvent) payload;
+        } else if (payload instanceof Map<?, ?> map) {
+            Object id = map.get("id");
+            Object data = map.get("data");
+            Object shouldFail = map.get("shouldFail");
+            if (id instanceof String) {
+                return new TestEvent((String) id, data != null ? data.toString() : null,
+                        Boolean.TRUE.equals(shouldFail));
+            }
+        }
+        return null;
+    }
 
     // Minimal TestEvent used by the tests
     static class TestEvent {
@@ -695,7 +677,8 @@ class BatchProcessingIntegrationTest {
         private String data;
         private boolean error;
 
-        public TestEvent() {}
+        public TestEvent() {
+        }
 
         public TestEvent(String id, String data, boolean error) {
             this.id = id;
@@ -703,9 +686,17 @@ class BatchProcessingIntegrationTest {
             this.error = error;
         }
 
-        public String getId() { return id; }
-        public String getData() { return data; }
-        public boolean isError() { return error; }
+        public String getId() {
+            return id;
+        }
+
+        public String getData() {
+            return data;
+        }
+
+        public boolean isError() {
+            return error;
+        }
 
         @Override
         public String toString() {
